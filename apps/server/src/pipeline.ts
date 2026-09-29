@@ -354,8 +354,12 @@ export class Pipeline implements PipelineApi {
 
   private worker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1): Promise<Record<string, unknown>> {
     const full = { ...job, entry: ENTRY, bundleDir: path.join(paths.data, "cache", "bundle", sourceHash()) };
+    // props with word timings exceed the Windows command-line limit (32K): pass the job as a file
+    const jobFile = path.join(paths.data, "cache", "jobs", `${randomUUID()}.json`);
+    mkdirSync(path.dirname(jobFile), { recursive: true });
+    writeFileSync(jobFile, JSON.stringify(full));
     return new Promise((resolve, reject) => {
-      const child = spawn(renderNode(), [WORKER, JSON.stringify(full)], { cwd: path.join(repoRoot, "apps", "server"), windowsHide: true });
+      const child = spawn(renderNode(), [WORKER, jobFile], { cwd: path.join(repoRoot, "apps", "server"), windowsHide: true });
       ctx?.signal.addEventListener("abort", () => child.kill());
       let buf = "";
       let done: Record<string, unknown> | undefined;

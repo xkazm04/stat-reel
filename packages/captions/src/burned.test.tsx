@@ -92,7 +92,7 @@ describe("BurnedCaptions", () => {
     expect(text(render(5.2))).toBe("Later");
   });
 
-  it("uses the vertical and landscape type specs with tabular numerals", () => {
+  it("uses the vertical and landscape type specs (proportional figures: cues are static, tnum widens hyphens)", () => {
     for (const [format, size] of [
       ["vertical", 76],
       ["landscape", 52],
@@ -102,7 +102,7 @@ describe("BurnedCaptions", () => {
         fontSize: size,
         fontWeight: 700,
         fontFamily: videoTheme.fonts.ui,
-        fontVariantNumeric: "tabular-nums",
+        fontVariantNumeric: "proportional-nums",
         background: videoTheme.captionBox,
         color: videoTheme.captionInk,
       });

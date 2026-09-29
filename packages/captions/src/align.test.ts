@@ -73,3 +73,23 @@ describe("wordsFromAlignment", () => {
     expect(() => wordsFromAlignment(hook, a, 0)).toThrow(/lengths/);
   });
 });
+
+describe("phrase-level tokens (a co-pilot may chunk several words into one token)", () => {
+  it("splits a token into per-word timings when display and spoken have the same word count", () => {
+    const scene = { scene_id: "s", tokens: [{ display: "Lewis Hamilton leads.", spoken: "Lewis Hamilton leads." }] };
+    const text = "Lewis Hamilton leads.";
+    const chars = [...text];
+    const alignment = { characters: chars, character_start_times_seconds: chars.map((_, i) => i * 0.1), character_end_times_seconds: chars.map((_, i) => i * 0.1 + 0.1) };
+    const words = wordsFromAlignment(scene, alignment, 0);
+    expect(words.map((w) => w.display)).toEqual(["Lewis", "Hamilton", "leads."]);
+    expect(words[1]!.start_s).toBeCloseTo(0.6);
+  });
+
+  it("keeps a token atomic when display and spoken word counts differ (105 / one hundred and five)", () => {
+    const scene = { scene_id: "s", tokens: [{ display: "105 wins", spoken: "one hundred and five wins" }] };
+    const text = "one hundred and five wins";
+    const chars = [...text];
+    const alignment = { characters: chars, character_start_times_seconds: chars.map((_, i) => i * 0.1), character_end_times_seconds: chars.map((_, i) => i * 0.1 + 0.1) };
+    expect(wordsFromAlignment(scene, alignment, 0).map((w) => w.display)).toEqual(["105 wins"]);
+  });
+});

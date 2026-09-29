@@ -18,6 +18,20 @@ type TimedChar = { ch: string; start: number; end: number };
  * ("one hundred and five" -> display "105"). Times are shifted by `offset_s` (scene start in the
  * final timeline).
  */
+/**
+ * A token may carry a whole phrase ("Lewis Hamilton leads."). When its display and spoken forms have
+ * the same number of words, map them pairwise so captions can break between words. When the counts
+ * differ ("105" / "one hundred and five") the token stays atomic: its words can't be paired.
+ */
+function expandTokens<T extends { display: string; spoken: string }>(tokens: T[]): T[] {
+  return tokens.flatMap((t) => {
+    const d = t.display.trim().split(/\s+/).filter(Boolean);
+    const s = t.spoken.trim().split(/\s+/).filter(Boolean);
+    if (d.length > 1 && d.length === s.length) return d.map((word, i) => ({ ...t, display: word, spoken: s[i]! }));
+    return [t];
+  });
+}
+
 export function wordsFromAlignment(scene: ScriptScene, alignment: CharAlignment, offset_s: number): WordTiming[] {
   const { characters, character_start_times_seconds: starts, character_end_times_seconds: ends } = alignment;
   if (starts.length !== characters.length || ends.length !== characters.length) {
@@ -47,7 +61,7 @@ export function wordsFromAlignment(scene: ScriptScene, alignment: CharAlignment,
   const words: WordTiming[] = [];
   let p = 0;
   let prevEnd = flat.find((c) => !WS.test(c.ch))?.start ?? 0;
-  for (const token of scene.tokens) {
+  for (const token of expandTokens(scene.tokens)) {
     const chars = token.spoken.replace(/\s+/g, "");
     let start = Number.POSITIVE_INFINITY;
     let end = Number.NEGATIVE_INFINITY;

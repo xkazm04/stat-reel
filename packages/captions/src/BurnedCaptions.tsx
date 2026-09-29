@@ -76,7 +76,8 @@ export function BurnedCaptions({ cues, t, format, theme }: BurnedCaptionsProps):
           fontWeight: 700,
           fontSize: s.fontSize,
           lineHeight: s.lineHeight,
-          fontVariantNumeric: "tabular-nums",
+          // proportional: a cue is static text, and Inter's tnum also widens hyphens ("43rd - highest")
+          fontVariantNumeric: "proportional-nums",
           textAlign: "center",
         }}
       >

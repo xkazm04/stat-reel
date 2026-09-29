@@ -311,7 +311,7 @@ function Payoff({
           marginTop: -8,
         }}
       >
-        {`${props.metric_adjusted_label} · era-adjusted`.toUpperCase()}
+        {(/era-adjusted/i.test(props.metric_adjusted_label) ? props.metric_adjusted_label : `${props.metric_adjusted_label} · era-adjusted`).toUpperCase()}
       </div>
     </div>
   );

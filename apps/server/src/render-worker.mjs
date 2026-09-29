@@ -6,7 +6,7 @@
  *   { mode: "video", compositionId, props, output, bundleDir, entry }
  *   { mode: "stills", compositionId, props, frames: [sec...], outDir, bundleDir, entry }
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -15,7 +15,8 @@ const { bundle } = req("@remotion/bundler");
 const { renderMedia, renderStill, selectComposition, ensureBrowser } = req("@remotion/renderer");
 
 const send = (o) => process.stdout.write(`${JSON.stringify(o)}\n`);
-const job = JSON.parse(process.argv[2]);
+const arg = process.argv[2];
+const job = JSON.parse(arg.endsWith(".json") ? readFileSync(arg, "utf8") : arg);
 
 async function serveUrl() {
   // One bundle per code version: bundleDir is keyed by git sha by the parent.
