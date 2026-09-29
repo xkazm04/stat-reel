@@ -2,6 +2,8 @@ import path from "node:path";
 import { defineConfig } from "@playwright/test";
 
 const e2eData = path.resolve("data", "e2e");
+// a fresh app DB per run (Windows keeps an open SQLite file locked, so it is never deleted in place)
+const runDb = path.join(e2eData, `app-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`);
 
 export default defineConfig({
   testDir: "e2e",
@@ -16,7 +18,7 @@ export default defineConfig({
       url: "http://127.0.0.1:8787/api/health",
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { STATREEL_APP_DB: path.join(e2eData, "app.sqlite"), LLM_MODE: process.env.LLM_MODE ?? "replay", AUDIO_MODE: process.env.AUDIO_MODE ?? "replay", PUBLISH_MODE: process.env.PUBLISH_MODE ?? "dry", LLM_RECORD: process.env.LLM_RECORD ?? "", AUDIO_RECORD: process.env.AUDIO_RECORD ?? "" },
+      env: { STATREEL_APP_DB: runDb, LLM_MODE: process.env.LLM_MODE ?? "replay", AUDIO_MODE: process.env.AUDIO_MODE ?? "replay", PUBLISH_MODE: process.env.PUBLISH_MODE ?? "dry", LLM_RECORD: process.env.LLM_RECORD ?? "", AUDIO_RECORD: process.env.AUDIO_RECORD ?? "" },
     },
     { command: "pnpm --filter @statreel/studio dev", url: "http://127.0.0.1:5173", reuseExistingServer: false, timeout: 120_000 },
   ],

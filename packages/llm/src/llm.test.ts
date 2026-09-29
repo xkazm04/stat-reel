@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { claudeArgs, fixtureKey, parseStreamLine, ReplayEngine, stripMcpPrefix, templateOut } from "./index";
+import { claudeArgs, fixtureKey, parseStreamLine, recordFixture, ReplayEngine, stripMcpPrefix, templateOut } from "./index";
 
 const lines = [
   { type: "system", subtype: "init", session_id: "s-123", tools: ["mcp__statreel__query"] },
@@ -86,5 +86,24 @@ describe("templated fixtures (project ids differ between runs)", () => {
 
   it("templates values out of what it records", () => {
     expect(templateOut('{"project":"p-1"} p-1', { PROJECT: "p-1" })).toBe('{"project":"{{PROJECT}}"} {{PROJECT}}');
+  });
+});
+
+describe("record -> replay round trip (one key function for both sides)", () => {
+  it("a recorded live session replays under a different project id", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "llm-"));
+    const sys = path.join(dir, "sys.md");
+    writeFileSync(sys, "system prompt v1");
+    const raw = [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "t", name: "mcp__statreel__set_props", input: { project: "p-live1" } }] } }),
+      JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t", content: "{}" }] } }),
+      JSON.stringify({ type: "result", subtype: "success", result: "ok", session_id: "s" }),
+    ];
+    recordFixture(dir, "claude-code", { prompt: "Draft p-live1", vars: { PROJECT: "p-live1" }, systemPromptFile: sys }, raw);
+    const calls: unknown[] = [];
+    const engine = new ReplayEngine("claude-code", dir, async (_t, i) => (calls.push(i), {}));
+    await engine.run({ prompt: "Draft p-other", vars: { PROJECT: "p-other" }, systemPromptFile: sys, mcpConfigPath: "m", onEvent: () => {} });
+    expect(calls).toEqual([{ project: "p-other" }]);
   });
 });

@@ -1,9 +1,7 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-/** Fresh app state per e2e run; the warehouse and caches are reused (read-only / content-addressed). */
+/** Each run gets its own app DB (see playwright.config.ts); the warehouse and caches are reused. */
 export default function globalSetup() {
-  const dir = path.resolve("data", "e2e");
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(path.resolve("data", "e2e"), { recursive: true });
 }

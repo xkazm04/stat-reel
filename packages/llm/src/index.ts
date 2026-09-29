@@ -113,7 +113,22 @@ export const fixtureKey = (engine: string, prompt: string, resume: string | unde
   createHash("sha256")
     .update(JSON.stringify({ engine, prompt, resume: resume ? "resumed" : null, ...(systemPrompt ? { system: createHash("sha256").update(systemPrompt).digest("hex") } : {}) }))
     .digest("hex").slice(0, 24);
-const systemOf = (o: RunOptions) => (o.systemPromptFile && existsSync(o.systemPromptFile) ? readFileSync(o.systemPromptFile, "utf8") : undefined);
+type KeyOpts = Pick<RunOptions, "prompt" | "resume" | "vars" | "systemPromptFile">;
+
+/** The single place a fixture path is derived; the recorder and the replayer both call it. */
+export function fixtureFile(dir: string, engine: string, o: KeyOpts): string {
+  return path.join(dir, `${fixtureKey(engine, templateOut(o.prompt, o.vars), o.resume, systemOf(o))}.jsonl`);
+}
+
+/** Write a recorded stream with run-specific values (project id) templated out. */
+export function recordFixture(dir: string, engine: string, o: KeyOpts, rawLines: string[]): string {
+  mkdirSync(dir, { recursive: true });
+  const file = fixtureFile(dir, engine, o);
+  writeFileSync(file, templateOut(rawLines.join("\n"), o.vars));
+  return file;
+}
+
+const systemOf = (o: KeyOpts) => (o.systemPromptFile && existsSync(o.systemPromptFile) ? readFileSync(o.systemPromptFile, "utf8") : undefined);
 
 function collect(events: LlmEvent[], opts: RunOptions): RunResult {
   const result = [...events].reverse().find((e) => e.type === "result") as Extract<LlmEvent, { type: "result" }> | undefined;
@@ -153,8 +168,7 @@ export class ClaudeEngine implements LlmEngine {
         if (buf.trim()) raw.push(buf);
         const res = collect(events, opts);
         if (this.fixturesDir && process.env.LLM_RECORD === "1") {
-          mkdirSync(this.fixturesDir, { recursive: true });
-          writeFileSync(path.join(this.fixturesDir, `${fixtureKey(this.name, opts.prompt, opts.resume)}.jsonl`), raw.join("\n"));
+          recordFixture(this.fixturesDir, this.name, opts, raw);
         }
         if (code !== 0 && !res.result) reject(new Error(`claude exited ${code}: ${stderr.slice(-800)}`));
         else resolve(res);
@@ -167,7 +181,7 @@ export class ReplayEngine implements LlmEngine {
   constructor(readonly name: "claude-code" | "codex", private readonly fixturesDir: string, private readonly execute: ToolExecutor) {}
 
   async run(opts: RunOptions): Promise<RunResult> {
-    const file = path.join(this.fixturesDir, `${fixtureKey(this.name, templateOut(opts.prompt, opts.vars), opts.resume, systemOf(opts))}.jsonl`);
+    const file = fixtureFile(this.fixturesDir, this.name, opts);
     if (!existsSync(file)) throw new Error(`LLM replay fixture missing: ${file} (record with LLM_MODE=live LLM_RECORD=1)`);
     const events: LlmEvent[] = [];
     for (const line of templateIn(readFileSync(file, "utf8"), opts.vars).split(/\r?\n/)) {
