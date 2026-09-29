@@ -1,4 +1,4 @@
-# StatReel task runner. Lane 1 (data) recipes run inside the uv-managed pipeline project.
+# StatReel task runner. Node side via pnpm; data lane (Python) via uv in pipeline/.
 set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
 uv := "uv run --project pipeline"
@@ -6,9 +6,15 @@ uv := "uv run --project pipeline"
 default:
     @just --list
 
-# install the Python toolchain for the data lane (Node side lands with the studio)
+# install everything: Python data lane, Node workspace, machine-local tools (.tools/: OPA, x64 Node on Windows-ARM)
 setup:
     uv sync --project pipeline
+    pnpm install
+    node scripts/setup-tools.mjs
+
+# store a secret in the OS keychain (e.g. `just secrets-set elevenlabs`)
+secrets-set name:
+    node scripts/secrets-set.mjs {{name}}
 
 # fetch one registry source through the ethics layer into data/raw/<source>/<snapshot>/
 ingest source:
@@ -22,6 +28,14 @@ transform:
 capabilities:
     {{uv}} python -m statreel_ingest capabilities
 
+# recompute the feasibility heatmap (server must be running)
+heatmap:
+    node -e "fetch('http://127.0.0.1:8787/api/heatmap/recompute',{method:'POST'}).then(r=>r.json()).then(j=>{const t={};j.cells.forEach(c=>t[c.mode+':'+c.status]=(t[c.mode+':'+c.status]||0)+1);console.log(t)})"
+
+# publish-gate policy tests
+policy-test:
+    .tools/opa test policy -v
+
 # Lane 1 unit + replay e2e tests
 test-pipeline:
     {{uv}} pytest pipeline/tests
@@ -29,3 +43,9 @@ test-pipeline:
 # Lane 1 live e2e: real f1db through the ethics layer (network, ~6 min on a cold cache)
 e2e-pipeline-live:
     {{uv}} pytest pipeline/tests -m live
+
+# everything that runs offline: vitest, OPA, pytest
+test-all:
+    pnpm test
+    .tools/opa test policy
+    {{uv}} pytest pipeline/tests
