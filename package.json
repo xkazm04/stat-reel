@@ -1,0 +1,26 @@
+{
+  "name": "statreel",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @statreel/server --filter @statreel/studio dev",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter @statreel/server start",
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "e2e": "cross-env LLM_MODE=replay AUDIO_MODE=replay PUBLISH_MODE=dry playwright test",
+    "e2e:live": "cross-env LLM_MODE=live AUDIO_MODE=live PUBLISH_MODE=dry E2E_LIVE=1 playwright test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@playwright/test": "^1.59.0",
+    "@types/node": "^22.10.0",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

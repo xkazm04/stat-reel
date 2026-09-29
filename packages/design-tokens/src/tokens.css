@@ -1,0 +1,136 @@
+/* StatReel · PATCHBAY design tokens (TEMPORARY baseline: contest brand-screens A/3, 2026-09-29)
+   One light instrument chassis, black display insets, one signal-orange accent.
+   Semantic names only; this file is the port target for the app. */
+
+@font-face { font-family: "Barlow Condensed"; font-weight: 500; font-style: normal; font-display: swap;
+  src: url("../../../fonts/barlow-condensed/BarlowCondensed-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-style: normal; font-display: swap;
+  src: url("../../../fonts/barlow-condensed/BarlowCondensed-600.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; font-style: normal; font-display: swap;
+  src: url("../../../fonts/barlow-condensed/BarlowCondensed-700.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 800; font-style: normal; font-display: swap;
+  src: url("../../../fonts/barlow-condensed/BarlowCondensed-800.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 100 900; font-style: normal; font-display: swap;
+  src: url("../../../fonts/inter/Inter-Variable.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 100 800; font-style: normal; font-display: swap;
+  src: url("../../../fonts/jetbrains-mono/JetBrainsMono-Variable.woff2") format("woff2"); }
+
+:root {
+  /* ── Colour · chassis (the light anodised faceplate) ── */
+  --color-chassis: #E3E3DE;
+  --color-chassis-shade: #D6D7D1;
+  --color-chassis-deep: #C9CAC3;
+  --color-chassis-edge: #B7B8B1;
+  --color-panel-raised: #EDEDE9;
+  --color-panel-seam: rgba(18, 19, 20, 0.16);
+  --color-panel-highlight: rgba(255, 255, 255, 0.72);
+  --color-screw: #A9AAA3;
+
+  /* ── Colour · silkscreen ink (legends printed on the chassis) ── */
+  --color-silkscreen: #121314;
+  --color-silkscreen-muted: #45484A;
+  --color-silkscreen-faint: #6B6E6F;
+
+  /* ── Colour · display (recessed black insets where data glows) ── */
+  --color-display: #0D0F0F;
+  --color-display-raised: #151919;
+  --color-display-grid: #232929;
+  --color-display-ink: #EAF2EE;
+  --color-display-ink-dim: #93A29D;
+  --color-display-ink-faint: #5E6B67;
+
+  /* ── Colour · accent (signal orange: primary keys, MODE, focus, highlight) ── */
+  --color-accent: #FF5B1F;
+  --color-accent-pressed: #E04A12;
+  --color-accent-ink: #A83A0C;        /* orange text on chassis, 4.9:1 */
+  --color-accent-glow: rgba(255, 91, 31, 0.42);
+  --color-on-accent: #121314;
+
+  /* ── Status · LED on display (lit) / ink on chassis (≥4.5:1) / glyph / label ── */
+  --status-go-led: #3DF08A;      --status-go-ink: #11693A;      --status-go-glyph: "●"; --status-go-label: "GO";
+  --status-ready-led: #3FD9EA;   --status-ready-ink: #0A6272;   --status-ready-glyph: "◐"; --status-ready-label: "READY";
+  --status-ask-led: #FFB21F;     --status-ask-ink: #7F5200;     --status-ask-glyph: "▲"; --status-ask-label: "ASK";
+  --status-blocked-led: #FF4B3E; --status-blocked-ink: #A8231B; --status-blocked-glyph: "⊘"; --status-blocked-label: "BLOCKED";
+  --status-pass-led: var(--status-go-led);      --status-pass-ink: var(--status-go-ink);      --status-pass-label: "PASS";
+  --status-refuse-led: var(--status-blocked-led); --status-refuse-ink: var(--status-blocked-ink); --status-refuse-label: "REFUSE";
+
+  /* ── Licence classes as jack types ── */
+  --licence-legal-color: #11693A;          --licence-legal-led: #3DF08A;   --licence-legal-label: "LEGAL";   --licence-legal-jack: "open";
+  --licence-noncommercial-color: #0A6272;  --licence-noncommercial-led: #3FD9EA; --licence-noncommercial-label: "NC"; --licence-noncommercial-jack: "collared";
+  --licence-paid-color: #6A4A8C;           --licence-paid-led: #C7A6F2;    --licence-paid-label: "PAID";     --licence-paid-jack: "keyed $";
+  --licence-avoid-color: #A8231B;          --licence-avoid-led: #FF4B3E;   --licence-avoid-label: "NEVER FETCHED"; --licence-avoid-jack: "capped";
+
+  /* ── Cables ── */
+  --cable-live: var(--color-accent);
+  --cable-legal: #1D7A48;
+  --cable-noncommercial: #0E7C8E;
+  --cable-dead: #8E918C;
+  --cable-width: 2.5px;
+
+  /* ── Type families ── */
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --numeric: tabular-nums;
+  --numeric-features: "tnum" 1;
+
+  /* ── Type scale (px; readable minimum 12) ── */
+  --type-legend: 12px;      /* silkscreen legends, uppercase, tracked */
+  --type-data: 12.5px;      /* mono readouts, ids, timecodes */
+  --type-small: 13px;
+  --type-body: 15px;
+  --type-body-lg: 17px;
+  --type-title: 22px;
+  --type-display-s: 28px;
+  --type-display-m: 40px;
+  --type-display-l: 56px;
+  --type-display-xl: clamp(44px, 6.2vw, 92px);
+  --tracking-legend: 0.14em;
+  --tracking-display: 0.01em;
+  --leading-tight: 0.92;
+  --leading-body: 1.5;
+
+  /* ── Spacing (4px grid) ── */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+
+  /* ── Radii ── */
+  --radius-display: 4px;
+  --radius-module: 7px;
+  --radius-key: 5px;
+  --radius-pill: 999px;
+
+  /* ── Depth ── */
+  --shadow-module: 0 1px 0 var(--color-panel-highlight) inset, 0 -1px 0 rgba(0,0,0,.08) inset, 0 1px 2px rgba(0,0,0,.14), 0 6px 18px rgba(0,0,0,.08);
+  --shadow-display: inset 0 2px 6px rgba(0,0,0,.85), inset 0 0 0 1px rgba(0,0,0,.9), 0 1px 0 var(--color-panel-highlight);
+  --shadow-key: 0 1px 0 rgba(255,255,255,.8) inset, 0 -2px 0 rgba(0,0,0,.14) inset, 0 2px 0 var(--color-chassis-edge), 0 3px 6px rgba(0,0,0,.18);
+  --shadow-key-pressed: 0 1px 0 rgba(255,255,255,.5) inset, 0 1px 3px rgba(0,0,0,.25) inset;
+  --focus-ring: 0 0 0 2px var(--color-chassis), 0 0 0 5px var(--color-accent);
+
+  /* ── Motion: signal, not decoration ── */
+  --duration-snap: 140ms;       /* keys, switches */
+  --duration-settle: 650ms;     /* meter needles, rolling numerals */
+  --duration-sweep: 900ms;      /* LED sweeps along a path */
+  --duration-flow: 1.4s;        /* cable dash flow period */
+  --duration-power-on: 1600ms;  /* landing power-on sequence */
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-needle: cubic-bezier(.22, 1, .36, 1);
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --stagger-led: 28ms;
+
+  /* ── Z layers ── */
+  --z-base: 0;
+  --z-cables: 5;
+  --z-raised: 10;
+  --z-sticky: 20;
+  --z-nav: 40;
+  --z-overlay: 60;
+  --z-toast: 80;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-snap: 0ms; --duration-settle: 0ms; --duration-sweep: 0ms;
+    --duration-flow: 0s; --duration-power-on: 0ms; --stagger-led: 0ms;
+  }
+}

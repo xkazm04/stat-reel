@@ -1,6 +1,6 @@
 # 003 - Changes proposed by the ai-registry media-generation review
 
-- Status: **proposed**. Owner decision needed before Lane 2 M1 work starts.
+- Status: **accepted** 2026-09-29 (owner adopted all 12 items; #13 resolved by raising the live budget to ≤ 75 s TTS + ≤ 75 s music per run, cached by request hash).
 - Date: 2026-09-29
 - Source: DESIGN.md read against `ai-registry/knowledge/media-generation` (21 subjects, 146
   techniques) and its `_laws.md`. Paths below are relative to that bundle.

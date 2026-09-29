@@ -51,3 +51,4 @@ pipeline/dbt/dbt_packages/
 /.ai/skill-runs.local.jsonl
 # END ai-registry linked skills
 pipeline/dbt/.user.yml
+.tools/

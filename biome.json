@@ -1,0 +1,7 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "files": { "includes": ["apps/**", "packages/**", "e2e/**", "!**/dist", "!**/node_modules", "!.contest", "!pipeline", "!data"] },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
+  "linter": { "rules": { "recommended": true } },
+  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always" } }
+}

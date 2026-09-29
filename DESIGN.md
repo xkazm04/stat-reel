@@ -52,6 +52,7 @@
 | D9 | **Burned-in captions everywhere + SRT/VTT sidecar on YouTube** | TikTok/Instagram APIs have no caption-file field | — |
 | D10 | **OFL fonts only, self-hosted, pinned** | Commercial-safe, server-render-safe, deterministic | Adobe Fonts / desktop EULAs (no server rendering) |
 | D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
+| D13 | **Knowledge-review changes adopted** ([ADR 003](docs/decisions/003-media-generation-knowledge-review.md)) | Fail-closed gate, fact binding, spoken/display tokens, hook/close craft, mix and peak targets | — |
 | D12 | **Capability tests declared in YAML, evaluated in Python** ([ADR 002](docs/decisions/002-capability-tests-in-python.md)) | One row per capability with coverage, rows and a reason; dbt tests keep schema integrity | dbt tests as capability carriers |
 
 ---
@@ -237,27 +238,28 @@ query_templates: [top_n_raw_vs_adjusted]
 
 - `packages/viz`: pure functions of `(data, t, theme, format)` returning SVG primitives — scales, axes, slopegraph, ridgeline, pitch, shot map, network, probability line, scatter/trajectory, bar race, diverging bars. No time source other than `t`; seeded RNG only.
 - `packages/compositions`: Remotion `<Composition>` per use case × format, reading `useCurrentFrame()` → `t`, Zod `schema`, `calculateMetadata` for duration from narration length.
-- Scene structure for 1–3 min: **hook (0–3 s, question on screen)** → context → reveal(s) → payoff → CTA/end card. Scenes are data in props (`scenes[]`), not code.
+- Scene structure: **hook** (one sentence at 0 s, spoken *and* on screen; `hook_shape` prop in preference order payoff-first → contradiction → scenario → stake, never "did you know" by default) → context → reveal(s) → payoff → **close**: shorts end on a one-line *reframe* written together with the hook (loops well); end cards only in landscape. Scenes are data in props (`scenes[]`), not code. Each use case declares its own duration band; the platform ceiling is never the target (ADR 003).
+- **Figures are bound to facts:** every number in props or narration references a `fact_key` returned by `query`; `set_props` / `write_script` reject untraceable figures. Adjusted/estimated metrics are presented rank-led and labelled "era-adjusted" (ADR 003).
 - Reference visual language: the storyboard frames (Sports Viz Storyboard artifact) — replace counters' display face per §6.5.
 
 ### 6.3 Render pipeline
 
 - `bundle()` once per code version (cached by git SHA); `selectComposition` + `renderMedia({codec: "h264", crf: 18, pixelFormat: "yuv420p", audioCodec: "aac"})`.
-- Formats: 1080×1920 @30 fps (vertical), 1920×1080 @30 fps (landscape). Duration 60–180 s (Shorts accept ≤ 3 min vertical).
+- Formats: 1080×1920 @30 fps (vertical), 1920×1080 @30 fps (landscape). Duration per use-case band (e.g. era-adjusted vertical 45–75 s); platform ceilings (Shorts ≤ 3 min) are limits, not targets.
 - Chromium: fonts loaded from `fonts/` only; network requests to external hosts **blocked** during render; render fails if `document.fonts` reports any fallback.
-- Post-render checks (ffprobe + ffmpeg): resolution, fps, duration, codecs, integrated loudness **−14 LUFS ±1**, true peak ≤ **−1 dBTP** (`ebur128`), black-frame detect.
+- Post-render checks (ffprobe + ffmpeg): resolution, fps, duration, codecs, integrated loudness **−14 LUFS ±1**, true peak ≤ **−2 dBTP** (platforms re-encode to lossy), loudness range recorded (`ebur128`), black-frame detect.
 - Output `data/renders/<project>/<run>/`: `video.mp4`, `captions.srt`, `captions.vtt`, `thumb.png` (frame chosen by props), `manifest.json` (§6.8).
 - Single render at a time; progress over SSE.
 
 ### 6.4 Audio (ElevenLabs)
 
 - **Plan requirement:** all assets destined for monetized channels must be generated on a **paid plan (Starter+)**; free-plan output is non-commercial forever. Creator+ only if tracks are ever distributed to streaming services. Record plan tier per asset.
-- **Voiceover:** `POST /v1/text-to-speech/{voice_id}/with-timestamps` → audio + **character-level** alignment; group characters into words in `packages/captions`. Re-timing after edits: `POST /v1/forced-alignment` (audio + transcript → word/char timings).
-- **Music:** `POST /v1/music` (`music_v2`/`music_v2_5`, `force_instrumental: true`, `music_length_ms` 3000–600000, composition plan per scene). Keep stems via `/v1/music/stem-separation` so a bed can be swapped if a claim appears. Outputs may not be unique across users → **never register in Content ID**.
+- **Voiceover:** generated **per scene** (a note re-renders one scene; joins are checked) with `POST /v1/text-to-speech/{voice_id}/with-timestamps` → audio + **character-level** alignment; group characters into words in `packages/captions`. Script tokens carry a `spoken` and a `display` form ("twenty-three" / "23") plus a pronunciation ledger; alignment runs on the spoken form, burn-in shows the display form. Re-timing after edits: `POST /v1/forced-alignment` (audio + transcript → word/char timings).
+- **Music:** generated **after** TTS is measured, at the exact needed length (off-length takes are rejected, never stretched), spotted cue by cue with deliberate silences; `POST /v1/music` (`music_v2`/`music_v2_5`, `force_instrumental: true`, `music_length_ms` 3000–600000, composition plan per scene). Keep stems via `/v1/music/stem-separation` so a bed can be swapped if a claim appears. Outputs may not be unique across users → **never register in Content ID**.
 - **SFX:** sound-effects API (≤ 30 s per generation) for transitions/whooshes; no beta features in commercial output.
-- **Mix plan** (Remotion `<Audio>` tracks): voice as anchor; music ducked ~−15 to −18 dB under voice (tunable); SFX sparse. Master target −14 LUFS integrated, ≤ −1 dBTP.
+- **Mix plan** (Remotion `<Audio>` tracks): voice as anchor; music ducked **6–12 dB** under voice (tunable); audio leads picture by 0.5–2 s at scene changes; SFX sparse. Master target −14 LUFS integrated, ≤ −2 dBTP.
 - **Rules:** no voices imitating real athletes/commentators; no "in the style of <artist>" prompts; opt out of ElevenLabs training if scripts are proprietary; cache every generation by request hash to save credits.
-- **Test budget:** replay fixtures by default; live e2e uses ≤ 20 s TTS and ≤ 10 s music per run.
+- **Test budget:** replay fixtures by default; live e2e may generate ≤ 75 s TTS and ≤ 75 s music per run, and every generation is cached by request hash, so a rerun with an unchanged script costs nothing (owner decision 2026-09-29).
 
 ### 6.5 Captions & typography baseline (research 2026-09-29)
 
@@ -268,7 +270,7 @@ query_templates: [top_n_raw_vs_adjusted]
 - Vertical style: 70–85 px text at 1920 h, weight 700, white on ~70 % black box or heavy stroke, contrast ≥ 4.5:1 (WCAG 2.2 SC 1.4.3); active-word highlight (accent colour) on shorts.
 - **Safe zone (union of TikTok, Reels, Shorts), 1080×1920:** top 270 px, bottom 670 px, left 65 px, right 130 px → critical-content box ≈ 885×980 px; captions sit just above y ≈ 1250. Debug overlay in Studio and in test renders. (Platforms publish templates, not text specs — values are a conservative union; re-check yearly.)
 - Accessibility law: the European Accessibility Act binds platforms, not an individual creator; treat WCAG 2.2 SC 1.2.2 (captions, prerecorded) as the standard anyway.
-- Rationale data: 69 % watch with sound off in public (Verizon/Publicis 2019); 49 % always/often use captions, 59–64 % among 18–34 (XR/M8 Labs, May 2026).
+- Rationale data: 49 % always/often use captions, 59–64 % among 18–34 (XR/M8 Labs, May 2026). (The often-quoted "69 % sound off" figure comes from muted-autoplay feeds, not the shorts platforms, which play sound by default. It is not used as a rationale; ADR 003.)
 
 **Fonts**
 - OFL 1.1 only (commercial use in video allowed, no attribution required). No Adobe Fonts (no server installation) and no desktop-EULA commercial fonts on the render path.
@@ -305,7 +307,9 @@ query_templates: [top_n_raw_vs_adjusted]
 
 - One active session at a time; engine switchable between sessions.
 - **Replay mode:** adapters record `(prompt hash → event stream)` fixtures in `e2e/fixtures/llm/`; `LLM_MODE=replay|live`.
-- Visual critique loop: after `render_keyframes`, the agent is prompted with a rubric (hierarchy, legibility at phone size, safe zone, colour contrast, data-ink) and may revise props (max 2 iterations by default).
+- Visual critique loop: after `render_keyframes`, the agent fills a typed yes/no schema (veto fields first: hierarchy, legibility at phone size, data-ink); safe zone and contrast are **measured in code**, not judged. Revisions are patch operations on props, with the gate re-run after each (max 2 iterations by default).
+- Word budget is a range; timing is judged on the rendered audio, and figures and hedges are never cut to fit.
+- A refusal (LLM or audio provider) is a labelled job state, never an empty success.
 - System prompt pack per use case in `packages/llm/prompts/` (hook formulas, narration length targets: ~150–165 wpm; 60 s ≈ 150–165 words).
 
 ### 6.7 Publishing & metrics
@@ -369,6 +373,18 @@ deny contains msg if {
   f.license != "OFL-1.1"
   msg := sprintf("font %s is not OFL", [f.family])
 }
+# Fail closed (ADR 003): a required field that is missing is a deny, not a pass.
+deny contains sprintf("missing evidence: %s", [f]) if {
+  some f in {"captions.max_cps", "checks.safe_zone_violations", "checks.loudness_lufs", "checks.true_peak_dbtp"}
+  not has_path(input.manifest, split(f, "."))
+}
+deny contains "no fonts recorded" if count(object.get(input.manifest, "fonts", [])) == 0
+deny contains sprintf("%s audio has no plan_tier", [a.kind]) if {
+  some a in input.manifest.audio
+  not a.plan_tier
+}
+deny contains "loudness outside -14 LUFS +/-1" if abs(input.manifest.checks.loudness_lufs + 14) > 1
+deny contains "true peak above -2 dBTP" if input.manifest.checks.true_peak_dbtp > -2
 deny contains "captions not burned in" if not input.manifest.captions.burned_in
 deny contains "caption reading speed above 20 CPS" if input.manifest.captions.max_cps > 20
 deny contains "safe-zone violations" if input.manifest.checks.safe_zone_violations > 0
@@ -379,7 +395,7 @@ deny contains "AI music used but disclosure flag not set" if {
 }
 ```
 
-Attribution strings from all sources are auto-appended to the description; gate warns (not denies) if the description was edited to remove them.
+The gate's result lists every check it ran (`checks_run[]`) as well as its denials. Attribution strings from all sources are auto-appended to the description; gate warns (not denies) if the description was edited to remove them.
 
 ---
 
@@ -410,7 +426,7 @@ Attribution strings from all sources are auto-appended to the description; gate 
 
 **E2E assertions for the walking skeleton**
 - UI: heatmap shows F1 × era-adjusted = `Go` after ingest; create project; LLM panel shows tool calls; props validate; Player scrubs.
-- Artifacts: `video.mp4` 1080×1920, 30 fps, h264/aac, duration 45–75 s; loudness −14 ±1 LUFS, TP ≤ −1 dBTP; SRT valid, max CPS ≤ 20; zero safe-zone violations (DOM bounding boxes measured in a still render); no font fallback; manifest schema-valid; policy `allow == true` for monetized target.
+- Artifacts: `video.mp4` 1080×1920, 30 fps, h264/aac, duration 45–75 s; loudness −14 ±1 LUFS, TP ≤ −2 dBTP; SRT valid, max CPS ≤ 20; zero safe-zone violations (DOM bounding boxes measured in a still render); no font fallback; manifest schema-valid; policy `allow == true` for monetized target.
 - Negative e2e: project using a `non_commercial` source → gate denies with the expected message.
 - Publish: API returns video id; `privacyStatus == "private"`; captions track present; cleanup succeeds.
 
