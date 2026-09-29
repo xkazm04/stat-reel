@@ -172,10 +172,12 @@ export class Pipeline implements PipelineApi {
     }
     const duration = Math.round((voiced.at(-1)!.voiceStart + voiced.at(-1)!.duration + AUDIO_DEFAULTS.tailS) * 30) / 30;
 
-    // 2. picture timeline: the picture cuts voice_lead_s after the next voice starts (audio leads picture)
+    // 2. scene timeline in AUDIO time (voice starts). The composition cuts the picture voice_lead_s
+    //    after each voice start (scene 0 at 0), so audio leads picture at every change (ADR 003).
     const lead = AUDIO_DEFAULTS.voiceLeadS;
-    const picture = voiced.map((v, i) => ({ scene_id: v.scene_id, start_s: i === 0 ? 0 : v.voiceStart + lead }));
-    const timelineScenes = picture.map((s, i) => ({ ...s, end_s: picture[i + 1]?.start_s ?? duration, voice_src: fileUrl(voiced[i]!.file) }));
+    const timelineScenes = voiced.map((v, i) => ({
+      scene_id: v.scene_id, start_s: v.voiceStart, end_s: voiced[i + 1]?.voiceStart ?? duration, voice_src: fileUrl(v.file),
+    }));
 
     // 3. words and cues (align on spoken, show display)
     const words: WordTiming[] = voiced.flatMap((v, i) => wordsFromAlignment(scenes[i]!, v.alignment, v.voiceStart));
