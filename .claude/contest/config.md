@@ -38,3 +38,4 @@ from them by the §7 rule, the OFL fonts in `fonts/`, and sample projects/era fi
   the identity is typographic, chromatic and data-driven.
 
 ## Skill improvement log
+- 2026-09-29 brand-screens: multi-page variants (index/heatmap/studio) need a per-page host pass - visual-pass.mjs opens index.html only; the host measured all 3 pages x 1280/1920 + landing at 390 and found the field's one hard-constraint breach (A/3 landing, 28 labels < 12 px) on a page the seat reported as fixed.
