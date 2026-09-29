@@ -1,0 +1,65 @@
+import { existsSync } from "node:fs";
+import { sampleEraProps, sampleScript } from "@statreel/schemas";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { paths } from "./config";
+import { openDb } from "./db";
+import { ProjectService } from "./projects";
+import { Warehouse } from "./warehouse";
+
+describe.skipIf(!existsSync(paths.warehouse))("ProjectService", () => {
+  let wh: Warehouse;
+  let svc: ProjectService;
+  beforeAll(async () => {
+    wh = await Warehouse.open(paths.warehouse);
+    svc = new ProjectService(openDb(":memory:"), wh);
+  });
+  afterAll(() => wh.close());
+
+  const create = () => svc.create({ title: "Most points ≠ most dominant", use_case_id: "era-adjusted-rankings", sport: "F1", format: "vertical", mode: "monetized" });
+
+  it("creates a project in the idea stage", () => {
+    const p = create();
+    expect(p.status).toBe("idea");
+    expect(svc.get(p.id)?.title).toContain("dominant");
+  });
+
+  it("stores props whose every figure matches the warehouse, versioned", async () => {
+    const p = create();
+    const r = await svc.setProps(p.id, sampleEraProps, "llm");
+    expect(r.errors).toEqual([]);
+    expect(r.version).toBe(1);
+    expect((await svc.setProps(p.id, sampleEraProps, "user")).version).toBe(2);
+    expect(svc.get(p.id)?.status).toBe("data-ready");
+  });
+
+  it("rejects props with a figure that does not match its fact, verbatim", async () => {
+    const p = create();
+    const bad = structuredClone(sampleEraProps);
+    bad.rows[0]!.adjusted_value = 19.5;
+    const r = await svc.setProps(p.id, bad, "llm");
+    expect(r.version).toBeNull();
+    expect(r.errors.join("\n")).toMatch(/19\.5 != fact/);
+  });
+
+  it("rejects schema-invalid props with the zod message", async () => {
+    const p = create();
+    const r = await svc.setProps(p.id, { ...sampleEraProps, hook_shape: "did-you-know" }, "llm");
+    expect(r.errors.join("\n")).toMatch(/hook_shape/);
+  });
+
+  it("writes a script: checks figures against facts and reports CPS/length", async () => {
+    const p = create();
+    const r = await svc.writeScript(p.id, sampleScript);
+    expect(r.errors).toEqual([]);
+    expect(r.words).toBeGreaterThan(0);
+    expect(r.est_duration_s.min).toBeLessThanOrEqual(r.est_duration_s.max);
+  });
+
+  it("rejects a script figure whose fact disagrees", async () => {
+    const p = create();
+    const bad = structuredClone(sampleScript);
+    bad.scenes[0]!.tokens[5] = { display: "25", spoken: "twenty-five", fact_key: "f1db:driver:juan-manuel-fangio:era-adjusted#wins" };
+    const r = await svc.writeScript(p.id, bad);
+    expect(r.errors.join("\n")).toMatch(/25.*24/);
+  });
+});

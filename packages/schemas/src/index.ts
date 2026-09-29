@@ -6,6 +6,7 @@
  * `f1db:driver:juan-manuel-fangio:era-adjusted#rank_adjusted` (ADR 003 #2).
  */
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 // ------------------------------------------------------------------ registry + use cases
 
@@ -122,6 +123,12 @@ export const EraAdjustedPropsSchema = z.object({
     ctx.addIssue({ code: "custom", message: "highlight_player_id must be one of rows", path: ["highlight_player_id"] });
 });
 export type EraAdjustedProps = z.infer<typeof EraAdjustedPropsSchema>;
+
+/** JSON Schema of the props object (refinements are not expressible; set_props enforces them). */
+export function eraPropsJsonSchema(): unknown {
+  const inner = (EraAdjustedPropsSchema as unknown as { _def: { schema: z.ZodTypeAny } })._def.schema;
+  return zodToJsonSchema(inner, "EraAdjustedProps");
+}
 
 /** Every figure in props must equal the fact it cites. Returns human-readable problems. */
 export function untracedFigures(props: EraAdjustedProps, facts: Map<string, number | string>): string[] {
