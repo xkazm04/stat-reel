@@ -3,7 +3,7 @@
  * captions, provenance manifest, policy IO, projects and jobs.
  *
  * Fact references: a figure cites `<row fact_key>#<column>` from an `llm.*` view row, e.g.
- * `f1db:driver:juan-fangio:era-adjusted#rank_adjusted` (ADR 003 #2).
+ * `f1db:driver:juan-manuel-fangio:era-adjusted#rank_adjusted` (ADR 003 #2).
  */
 import { z } from "zod";
 
@@ -207,6 +207,7 @@ export type Timeline = z.infer<typeof TimelineSchema>;
 // ------------------------------------------------------------------ provenance + policy
 
 export const PlanTier = z.enum(["free", "starter", "creator", "pro", "scale", "business", "enterprise"]);
+export type PlanTier = z.infer<typeof PlanTier>;
 export const AudioAssetSchema = z.object({
   kind: z.enum(["tts", "music", "sfx"]),
   provider: z.literal("elevenlabs"),
@@ -220,6 +221,8 @@ export const AudioAssetSchema = z.object({
   scene_id: z.string().nullish(),
   c2pa: z.enum(["claimed-by-provider", "absent", "unknown"]).default("unknown"),
 });
+
+export type AudioAsset = z.infer<typeof AudioAssetSchema>;
 
 export const ProvenanceManifestSchema = z.object({
   subject: z.object({ file: z.string(), sha256: z.string() }),
