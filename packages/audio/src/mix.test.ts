@@ -32,7 +32,7 @@ describe("mixPlan", () => {
 
   it("music sits at the duck gain while voice is active and opens up in gaps", () => {
     const plan = mixPlan({ scenes, cues: [{ ...cue, src: "m1.mp3" }], musicOpenDb: -3, rampS: 0.2 });
-    const env = plan.music[0]?.envelope ?? [];
+    const env = plan.music[0]!.envelope;
     expect(volumeDbAt(env, 6)).toBeCloseTo(-9); // under s2 voice
     expect(volumeDbAt(env, 12.5)).toBeCloseTo(-3); // gap between s2 voice end (11.5) and s3 voice (13.5)
     expect(volumeDbAt(env, 20)).toBeCloseTo(-9); // under s3 voice

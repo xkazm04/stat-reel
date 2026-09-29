@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EraAdjustedPropsSchema,
   ProvenanceManifestSchema,
+  type Script,
   ScriptSchema,
   sceneDisplayText,
   sceneSpokenText,
@@ -76,7 +77,7 @@ describe("script tokens (ADR 003 #7)", () => {
   });
 
   it("allows a declared literal (a rule, not data)", () => {
-    const ok = structuredClone(sampleScript);
+    const ok: Script = ScriptSchema.parse(structuredClone(sampleScript));
     ok.scenes[0]!.tokens.push({ display: "25", spoken: "twenty-five", literal: "points for a win under the current system" });
     expect(untracedScriptFigures(ScriptSchema.parse(ok))).toEqual([]);
   });
