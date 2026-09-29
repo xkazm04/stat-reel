@@ -1,0 +1,16 @@
+id: metric-explainer-shorts
+name: Metric explainer shorts
+stage: 3
+requires:
+  kinds:
+  - events
+composition: null
+formats:
+- vertical
+default_format: vertical
+duration_s:
+  min: 30
+  max: 60
+props_schema: null
+query_templates: []
+notes: xT, PPDA, etc.

@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: players
+    columns:
+      - name: player_id
+        data_tests: [unique, not_null]
+  - name: matches
+    columns:
+      - name: match_id
+        data_tests: [unique, not_null]
+  - name: seasons
+    columns:
+      - name: season
+        data_tests: [unique, not_null]
+  - name: player_match_results
+    columns:
+      - name: points_current_system
+        data_tests: [not_null]
+  - name: player_season_stats
+    data_tests:
+      - dbt_utils_free_unique_combination:
+          columns: [player_id, season]
+    columns:
+      - name: points_current_system
+        data_tests: [not_null]

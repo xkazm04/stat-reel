@@ -1,0 +1,9 @@
+version: 2
+
+models:
+  - name: mart_era_adjusted
+    columns:
+      - name: player_id
+        data_tests: [unique, not_null]
+      - name: starts
+        data_tests: [not_null]

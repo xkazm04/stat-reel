@@ -1,0 +1,32 @@
+[project]
+name = "statreel-pipeline"
+version = "0.1.0"
+description = "StatReel data lane: ethical ingestion, dbt-duckdb transforms, lineage and capabilities"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "httpx>=0.28",
+  "protego>=0.4",
+  "pydantic>=2.9",
+  "pyyaml>=6.0",
+  "duckdb>=1.2",
+  "dbt-core>=1.10",
+  "dbt-duckdb>=1.9",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[project.scripts]
+statreel-ingest = "statreel_ingest.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["statreel_ingest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: hits the network through the ethics layer (pnpm e2e:live / just e2e-live)"]
+addopts = "-m 'not live'"

@@ -50,3 +50,4 @@ pipeline/dbt/dbt_packages/
 /.claude/rules/ai-registry-media-generation.md
 /.ai/skill-runs.local.jsonl
 # END ai-registry linked skills
+pipeline/dbt/.user.yml

@@ -1,0 +1,17 @@
+id: counterfactual-timelines
+name: Counterfactual timelines
+stage: 5
+requires:
+  kinds:
+  - hist
+  - events
+composition: null
+formats:
+- landscape
+default_format: landscape
+duration_s:
+  min: 60
+  max: 150
+props_schema: null
+query_templates: []
+notes: ghost line model

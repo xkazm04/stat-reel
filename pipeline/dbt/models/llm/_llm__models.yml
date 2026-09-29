@@ -1,0 +1,53 @@
+version: 2
+
+# The ONLY schema the MCP `query` tool may read. Every column is documented: the comments are
+# persisted into DuckDB and served to the LLM by `describe_views`.
+models:
+  - name: f1_driver_era_adjusted
+    description: >-
+      F1 driver careers, raw vs era-adjusted. Adjusted = every Grand Prix re-scored under the current
+      points system (25-18-15-12-10-8-6-4-2-1) divided by starts; Indianapolis 500 excluded; shared cars
+      split. An ESTIMATE of dominance, not an official statistic - say "era-adjusted" when quoting it.
+      Source F1DB (CC BY 4.0), attribution required.
+    columns:
+      - {name: fact_key, description: "Stable id of this fact; cite it in props and narration."}
+      - {name: player_id, description: "f1db driver id (slug)."}
+      - {name: display_name, description: "Name as commonly used (use this on screen and in narration)."}
+      - {name: full_name, description: "Full legal name of the driver."}
+      - {name: first_season, description: "First season with a Grand Prix start (Indianapolis excluded)."}
+      - {name: last_season, description: "Latest season with a start."}
+      - {name: seasons, description: "Number of seasons with at least one start."}
+      - {name: starts, description: "Grand Prix starts, excluding non-starts (DNQ/DNPQ/DNS/DNP) and the Indianapolis 500."}
+      - {name: wins, description: "Wins among those starts (shared wins count for each driver)."}
+      - {name: podiums, description: "Top-3 finishes among those starts."}
+      - {name: titles, description: "World Drivers' Championships."}
+      - {name: points_awarded, description: "Career points as historically awarded (all rounds, era rules). RAW metric."}
+      - {name: points_current_system, description: "Career points re-scored under the current system (no fastest-lap point, no sprints)."}
+      - {name: points_per_start_current_system, description: "ADJUSTED metric - points_current_system / starts (0-25)."}
+      - {name: win_rate, description: "wins / starts (0-1)."}
+      - {name: peak_season_share, description: "Best season's current-system points as a share of the maximum possible (25 x races), in seasons where the driver started at least half the races."}
+      - {name: eligible, description: "True when starts >= min_starts; only eligible drivers are ranked."}
+      - {name: rank_raw, description: "Rank by points_awarded among eligible drivers (1 = most)."}
+      - {name: rank_adjusted, description: "Rank by points_per_start_current_system among eligible drivers."}
+      - {name: min_starts, description: "Eligibility threshold used for the ranks."}
+      - {name: method, description: "Plain-language statement of the adjustment; show it on screen or in the description."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_driver_seasons
+    description: >-
+      F1 driver seasons with raw and current-system points and share of the season maximum.
+      Source F1DB (CC BY 4.0), attribution required.
+    columns:
+      - {name: fact_key, description: "Stable id of this fact; cite it in props and narration."}
+      - {name: player_id, description: "f1db driver id (slug)."}
+      - {name: display_name, description: "Name as commonly used (use this on screen and in narration)."}
+      - {name: full_name, description: "Full legal name of the driver."}
+      - {name: season, description: "Championship year."}
+      - {name: starts, description: "Starts that season (Indianapolis excluded)."}
+      - {name: wins, description: "Wins that season."}
+      - {name: podiums, description: "Podiums that season."}
+      - {name: points_awarded, description: "Points as awarded that season under its own rules."}
+      - {name: points_current_system, description: "Points re-scored under the current system."}
+      - {name: season_share, description: "points_current_system / (25 x races held that season, Indianapolis excluded)."}
+      - {name: season_races, description: "Races held that season (Indianapolis excluded)."}
+      - {name: championship_position, description: "Final Drivers' Championship position (null if unclassified)."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}

@@ -1,0 +1,479 @@
+# Source registry - the single source of truth for what may be fetched and how (DESIGN.md §5.1).
+# Ingestion refuses any host not listed under a source's `hosts`. `verdict: avoid` sources carry no
+# hosts and are unreachable in code. Seeded from DESIGN.md Appendix A (research 2026-09-29).
+#
+# rate_limit: the PUBLISHED limit ({requests, per_s}); clients run at <= 50 % of it. null = none
+# published -> default 1 request / 3 s per host.
+
+- id: f1db
+  sport: F1
+  url: https://github.com/f1db/f1db
+  # github.com/robots.txt disallows /*/download for generic agents, so release assets are fetched
+  # through the GitHub REST API (ADR 001), which redirects to release-assets.githubusercontent.com.
+  access: api
+  hosts: [api.github.com, release-assets.githubusercontent.com]
+  verdict: legal
+  license: CC-BY-4.0
+  attribution: "Data: F1DB (CC BY 4.0)"
+  kinds: [hist, bio, live]
+  coverage: {from: 1950, to: current}
+  rate_limit: {requests: 60, per_s: 3600, note: "GitHub REST, unauthenticated"}
+  terms_url: https://github.com/f1db/f1db/blob/main/LICENSE
+  terms_checked_at: 2026-09-29
+  notes: "Released after every race; no telemetry."
+
+- id: wikidata
+  sport: all
+  url: https://query.wikidata.org/
+  access: api
+  hosts: [query.wikidata.org]
+  verdict: legal
+  license: CC0-1.0
+  attribution: "Data: Wikidata (CC0)"
+  kinds: [bio]
+  partial_kinds: [hist]
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.wikidata.org/wiki/Wikidata:Licensing
+  terms_checked_at: 2026-09-29
+  notes: "SPARQL; set UA. Commons images are licensed per file and are not ingested."
+
+- id: jolpica-f1
+  sport: F1
+  url: https://api.jolpi.ca/ergast/f1/
+  access: api
+  hosts: [api.jolpi.ca]
+  verdict: non_commercial
+  license: CC-BY-NC-SA-4.0
+  attribution: "Data: Jolpica-F1 (CC BY-NC-SA 4.0)"
+  kinds: [hist, live]
+  coverage: {from: 1950, to: current}
+  rate_limit: {requests: 500, per_s: 3600, burst_per_s: 4}
+  terms_url: https://github.com/jolpica/jolpica-f1/blob/main/TERMS.md
+  terms_checked_at: 2026-09-29
+  notes: "Commercial use by permission: admin@jolpi.ca."
+
+- id: openf1
+  sport: F1
+  url: https://openf1.org/
+  access: api
+  hosts: [api.openf1.org]
+  verdict: non_commercial
+  license: CC-BY-NC-SA-4.0
+  attribution: "Data: OpenF1 (CC BY-NC-SA 4.0)"
+  kinds: [track, events, live]
+  coverage: {from: 2023, to: current}
+  rate_limit: {requests: 30, per_s: 60, burst_per_s: 3}
+  terms_url: https://openf1.org/
+  terms_checked_at: 2026-09-29
+  notes: "Does not own F1 data. Live access is paid (EUR 9.90/mo)."
+
+- id: fastf1
+  sport: F1
+  url: https://github.com/theOehrly/Fast-F1
+  access: manual
+  hosts: []
+  verdict: non_commercial
+  license: "MIT (code); F1 timing data (c) FOWC"
+  attribution: "Timing data (c) Formula One World Championship Ltd, via FastF1"
+  kinds: [track, events]
+  coverage: {from: 2018, to: current}
+  rate_limit: null
+  terms_url: https://github.com/theOehrly/Fast-F1
+  terms_checked_at: 2026-09-29
+  notes: "Library with its own cache; imported manually with a provenance note."
+
+- id: formula1-com
+  sport: F1
+  url: https://www.formula1.com/
+  access: manual
+  hosts: []
+  verdict: avoid
+  license: "personal non-commercial; automated use restricted"
+  attribution: null
+  kinds: []
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.formula1.com/en/information/legal-notices.html
+  terms_checked_at: 2026-09-29
+  notes: "Trademarks of F1 Licensing BV."
+
+- id: balldontlie
+  sport: NBA
+  url: https://www.balldontlie.io/
+  access: api
+  hosts: [api.balldontlie.io]
+  verdict: legal
+  license: "publish/display allowed; no attribution required"
+  attribution: "Data: balldontlie"
+  kinds: [hist, live]
+  coverage: null
+  rate_limit: {requests: 5, per_s: 60, note: "free tier"}
+  terms_url: https://www.balldontlie.io/terms.html
+  terms_checked_at: 2026-09-29
+  notes: "Paid tiers for advanced stats; no shot x/y."
+
+- id: nba-api
+  sport: NBA
+  url: https://stats.nba.com/
+  access: api
+  hosts: [stats.nba.com]
+  verdict: non_commercial
+  license: "NBA.com ToS: personal non-commercial"
+  attribution: "Data: NBA.com"
+  kinds: [hist, events, track, live]
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.nba.com/termsofuse
+  terms_checked_at: 2026-09-29
+  notes: "No published limit - default 1 req / 3 s."
+
+- id: hoopr-espn
+  sport: NBA
+  url: https://github.com/sportsdataverse/hoopR
+  access: manual
+  hosts: []
+  verdict: non_commercial
+  license: "MIT (code); ESPN/NBA data"
+  attribution: "Data: ESPN via hoopR"
+  kinds: [events]
+  coverage: {from: 2002, to: current}
+  rate_limit: null
+  terms_url: https://github.com/sportsdataverse/hoopR
+  terms_checked_at: 2026-09-29
+  notes: "Shot locations 2002+."
+
+- id: sportradar-nba
+  sport: NBA
+  url: https://developer.sportradar.com/
+  access: api
+  hosts: []
+  verdict: paid
+  license: "contract; trial is evaluation-only"
+  attribution: "Data: Sportradar"
+  kinds: [events, live, hist]
+  coverage: null
+  rate_limit: {requests: 1, per_s: 1, note: "trial"}
+  terms_url: https://developer.sportradar.com/
+  terms_checked_at: 2026-09-29
+  notes: "No hosts until a contract exists."
+
+- id: basketball-reference
+  sport: NBA
+  url: https://www.basketball-reference.com/
+  access: manual
+  hosts: []
+  verdict: avoid
+  verdict_note: automated
+  license: "no automated access; single facts OK manually"
+  attribution: null
+  kinds: [hist]
+  coverage: null
+  rate_limit: {requests: 20, per_s: 60, note: "exceeding = 1-day jail"}
+  terms_url: https://www.sports-reference.com/data_use.html
+  terms_checked_at: 2026-09-29
+  notes: null
+
+- id: sportsdataio-trial
+  sport: NBA
+  url: https://sportsdata.io/
+  access: manual
+  hosts: []
+  verdict: avoid
+  license: "trial data scrambled 5-20 %"
+  attribution: null
+  kinds: []
+  coverage: null
+  rate_limit: null
+  terms_url: https://sportsdata.io/
+  terms_checked_at: 2026-09-29
+  notes: null
+
+- id: nhl-api
+  sport: NHL
+  url: https://api-web.nhle.com/
+  access: api
+  hosts: [api-web.nhle.com]
+  verdict: non_commercial
+  license: "NHL.com ToS bans scraping/commercial reuse"
+  attribution: "Data: NHL.com"
+  kinds: [hist, events, track, live]
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.nhl.com/info/terms-of-service
+  terms_checked_at: 2026-09-29
+  notes: "429 on bursts."
+
+- id: moneypuck
+  sport: NHL
+  url: https://www.moneypuck.com/data.htm
+  access: bulk_download
+  hosts: [moneypuck.com, www.moneypuck.com]
+  verdict: non_commercial
+  license: "free non-commercial and journalists; credit required"
+  attribution: "Data: MoneyPuck.com"
+  kinds: [events, hist]
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.moneypuck.com/data.htm
+  terms_checked_at: 2026-09-29
+  notes: "CSV downloads only; scraping blocked."
+
+- id: hockeyr-fastrhockey
+  sport: NHL
+  url: https://github.com/sportsdataverse/fastRhockey
+  access: manual
+  hosts: []
+  verdict: non_commercial
+  license: "MIT (code); NHL data"
+  attribution: "Data: NHL via hockeyR/fastRhockey"
+  kinds: [events]
+  coverage: null
+  rate_limit: null
+  terms_url: https://github.com/sportsdataverse/fastRhockey
+  terms_checked_at: 2026-09-29
+  notes: "Bundled xG models."
+
+- id: naturalstattrick
+  sport: NHL
+  url: https://www.naturalstattrick.com/
+  access: manual
+  hosts: []
+  verdict: non_commercial
+  verdict_note: provisional
+  license: "scraping policy unverified"
+  attribution: "Data: Natural Stat Trick"
+  kinds: [events, hist]
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.naturalstattrick.com/
+  terms_checked_at: 2026-09-29
+  notes: "Read the policy manually before any use."
+
+- id: hockey-reference
+  sport: NHL
+  url: https://www.hockey-reference.com/
+  access: manual
+  hosts: []
+  verdict: avoid
+  verdict_note: automated
+  license: "no automated access; manual/CSV export OK"
+  attribution: null
+  kinds: [hist]
+  coverage: null
+  rate_limit: {requests: 20, per_s: 60}
+  terms_url: https://www.sports-reference.com/data_use.html
+  terms_checked_at: 2026-09-29
+  notes: null
+
+- id: evolving-hockey
+  sport: NHL
+  url: https://evolving-hockey.com/
+  access: manual
+  hosts: []
+  verdict: avoid
+  license: "no redistribution; paid"
+  attribution: null
+  kinds: []
+  coverage: null
+  rate_limit: null
+  terms_url: https://evolving-hockey.com/
+  terms_checked_at: 2026-09-29
+  notes: null
+
+- id: wyscout-public
+  sport: Soccer
+  url: https://figshare.com/collections/Soccer_match_event_dataset/4415000
+  access: bulk_download
+  hosts: [figshare.com, ndownloader.figshare.com]
+  verdict: legal
+  license: CC-BY-4.0
+  attribution: "Data: Pappalardo et al. (2019), Wyscout public dataset (CC BY 4.0)"
+  kinds: [events]
+  coverage: {from: 2016, to: 2018}
+  rate_limit: null
+  terms_url: https://www.nature.com/articles/s41597-019-0247-7
+  terms_checked_at: 2026-09-29
+  notes: "2017/18 top-5 leagues, World Cup 2018, Euro 2016."
+
+- id: skillcorner-open
+  sport: Soccer
+  url: https://github.com/SkillCorner/opendata
+  access: api
+  hosts: [api.github.com, release-assets.githubusercontent.com, raw.githubusercontent.com]
+  verdict: legal
+  license: MIT
+  attribution: "Tracking data: SkillCorner"
+  kinds: [track]
+  coverage: {from: 2024, to: 2025}
+  rate_limit: {requests: 60, per_s: 3600, note: "GitHub REST, unauthenticated"}
+  terms_url: https://github.com/SkillCorner/opendata
+  terms_checked_at: 2026-09-29
+  notes: "10 A-League 2024/25 matches; credit requested."
+
+- id: metrica-sample
+  sport: Soccer
+  url: https://github.com/metrica-sports/sample-data
+  access: api
+  hosts: [api.github.com, raw.githubusercontent.com]
+  verdict: legal
+  verdict_note: credit
+  license: "no licence file; 'acknowledge the source'"
+  attribution: "Data: Metrica Sports sample data"
+  kinds: [track, events]
+  coverage: null
+  rate_limit: {requests: 60, per_s: 3600, note: "GitHub REST, unauthenticated"}
+  terms_url: https://github.com/metrica-sports/sample-data
+  terms_checked_at: 2026-09-29
+  notes: "3 matches; ask before sponsored use."
+
+- id: openfootball
+  sport: Soccer
+  url: https://github.com/openfootball/football.json
+  access: api
+  hosts: [api.github.com, raw.githubusercontent.com]
+  verdict: legal
+  license: CC0-1.0
+  attribution: "Data: openfootball (CC0)"
+  kinds: [hist, live]
+  coverage: {from: 2010, to: 2026}
+  rate_limit: {requests: 60, per_s: 3600, note: "GitHub REST, unauthenticated"}
+  terms_url: https://github.com/openfootball/football.json
+  terms_checked_at: 2026-09-29
+  notes: "Fixtures and results."
+
+- id: wikipedia
+  sport: all
+  url: https://en.wikipedia.org/
+  access: manual
+  hosts: []
+  verdict: legal
+  license: CC-BY-SA-4.0
+  attribution: "Source: Wikipedia (CC BY-SA 4.0)"
+  kinds: [money, hist]
+  coverage: null
+  rate_limit: null
+  terms_url: https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use
+  terms_checked_at: 2026-09-29
+  notes: "Attribution + share-alike; transfers hand-curated."
+
+- id: football-data-org
+  sport: Soccer
+  url: https://www.football-data.org/
+  access: api
+  hosts: [api.football-data.org]
+  verdict: legal
+  license: "attribution required"
+  attribution: "Football data provided by the Football-Data.org API"
+  kinds: [live, hist]
+  coverage: null
+  rate_limit: {requests: 10, per_s: 60, note: "free tier"}
+  terms_url: https://www.football-data.org/terms
+  terms_checked_at: 2026-09-29
+  notes: "Full terms unverified."
+
+- id: api-football
+  sport: Soccer
+  url: https://www.api-football.com/
+  access: api
+  hosts: []
+  verdict: paid
+  license: "confirm 'mass media channels' use in writing"
+  attribution: "Data: API-Football"
+  kinds: [live, events, money]
+  coverage: null
+  rate_limit: {requests: 100, per_s: 86400, note: "free tier"}
+  terms_url: https://www.api-football.com/terms
+  terms_checked_at: 2026-09-29
+  notes: "No hosts until written confirmation."
+
+- id: statsbomb-open
+  sport: Soccer
+  url: https://github.com/statsbomb/open-data
+  access: api
+  hosts: [api.github.com, raw.githubusercontent.com]
+  verdict: non_commercial
+  license: "StatsBomb user agreement §1.2.2 bans commercial use of data or derived analysis"
+  attribution: "Data: StatsBomb (logo credit required)"
+  kinds: [events, track]
+  coverage: null
+  rate_limit: {requests: 60, per_s: 3600, note: "GitHub REST, unauthenticated"}
+  terms_url: https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf
+  terms_checked_at: 2026-09-29
+  notes: null
+
+- id: understat
+  sport: Soccer
+  url: https://understat.com/
+  access: html_scrape
+  hosts: [understat.com]
+  verdict: non_commercial
+  license: "no ToS found"
+  attribution: "Data: Understat"
+  kinds: [events, live]
+  coverage: null
+  rate_limit: null
+  terms_url: https://understat.com/
+  terms_checked_at: 2026-09-29
+  notes: "Credit; 1 req / 3 s."
+
+- id: football-data-co-uk
+  sport: Soccer
+  url: https://www.football-data.co.uk/
+  access: bulk_download
+  hosts: [www.football-data.co.uk]
+  verdict: non_commercial
+  license: "all rights reserved"
+  attribution: "Data: football-data.co.uk"
+  kinds: [hist]
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.football-data.co.uk/
+  terms_checked_at: 2026-09-29
+  notes: "Chart facts; do not redistribute CSVs."
+
+- id: fbref
+  sport: Soccer
+  url: https://fbref.com/
+  access: manual
+  hosts: []
+  verdict: avoid
+  verdict_note: automated
+  license: "no automated access"
+  attribution: null
+  kinds: [hist]
+  coverage: null
+  rate_limit: {requests: 10, per_s: 60}
+  terms_url: https://www.sports-reference.com/data_use.html
+  terms_checked_at: 2026-09-29
+  notes: "Advanced stats removed Jan 2026."
+
+- id: transfermarkt
+  sport: Soccer
+  url: https://www.transfermarkt.com/
+  access: manual
+  hosts: []
+  verdict: avoid
+  license: "reported scraping ban (unverified)"
+  attribution: null
+  kinds: [money]
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.transfermarkt.com/
+  terms_checked_at: 2026-09-29
+  notes: "Cite single facts manually."
+
+- id: fotmob-sofascore
+  sport: Soccer
+  url: https://www.fotmob.com/
+  access: manual
+  hosts: []
+  verdict: avoid
+  license: "scraping prohibited"
+  attribution: null
+  kinds: []
+  coverage: null
+  rate_limit: null
+  terms_url: https://www.fotmob.com/
+  terms_checked_at: 2026-09-29
+  notes: null

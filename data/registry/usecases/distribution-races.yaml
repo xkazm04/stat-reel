@@ -1,0 +1,17 @@
+id: distribution-races
+name: Distribution races
+stage: 4
+requires:
+  kinds:
+  - hist
+  - bio
+composition: null
+formats:
+- landscape
+default_format: landscape
+duration_s:
+  min: 60
+  max: 150
+props_schema: null
+query_templates: []
+notes: ridgeline

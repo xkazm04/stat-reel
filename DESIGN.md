@@ -13,7 +13,7 @@
 2. **Test-first per milestone.** Write the milestone's e2e test (failing) before implementation. A milestone is done only when its Definition of Done (DoD) checks pass locally with `pnpm e2e:live` (and `pnpm e2e` in replay mode).
 3. **Trunk-based, small commits.** One logical change per commit, conventional commit messages. Never commit secrets, raw scraped data, rendered media or `.duckdb` files.
 4. **Verify CLI flags before relying on them.** Flags listed for `claude`, `codex`, `grok`, `opa`, `ffmpeg`, `dbt` are from research on 2026-09-29; run `<tool> --help` and adapt. Record deviations in `docs/decisions/`.
-5. **Never bypass the ethics layer.** No ingestion code may issue HTTP requests except through `packages/ingest` clients that enforce the source registry (verdict, robots.txt, rate limits, caching, User-Agent). Sources with verdict `avoid` must be unreachable in code.
+5. **Never bypass the ethics layer.** No ingestion code may issue HTTP requests except through `pipeline/statreel_ingest` clients (`EthicalClient`) that enforce the source registry (verdict, robots.txt, rate limits, caching, User-Agent). Sources with verdict `avoid` must be unreachable in code.
 6. **Ask the owner** before: creating platform developer apps, spending ElevenLabs credits beyond test budgets (see §6.6), making anything public, or adding a new data source not in the registry.
 7. Keep this document current: when a decision changes, update the relevant section and add an ADR in `docs/decisions/NNN-title.md`.
 
@@ -51,6 +51,8 @@
 | D8 | **ElevenLabs** for TTS, music (Eleven Music), SFX, alignment | Owner has credits; commercial rights on paid plans | — |
 | D9 | **Burned-in captions everywhere + SRT/VTT sidecar on YouTube** | TikTok/Instagram APIs have no caption-file field | — |
 | D10 | **OFL fonts only, self-hosted, pinned** | Commercial-safe, server-render-safe, deterministic | Adobe Fonts / desktop EULAs (no server rendering) |
+| D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
+| D12 | **Capability tests declared in YAML, evaluated in Python** ([ADR 002](docs/decisions/002-capability-tests-in-python.md)) | One row per capability with coverage, rows and a reason; dbt tests keep schema integrity | dbt tests as capability carriers |
 
 ---
 
@@ -139,14 +141,15 @@ Single source of truth for what may be fetched and how. Ingestion refuses any ho
 - id: f1db
   sport: F1
   url: https://github.com/f1db/f1db
-  access: bulk_download          # bulk_download | api | html_scrape | manual
+  access: api                    # bulk_download | api | html_scrape | manual  (ADR 001)
+  hosts: [api.github.com, release-assets.githubusercontent.com]   # the only hosts the client may reach
   verdict: legal                 # legal | non_commercial | paid | avoid
   license: CC-BY-4.0
   attribution: "Data: F1DB (CC BY 4.0)"
   kinds: [hist, bio, live]
   coverage: {from: 1950, to: current}
-  rate_limit: null
-  terms_url: https://github.com/f1db/f1db
+  rate_limit: {requests: 60, per_s: 3600}   # published limit; client runs at <= 50 %
+  terms_url: https://github.com/f1db/f1db/blob/main/LICENSE
   terms_checked_at: 2026-09-29
   notes: "Released after every race; no telemetry."
 ```
@@ -190,8 +193,8 @@ Raw snapshots are immutable. A `current` pointer per source selects the snapshot
 - Schemas: `staging_<source>` → `core` (conformed: `players`, `teams`, `competitions`, `seasons`, `matches`, `player_season_stats`, `events`, `tracks`) → `marts` (one per use case family, e.g. `mart_era_adjusted`, `mart_shot_maps`).
 - Every source model declares `meta: {license_class: legal|non_commercial|paid, source_id: …}`.
 - `pipeline/statreel_ingest/lineage.py` reads `target/manifest.json` and computes for each model the **most restrictive** upstream licence class and the set of upstream sources → writes `meta.model_lineage(model, license_class, sources[])` into DuckDB.
-- **Capability tests** (dbt tests + custom macros) per sport × kind: row counts, coverage years, null ratios, coordinate ranges. Results → `meta.capabilities(sport, kind, source_id, license_class, coverage_from, coverage_to, rows, status, evaluated_at)`.
-- Curated **read-only views** for the LLM in schema `llm` with column comments (`COMMENT ON`) — the only schema the MCP `query` tool can read.
+- **Capability tests** (declared in `pipeline/capabilities.yaml`, evaluated in Python after `dbt build` — ADR 002; dbt tests keep schema integrity) per sport × kind: row counts, coverage years, null ratios, coordinate ranges. Results → `meta.capabilities(sport, kind, source_id, license_class, coverage_from, coverage_to, rows, status, detail, evaluated_at)`.
+- Curated **read-only views** for the LLM in schema `llm` with column comments (dbt `persist_docs` → DuckDB comments) — the only schema the MCP `query` tool can read. Every row carries a stable `fact_key` (for binding on-screen figures to facts) and the `attribution` string; adjusted metrics carry a plain-language `method`.
 
 ### 5.5 Models (Python batch jobs writing DuckDB tables)
 

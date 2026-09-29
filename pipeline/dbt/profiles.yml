@@ -1,0 +1,7 @@
+statreel:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: "{{ env_var('STATREEL_WAREHOUSE') }}"
+      threads: 4

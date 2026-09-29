@@ -1,0 +1,27 @@
+name: statreel
+version: "0.1.0"
+config-version: 2
+profile: statreel
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+models:
+  statreel:
+    staging:
+      +schema: staging_f1db
+      +materialized: view
+    core:
+      +schema: core
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
+    llm:
+      # the only schema the MCP `query` tool may read (DESIGN.md §5.4)
+      +schema: llm
+      +materialized: view
+      +persist_docs: {relation: true, columns: true}

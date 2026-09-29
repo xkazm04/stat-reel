@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: f1db
+    description: "F1DB release snapshot (CC BY 4.0), immutable Parquet under data/raw/f1db/<snapshot>/."
+    meta:
+      source_id: f1db
+      license_class: legal
+      attribution: "Data: F1DB (CC BY 4.0)"
+      external_location: "read_parquet('{{ env_var('F1DB_SNAPSHOT') }}/{name}.parquet')"
+    tables:
+      - name: drivers
+      - name: races
+      - name: races_race_results
+      - name: seasons
+      - name: seasons_driver_standings

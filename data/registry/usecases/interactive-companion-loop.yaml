@@ -1,0 +1,17 @@
+id: interactive-companion-loop
+name: Interactive companion loop
+stage: 7
+requires:
+  kinds:
+  - hist
+  - bio
+composition: null
+formats:
+- landscape
+default_format: landscape
+duration_s:
+  min: 60
+  max: 120
+props_schema: null
+query_templates: []
+notes: companion web tool (later)
