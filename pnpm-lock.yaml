@@ -30,8 +30,8 @@ importers:
   apps/server:
     dependencies:
       '@duckdb/node-api':
-        specifier: ^1.4.0-r.1
-        version: 1.4.0-r.2
+        specifier: ^1.5.6-r.1
+        version: 1.5.6-r.1
       '@hono/node-server':
         specifier: ^1.19.0
         version: 1.19.17(hono@4.13.10)
@@ -389,36 +389,55 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@duckdb/node-api@1.4.0-r.2':
-    resolution: {integrity: sha512-kt5598+3L1TiSUCyNZ5Zh12hHIQeAzUj51CXKXycQaobEf3KooXZJhjiM1RkELKoGW+GeRotgPw2QUoIyeaWVg==}
+  '@duckdb/node-api@1.5.6-r.1':
+    resolution: {integrity: sha512-yIPol6P4EQmsAUsb27donJf7iADrM31Ei/WkvhkZpSscjhEErYsuF19lsJ/qz5mUWxsKFQpLdjvrlhPQnMTBqw==}
 
-  '@duckdb/node-bindings-darwin-arm64@1.4.0-r.2':
-    resolution: {integrity: sha512-WaTZhpodKIKROqPC5b3l00rSa1xdnZUmPqngGEJlRSR/YeOGnh1J1ONx5o3q9vkbbzSbsk7POtFwTbmJCvrIDw==}
+  '@duckdb/node-bindings-darwin-arm64@1.5.6-r.1':
+    resolution: {integrity: sha512-KFT/J/pyouuAD1jftAIfcWVRdorg+c/yVR/BJL8LJKrST+mYC4d7QSuQ+iXSYbFpHENUAeZUagXrMPtZT8Xzsg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@duckdb/node-bindings-darwin-x64@1.4.0-r.2':
-    resolution: {integrity: sha512-dSCGn4ZV8R7vCdnlJpOfadNtf9YqvpdAGo4CC48O7uRbargDIGQ4lpRJUSAoKsvxC63p3aG3p19regFpRbJqMA==}
+  '@duckdb/node-bindings-darwin-x64@1.5.6-r.1':
+    resolution: {integrity: sha512-tVwUZNvdQoaPJhrh3q2e6jxm1MhahNHJQK/pvCyco46NX0mEuGzlw9i0n2MArgsyzccdCwScOK9ctbyr+3oMbQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@duckdb/node-bindings-linux-arm64@1.4.0-r.2':
-    resolution: {integrity: sha512-xB3xI5QcUC7LiyKPFZOYam5nV31SkgGTHazC58sACBB7OSpjBTxD0+EKdTOOA3IymR+mZ7WCPCLfKhyemreqbQ==}
+  '@duckdb/node-bindings-linux-arm64-musl@1.5.6-r.1':
+    resolution: {integrity: sha512-j6dcNLWnFvlQyKMtl36HyeDsOaetXFoj0dH21Q9MbLjABNuJs5ekDV6zMSEda/g5+z1Tm6r2KFOS8j3tGUCRiw==}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
-  '@duckdb/node-bindings-linux-x64@1.4.0-r.2':
-    resolution: {integrity: sha512-t1tuDc2FBdj1hRuP1rtoPoIhnDgMYSMFh1R/OmNbtbvI2K4RIMICp8ya6/RiP2NGyXk9A+NMDooi9kLuNQmlvQ==}
+  '@duckdb/node-bindings-linux-arm64@1.5.6-r.1':
+    resolution: {integrity: sha512-3jnUaDil1BrF/6vAZwVaInJ1xoBaWGHB4PDiUnzJWKCo8a8TLx9j7/gPyPl/UGRBftrYIuTihRZSfF4mWMgtWA==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@duckdb/node-bindings-linux-x64-musl@1.5.6-r.1':
+    resolution: {integrity: sha512-PVzIEZqp7QN07WBgjmIH0cK2GKXR735KmL6wnghTzRnhHWrePxx3MjZB9zZHI8tB73wdF8luarBm4EgqSjGyVA==}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
-  '@duckdb/node-bindings-win32-x64@1.4.0-r.2':
-    resolution: {integrity: sha512-aoJHj+EumU2bLKMxk5OpJrD12KREt/o3FF3GaAkhFsQZc95AKWqdOkp3BWGaMqGq7A7cWoqSKBHxMHAlZI9z0A==}
+  '@duckdb/node-bindings-linux-x64@1.5.6-r.1':
+    resolution: {integrity: sha512-IXcrZJE6kEqM0Z4wwdVnGBHX/frOS33VPNAwDXQ/Q+Fs84b058Qe94chrCCIcNJlG8Y3UHIUU4eBeCQxW5mN1Q==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@duckdb/node-bindings-win32-arm64@1.5.6-r.1':
+    resolution: {integrity: sha512-nzNTZx9rus5QpuX+KH6UOPNeZp8yF25TxV6DiUly4RKgR5mu6xo8c7a7lS80AqxTJfJ9BwUIiqlCuYKWztRM5A==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@duckdb/node-bindings-win32-x64@1.5.6-r.1':
+    resolution: {integrity: sha512-5Rpn5WXEG5gY/u7Keh+c4kuwG/LiE31pCP9CoCohv+u0aFensk/yRIQVW/CXuIoITky9xFhdRzaWUtAnGTYxJQ==}
     cpu: [x64]
     os: [win32]
 
-  '@duckdb/node-bindings@1.4.0-r.2':
-    resolution: {integrity: sha512-FZEWyV16aQix8rD2BZtcnY3EFw4i+1xP8WRbo1UampJve7krrLV4t9jMSmh4r+Nc5BRJ006A4/jwD6OpNhbR2g==}
+  '@duckdb/node-bindings@1.5.6-r.1':
+    resolution: {integrity: sha512-/pWlTyvKC1d16iSMJCBAPwlmzoeXRs5Y9cqG+TpKd/YAW6Ke05FJg099v/Im2bkS9BgznNyNcAK1NxA1eQhSUw==}
 
   '@emnapi/core@1.11.3':
     resolution: {integrity: sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg==}
@@ -2871,32 +2890,46 @@ snapshots:
   '@biomejs/cli-win32-x64@2.5.14':
     optional: true
 
-  '@duckdb/node-api@1.4.0-r.2':
+  '@duckdb/node-api@1.5.6-r.1':
     dependencies:
-      '@duckdb/node-bindings': 1.4.0-r.2
+      '@duckdb/node-bindings': 1.5.6-r.1
 
-  '@duckdb/node-bindings-darwin-arm64@1.4.0-r.2':
+  '@duckdb/node-bindings-darwin-arm64@1.5.6-r.1':
     optional: true
 
-  '@duckdb/node-bindings-darwin-x64@1.4.0-r.2':
+  '@duckdb/node-bindings-darwin-x64@1.5.6-r.1':
     optional: true
 
-  '@duckdb/node-bindings-linux-arm64@1.4.0-r.2':
+  '@duckdb/node-bindings-linux-arm64-musl@1.5.6-r.1':
     optional: true
 
-  '@duckdb/node-bindings-linux-x64@1.4.0-r.2':
+  '@duckdb/node-bindings-linux-arm64@1.5.6-r.1':
     optional: true
 
-  '@duckdb/node-bindings-win32-x64@1.4.0-r.2':
+  '@duckdb/node-bindings-linux-x64-musl@1.5.6-r.1':
     optional: true
 
-  '@duckdb/node-bindings@1.4.0-r.2':
+  '@duckdb/node-bindings-linux-x64@1.5.6-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-win32-arm64@1.5.6-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-win32-x64@1.5.6-r.1':
+    optional: true
+
+  '@duckdb/node-bindings@1.5.6-r.1':
+    dependencies:
+      detect-libc: 2.1.2
     optionalDependencies:
-      '@duckdb/node-bindings-darwin-arm64': 1.4.0-r.2
-      '@duckdb/node-bindings-darwin-x64': 1.4.0-r.2
-      '@duckdb/node-bindings-linux-arm64': 1.4.0-r.2
-      '@duckdb/node-bindings-linux-x64': 1.4.0-r.2
-      '@duckdb/node-bindings-win32-x64': 1.4.0-r.2
+      '@duckdb/node-bindings-darwin-arm64': 1.5.6-r.1
+      '@duckdb/node-bindings-darwin-x64': 1.5.6-r.1
+      '@duckdb/node-bindings-linux-arm64': 1.5.6-r.1
+      '@duckdb/node-bindings-linux-arm64-musl': 1.5.6-r.1
+      '@duckdb/node-bindings-linux-x64': 1.5.6-r.1
+      '@duckdb/node-bindings-linux-x64-musl': 1.5.6-r.1
+      '@duckdb/node-bindings-win32-arm64': 1.5.6-r.1
+      '@duckdb/node-bindings-win32-x64': 1.5.6-r.1
 
   '@emnapi/core@1.11.3':
     dependencies:
@@ -4755,7 +4788,7 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
 
-  terser-webpack-plugin@5.6.1(esbuild@0.28.1)(postcss@8.5.28)(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.28)):
+  terser-webpack-plugin@5.6.1(esbuild@0.28.1)(postcss@8.5.28)(webpack@5.105.0(postcss@8.5.28)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
@@ -4939,7 +4972,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.5.0
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.1(esbuild@0.28.1)(postcss@8.5.28)(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.28))
+      terser-webpack-plugin: 5.6.1(esbuild@0.28.1)(postcss@8.5.28)(webpack@5.105.0(postcss@8.5.28))
       watchpack: 2.5.2
       webpack-sources: 3.6.0
     transitivePeerDependencies:

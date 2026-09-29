@@ -52,3 +52,11 @@ pipeline/dbt/dbt_packages/
 # END ai-registry linked skills
 pipeline/dbt/.user.yml
 .tools/
+
+# app state, e2e scratch and generated audio fixtures (CLAUDE.md: never commit audio)
+data/app.sqlite*
+data/e2e/
+data/e2e-smoke/
+e2e/fixtures/audio/
+test-results/
+playwright-report/
