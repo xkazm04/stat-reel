@@ -1,0 +1,52 @@
+# deps / build
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# data (registry + fixtures are committed; everything fetched or derived is not)
+data/raw/
+data/cache/
+data/renders/
+data/audio/
+*.duckdb
+*.duckdb.wal
+pipeline/dbt/target/
+pipeline/dbt/logs/
+pipeline/dbt/dbt_packages/
+
+# media
+*.mp4
+*.wav
+*.mp3
+
+# secrets / local
+.env
+.env.*
+*.local.json
+.statreel/
+
+# registry-linked skills and installed rule copies are machine state
+.claude/skills/
+.claude/rules/ai-registry-*.md
+.claude/settings.local.json
+
+# contest arena and vault (large, belongs to no commit)
+.contest/
+
+# BEGIN ai-registry linked skills (managed by ai-registry/scripts/link-registry.mjs)
+# Links are machine state; the declarations live in .ai/manifest.yaml (`skills:` and `knowledge.domains`).
+/.claude/skills/contest
+/.claude/skills/consult
+/.claude/skills/research
+/.claude/skills/uat
+/.claude/rules/ai-registry-access.md
+/.claude/rules/ai-registry-software-engineering.md
+/.claude/rules/ai-registry-media-generation.md
+/.ai/skill-runs.local.jsonl
+# END ai-registry linked skills

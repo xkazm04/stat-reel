@@ -1,0 +1,46 @@
+# .ai/manifest.yaml — the agent-facing contract for this repo. Unknown fields MUST be ignored.
+schema: ai-manifest
+schemaVersion: 0.1.0
+generatedAt: "2026-09-29"
+
+repo:
+  name: statreel
+  purpose: "Local-first studio turning licensed sports data into 1-3 min data-viz videos"
+  languages: [typescript, python]
+  archetype: solo
+
+capabilities:
+  test: { command: "pnpm test", verified: false }
+  e2e: { command: "pnpm e2e", verified: false }
+  e2e-live: { command: "pnpm e2e:live", verified: false }
+  pipeline-test: { command: "uv run --project pipeline pytest", verified: false }
+  policy-test: { command: "opa test policy", verified: false }
+
+paths:
+  design: DESIGN.md
+  decisions: docs/decisions/
+  sourceRegistry: data/registry/sources.yaml
+
+boundaries:
+  neverTouch: [data/raw/, data/renders/]
+  secretsFrom: "OS keychain (@napi-rs/keyring)"
+
+registry:
+  remote: github:xkazm04/ai-registry
+  local: ../ai-registry
+  machine: secondary
+  contributor: mkdol-dev-box
+
+# software-engineering: TS/Python monorepo, gates. media-generation: Remotion render,
+# ElevenLabs audio, captions, provenance.
+knowledge:
+  domains: [software-engineering, media-generation]
+
+# Shared skills this project uses, from the registry's skills/ lane. The LINK is machine
+# state (gitignored, made by ai-registry/scripts/link-registry.mjs); THIS list is the
+# reviewable declaration.
+skills:
+  - contest
+  - consult
+  - research
+  - uat
