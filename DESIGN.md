@@ -266,7 +266,7 @@ query_templates: [top_n_raw_vs_adjusted]
 **Captions**
 - Burned into every export (TikTok/Instagram APIs have no caption-file field); YouTube additionally gets SRT/VTT via `captions.insert` (400 quota units).
 - One timed-word JSON is the source for both burn-in and sidecar.
-- Cue rules: ≤ 2 lines; ≤ 32 chars/line vertical, ≤ 42 landscape; reading speed target 15–17 CPS, hard max 20 CPS; cue duration 0.8–7 s; min gap 2 frames (Netflix timed-text guide).
+- Cue rules: ≤ 2 lines; ≤ 42 chars/line landscape; vertical is limited by the safe-zone width, not the Netflix 32: at 76 px Inter Bold (≈0.56 em/char) the 885 px critical box fits **≈ 19 chars/line** (`maxCharsPerLine(format)` in `packages/captions`; measured 2026-09-29); reading speed target 15–17 CPS, hard max 20 CPS; cue duration 0.8–7 s; min gap 2 frames (Netflix timed-text guide).
 - Vertical style: 70–85 px text at 1920 h, weight 700, white on ~70 % black box or heavy stroke, contrast ≥ 4.5:1 (WCAG 2.2 SC 1.4.3); active-word highlight (accent colour) on shorts.
 - **Safe zone (union of TikTok, Reels, Shorts), 1080×1920:** top 270 px, bottom 670 px, left 65 px, right 130 px → critical-content box ≈ 885×980 px; captions sit just above y ≈ 1250. Debug overlay in Studio and in test renders. (Platforms publish templates, not text specs — values are a conservative union; re-check yearly.)
 - Accessibility law: the European Accessibility Act binds platforms, not an individual creator; treat WCAG 2.2 SC 1.2.2 (captions, prerecorded) as the standard anyway.
