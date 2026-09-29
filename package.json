@@ -13,7 +13,7 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "e2e": "cross-env LLM_MODE=replay AUDIO_MODE=replay PUBLISH_MODE=dry playwright test",
-    "e2e:live": "cross-env LLM_MODE=live AUDIO_MODE=live PUBLISH_MODE=dry E2E_LIVE=1 playwright test"
+    "e2e:live": "cross-env LLM_MODE=live AUDIO_MODE=live PUBLISH_MODE=dry LLM_RECORD=1 AUDIO_RECORD=1 E2E_LIVE=1 playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

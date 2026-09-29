@@ -16,7 +16,7 @@ export default defineConfig({
       url: "http://127.0.0.1:8787/api/health",
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { STATREEL_APP_DB: path.join(e2eData, "app.sqlite"), LLM_MODE: process.env.LLM_MODE ?? "replay", AUDIO_MODE: process.env.AUDIO_MODE ?? "replay", PUBLISH_MODE: process.env.PUBLISH_MODE ?? "dry" },
+      env: { STATREEL_APP_DB: path.join(e2eData, "app.sqlite"), LLM_MODE: process.env.LLM_MODE ?? "replay", AUDIO_MODE: process.env.AUDIO_MODE ?? "replay", PUBLISH_MODE: process.env.PUBLISH_MODE ?? "dry", LLM_RECORD: process.env.LLM_RECORD ?? "", AUDIO_RECORD: process.env.AUDIO_RECORD ?? "" },
     },
     { command: "pnpm --filter @statreel/studio dev", url: "http://127.0.0.1:5173", reuseExistingServer: false, timeout: 120_000 },
   ],

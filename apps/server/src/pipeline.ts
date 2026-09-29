@@ -9,7 +9,7 @@
  */
 import { spawn, execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { desc, eq } from "drizzle-orm";
@@ -277,6 +277,9 @@ export class Pipeline implements PipelineApi {
       checks_json: JSON.stringify(checks), policy_json: JSON.stringify({ ...verdict, target: p.target }), created_at: now() }).run();
     this.projects.advance(p.projectId, "rendered");
     if (verdict.allow) this.projects.advance(p.projectId, "gated");
+    // disposable intermediates go; the deliverables (video, captions, thumb, manifest) stay (ADR 003)
+    for (const f of [raw, mixWav, masterWav]) rmSync(f, { force: true });
+    rmSync(path.join(dir, "thumb"), { recursive: true, force: true });
     this.bus.emit({ type: "render.done", project_id: project.id, render_id: id, allow: verdict.allow });
     return { render_id: id, video: fileUrl(video), checks, policy: verdict };
   }
