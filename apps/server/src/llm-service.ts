@@ -1,6 +1,7 @@
 /** LLM sessions: one at a time (job kind "llm"), events persisted and streamed, resumable. */
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { ClaudeEngine, type LlmEngine, type LlmEvent, ReplayEngine } from "@statreel/llm";
@@ -43,10 +44,12 @@ export class LlmService {
       const { sessionId, projectId, prompt, resume } = params as { sessionId: string; projectId: string; prompt: string; resume?: string };
       const engine = this.engine();
       const project = this.projects.get(projectId);
-      const system = readFileSync(path.join(PROMPTS, `${project?.use_case_id ?? "era-adjusted-rankings"}.md`), "utf8");
+      const systemPromptFile = path.join(PROMPTS, `${project?.use_case_id ?? "era-adjusted-rankings"}.md`);
+      const cwd = path.join(tmpdir(), "statreel-llm"); // neutral: no repo CLAUDE.md, no git status in context
+      mkdirSync(cwd, { recursive: true });
       let seq = this.db.select().from(llmEvents).where(eq(llmEvents.session_id, sessionId)).all().length;
       const res = await engine.run({
-        prompt, resume, systemPrompt: system, mcpConfigPath: writeMcpConfig(), cwd: repoRoot, signal: ctx.signal,
+        prompt, resume, systemPromptFile, mcpConfigPath: writeMcpConfig(), cwd, signal: ctx.signal, vars: { PROJECT: projectId },
         onEvent: (e: LlmEvent) => {
           this.db.insert(llmEvents).values({ session_id: sessionId, seq: seq++, type: e.type, payload_json: JSON.stringify(e), at: now() }).run();
           if (e.type === "session") this.db.update(llmSessions).set({ external_session_id: e.session_id }).where(eq(llmSessions.id, sessionId)).run();
@@ -64,7 +67,7 @@ export class LlmService {
   engine(): LlmEngine {
     return modes.llm === "replay"
       ? new ReplayEngine("claude-code", LLM_FIXTURES, executor(this.tools))
-      : new ClaudeEngine(process.env.CLAUDE_BIN ?? "claude", LLM_FIXTURES);
+      : new ClaudeEngine(undefined, LLM_FIXTURES);
   }
 
   /** Start (or continue) a session for a project. Returns the app session id and job id. */

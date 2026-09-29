@@ -47,9 +47,20 @@ describe.skipIf(!existsSync(paths.warehouse))("ProjectService", () => {
     expect(r.errors.join("\n")).toMatch(/hook_shape/);
   });
 
+  const fullLength = () => {
+    const s = structuredClone(sampleScript);
+    s.scenes[0]!.tokens.push(...Array.from({ length: 110 }, () => ({ display: "word", spoken: "word" })));
+    return s;
+  };
+
+  it("rejects a fragment as too short for the use case", async () => {
+    const r = await svc.writeScript(create().id, sampleScript);
+    expect(r.errors.join("\n")).toMatch(/too short/);
+  });
+
   it("writes a script: checks figures against facts and reports CPS/length", async () => {
     const p = create();
-    const r = await svc.writeScript(p.id, sampleScript);
+    const r = await svc.writeScript(p.id, fullLength());
     expect(r.errors).toEqual([]);
     expect(r.words).toBeGreaterThan(0);
     expect(r.est_duration_s.min).toBeLessThanOrEqual(r.est_duration_s.max);
@@ -61,5 +72,15 @@ describe.skipIf(!existsSync(paths.warehouse))("ProjectService", () => {
     bad.scenes[0]!.tokens[5] = { display: "25", spoken: "twenty-five", fact_key: "f1db:driver:juan-manuel-fangio:era-adjusted#wins" };
     const r = await svc.writeScript(p.id, bad);
     expect(r.errors.join("\n")).toMatch(/25.*24/);
+  });
+
+  it("rejects a script that cannot fit the use case's duration band at the narrator's measured rate", async () => {
+    const p = create();
+    const long = structuredClone(sampleScript);
+    const filler = Array.from({ length: 200 }, (_, i) => ({ display: `word${"abcdefghij"[i % 10]}`, spoken: "word" }));
+    long.scenes[0]!.tokens.push(...filler);
+    const r = await svc.writeScript(p.id, long);
+    expect(r.version).toBeNull();
+    expect(r.errors.join("\n")).toMatch(/too long.*measured/);
   });
 });

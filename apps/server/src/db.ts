@@ -1,4 +1,6 @@
 /** app.sqlite - projects, props, scripts, assets, jobs, renders, LLM sessions, publications, metrics (DESIGN §9). */
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
@@ -149,6 +151,7 @@ create table if not exists settings (key text primary key, value_json text not n
 export type Db = BetterSQLite3Database<Record<string, never>> & { $client: Database.Database };
 
 export function openDb(file: string): Db {
+  if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
   const sqlite = new Database(file);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");

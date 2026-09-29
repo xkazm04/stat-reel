@@ -15,7 +15,7 @@ import { promisify } from "node:util";
 import { desc, eq } from "drizzle-orm";
 import { Entry } from "@napi-rs/keyring";
 import {
-  AudioCache, Budget, ElevenLabsClient, generateMusic, generateTts, measureLoudness, mixPlan, normalizeTo,
+  AudioCache, Budget, ElevenLabsClient, generateMusic, generateTts, jobStatusFor, measureLoudness, mixPlan, normalizeTo,
   planMusicCues, planTierFromSubscription,
 } from "@statreel/audio";
 import { buildCues, captionSafeZoneViolations, maxCps, toSrt, toVtt, wordsFromAlignment } from "@statreel/captions";
@@ -67,7 +67,15 @@ export class Pipeline implements PipelineApi {
 
   constructor(d: { db: Db; bus: EventBus; runner: JobRunner; projects: ProjectService; wh: Warehouse }) {
     ({ db: this.db, bus: this.bus, runner: this.runner, projects: this.projects, wh: this.wh } = d);
-    this.runner.register("audio", (p, ctx) => this.audioJob(p as { projectId: string; target?: PublishTarget; chain?: boolean }, ctx));
+    this.runner.register("audio", async (p, ctx) => {
+      try {
+        return await this.audioJob(p as { projectId: string; target?: PublishTarget; chain?: boolean }, ctx);
+      } catch (e) {
+        // AudioRefused / BudgetExceeded are labelled refusals, not failures (ADR 003)
+        if (jobStatusFor(e) === "refused") throw new Refusal("audio", e instanceof Error ? e.message : String(e));
+        throw e;
+      }
+    });
     this.runner.register("render", (p, ctx) => this.renderJob(p as { projectId: string; target: PublishTarget }, ctx));
     this.runner.register("publish", (p, ctx) => this.publishJob(p as { projectId: string; title?: string; description?: string; tags?: string[] }, ctx));
   }

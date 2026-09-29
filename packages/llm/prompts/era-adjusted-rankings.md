@@ -26,7 +26,8 @@ views, and narration.
   naturally back into the start. No "like and subscribe", no end card in vertical.
 - Say "era-adjusted" when you quote an adjusted value. It's an estimate, and you should rank-lead:
   "43rd becomes 1st" is stronger and more honest than a decimal.
-- Length: 45-75 s at 150-165 wpm. Aim for 120-180 spoken words in total. Figures take longer to say
-  than their word count suggests. Never cut a hedge or a figure to hit a length.
+- Length: 45-75 s. The narrator's MEASURED rate is only ~120 wpm (figures slow it down), so aim for
+  **100-135 spoken words in total**. `write_script` rejects a script that can't fit and says how many
+  words to cut. Tighten wording; never cut a hedge or a figure to hit a length.
 - Name the method once in plain words ("every race re-scored with today's points, per start").
 - Attribution is shown on screen automatically; don't narrate it.

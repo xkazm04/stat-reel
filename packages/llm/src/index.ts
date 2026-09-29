@@ -24,11 +24,14 @@ export type LlmEvent =
 export type RunOptions = {
   prompt: string;
   mcpConfigPath: string;
-  systemPrompt?: string;
+  /** path to a system prompt file (replaces the coding-agent default) */
+  systemPromptFile?: string;
   resume?: string;
   cwd?: string;
   model?: string;
   signal?: AbortSignal;
+  /** values that differ between runs (e.g. PROJECT id): templated out of fixture keys and files */
+  vars?: Record<string, string>;
   onEvent: (e: LlmEvent) => void;
 };
 export type RunResult = { ok: boolean; session_id: string; result: string; cost_usd?: number; events: LlmEvent[] };
@@ -74,17 +77,43 @@ export function parseStreamLine(line: string): LlmEvent[] {
   return [];
 }
 
-export function claudeArgs(o: { prompt: string; mcpConfigPath: string; systemPrompt?: string; resume?: string; model?: string }): string[] {
-  const args = ["-p", o.prompt, "--output-format", "stream-json", "--verbose", "--mcp-config", o.mcpConfigPath, "--strict-mcp-config",
-    "--allowedTools", "mcp__statreel__*", "--permission-mode", "default", "--setting-sources", "project,local"];
-  if (o.systemPrompt) args.push("--append-system-prompt", o.systemPrompt);
+/** Headless flags (verified with `claude --help`, 2026-09-29). The prompt goes on stdin. */
+export function claudeArgs(o: { mcpConfigPath: string; systemPromptFile?: string; resume?: string; model?: string }): string[] {
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--mcp-config", o.mcpConfigPath, "--strict-mcp-config",
+    "--tools", "", "--allowedTools", "mcp__statreel__*"];
+  if (o.systemPromptFile) args.push("--system-prompt-file", o.systemPromptFile);
   if (o.resume) args.push("--resume", o.resume);
   if (o.model) args.push("--model", o.model);
   return args;
 }
 
-export const fixtureKey = (engine: string, prompt: string, resume: string | undefined) =>
-  createHash("sha256").update(JSON.stringify({ engine, prompt, resume: resume ? "resumed" : null })).digest("hex").slice(0, 24);
+/** The real claude executable (the npm shim can't be spawned without a shell on Windows). */
+export function resolveClaudeBin(): string {
+  if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
+  if (process.platform === "win32" && process.env.APPDATA) {
+    const exe = path.join(process.env.APPDATA, "npm", "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+    if (existsSync(exe)) return exe;
+  }
+  return "claude";
+}
+
+export function templateOut(text: string, vars: Record<string, string> = {}): string {
+  let out = text;
+  for (const [k, v] of Object.entries(vars)) if (v) out = out.split(v).join(`{{${k}}}`);
+  return out;
+}
+export function templateIn(text: string, vars: Record<string, string> = {}): string {
+  let out = text;
+  for (const [k, v] of Object.entries(vars)) out = out.split(`{{${k}}}`).join(v);
+  return out;
+}
+
+/** Fixture key: engine + templated prompt + system prompt content (editing a prompt pack re-keys). */
+export const fixtureKey = (engine: string, prompt: string, resume: string | undefined, systemPrompt?: string) =>
+  createHash("sha256")
+    .update(JSON.stringify({ engine, prompt, resume: resume ? "resumed" : null, ...(systemPrompt ? { system: createHash("sha256").update(systemPrompt).digest("hex") } : {}) }))
+    .digest("hex").slice(0, 24);
+const systemOf = (o: RunOptions) => (o.systemPromptFile && existsSync(o.systemPromptFile) ? readFileSync(o.systemPromptFile, "utf8") : undefined);
 
 function collect(events: LlmEvent[], opts: RunOptions): RunResult {
   const result = [...events].reverse().find((e) => e.type === "result") as Extract<LlmEvent, { type: "result" }> | undefined;
@@ -94,11 +123,12 @@ function collect(events: LlmEvent[], opts: RunOptions): RunResult {
 
 export class ClaudeEngine implements LlmEngine {
   readonly name = "claude-code" as const;
-  constructor(private readonly bin = process.env.CLAUDE_BIN ?? "claude", private readonly fixturesDir?: string) {}
+  constructor(private readonly bin = resolveClaudeBin(), private readonly fixturesDir?: string) {}
 
   run(opts: RunOptions): Promise<RunResult> {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.bin, claudeArgs(opts), { cwd: opts.cwd, signal: opts.signal, shell: process.platform === "win32", windowsHide: true });
+      const child = spawn(this.bin, claudeArgs(opts), { cwd: opts.cwd, signal: opts.signal, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      child.stdin.end(opts.prompt, "utf8");
       const raw: string[] = [];
       const events: LlmEvent[] = [];
       let buf = "";
@@ -137,10 +167,10 @@ export class ReplayEngine implements LlmEngine {
   constructor(readonly name: "claude-code" | "codex", private readonly fixturesDir: string, private readonly execute: ToolExecutor) {}
 
   async run(opts: RunOptions): Promise<RunResult> {
-    const file = path.join(this.fixturesDir, `${fixtureKey(this.name, opts.prompt, opts.resume)}.jsonl`);
+    const file = path.join(this.fixturesDir, `${fixtureKey(this.name, templateOut(opts.prompt, opts.vars), opts.resume, systemOf(opts))}.jsonl`);
     if (!existsSync(file)) throw new Error(`LLM replay fixture missing: ${file} (record with LLM_MODE=live LLM_RECORD=1)`);
     const events: LlmEvent[] = [];
-    for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
+    for (const line of templateIn(readFileSync(file, "utf8"), opts.vars).split(/\r?\n/)) {
       for (const e of parseStreamLine(line)) {
         if (opts.signal?.aborted) throw new Error("aborted");
         if (e.type === "tool_result") {

@@ -3,17 +3,22 @@ import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import {
   EraAdjustedPropsSchema, type EraAdjustedProps, type ProjectStatus, ScriptSchema, type Script,
-  sceneSpokenText, untracedFigures, untracedScriptFigures,
+  sceneSpokenText, untracedFigures, untracedScriptFigures, type UseCase,
 } from "@statreel/schemas";
 import { type Db, now, projectProps, projects, scripts } from "./db";
+import { loadRegistry } from "./registry";
 import type { Warehouse } from "./warehouse";
 
 export type NewProject = { title: string; use_case_id: string; sport: string; format: string; mode: string };
 export const SCHEMA_VERSION = "era-adjusted@1";
+/** Narrator speech rate MEASURED on rendered TTS (voice "Daniel", 2026-09-29: 99-127 wpm, figures slow it). */
+export const NARRATOR_WPM = { min: 115, max: 128 };
+/** Fixed time the audio stage adds around speech: 0.35 s per scene gap + 1.2 s tail. */
+const OVERHEAD_S = (scenes: number) => 0.35 * Math.max(0, scenes - 1) + 1.2;
 const ORDER: ProjectStatus[] = ["idea", "data-ready", "scripted", "rendered", "gated", "published"];
 
 export class ProjectService {
-  constructor(private readonly db: Db, private readonly wh: Warehouse) {}
+  constructor(private readonly db: Db, private readonly wh: Warehouse, private readonly usecases: UseCase[] = loadRegistry().usecases) {}
 
   create(p: NewProject) {
     const row = { id: `p-${randomUUID().slice(0, 8)}`, ...p, status: "idea", created_at: now() };
@@ -72,6 +77,11 @@ export class ProjectService {
     return r ? { version: r.version, script: JSON.parse(r.scenes_json) } : undefined;
   }
 
+  private durationBand(projectId: string): { min: number; max: number } | undefined {
+    const useCase = this.get(projectId)?.use_case_id;
+    return this.usecases?.find((u) => u.id === useCase)?.duration_s;
+  }
+
   async writeScript(id: string, input: unknown): Promise<{ version: number | null; errors: string[]; words: number; est_duration_s: { min: number; max: number }; per_scene: { scene_id: string; words: number }[] }> {
     const empty = { version: null, words: 0, est_duration_s: { min: 0, max: 0 }, per_scene: [] };
     if (!this.get(id)) return { ...empty, errors: [`unknown project ${id}`] };
@@ -89,7 +99,18 @@ export class ProjectService {
     }
     const perScene = script.scenes.map((s) => ({ scene_id: s.scene_id, words: sceneSpokenText(s).split(/\s+/).filter(Boolean).length }));
     const words = perScene.reduce((a, s) => a + s.words, 0);
-    const est = { min: Math.round((words / script.words_per_minute.max) * 600) / 10, max: Math.round((words / script.words_per_minute.min) * 600) / 10 };
+    const overhead = OVERHEAD_S(script.scenes.length);
+    const est = {
+      min: Math.round(((words / NARRATOR_WPM.max) * 60 + overhead) * 10) / 10,
+      max: Math.round(((words / NARRATOR_WPM.min) * 60 + overhead) * 10) / 10,
+    };
+    const band = this.durationBand(id);
+    if (band && est.max > band.max) {
+      const maxWords = Math.floor(((band.max - overhead) / 60) * NARRATOR_WPM.min);
+      errors.push(`too long: ~${est.max} s at the narrator's measured ${NARRATOR_WPM.min}-${NARRATOR_WPM.max} wpm; this use case allows ${band.min}-${band.max} s. Tighten to <= ${maxWords} spoken words (now ${words}) without dropping figures or hedges.`);
+    } else if (band && est.min < band.min) {
+      errors.push(`too short: ~${est.min} s; this use case needs at least ${band.min} s.`);
+    }
     if (errors.length) return { version: null, errors, words, est_duration_s: est, per_scene: perScene };
     const version = (this.latestScript(id)?.version ?? 0) + 1;
     this.db.insert(scripts).values({ project_id: id, version, scenes_json: JSON.stringify(script), words, est_duration_s: est.max, created_at: now() }).run();

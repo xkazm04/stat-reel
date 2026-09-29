@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { claudeArgs, fixtureKey, parseStreamLine, ReplayEngine, stripMcpPrefix } from "./index";
+import { claudeArgs, fixtureKey, parseStreamLine, ReplayEngine, stripMcpPrefix, templateOut } from "./index";
 
 const lines = [
   { type: "system", subtype: "init", session_id: "s-123", tools: ["mcp__statreel__query"] },
@@ -33,11 +33,14 @@ describe("stream-json parsing", () => {
 });
 
 describe("claude invocation", () => {
-  it("builds the verified headless flags, scoped to statreel MCP tools", () => {
-    const args = claudeArgs({ prompt: "hi", mcpConfigPath: "/x/mcp.json", systemPrompt: "sys" });
+  it("builds the verified headless flags: MCP tools only, prompt on stdin, own system prompt", () => {
+    const args = claudeArgs({ mcpConfigPath: "/x/mcp.json", systemPromptFile: "/x/sys.md" });
     expect(args).toEqual(expect.arrayContaining(["-p", "--output-format", "stream-json", "--verbose", "--mcp-config", "/x/mcp.json", "--strict-mcp-config", "--allowedTools", "mcp__statreel__*"]));
-    expect(args).toContain("--append-system-prompt");
-    expect(claudeArgs({ prompt: "hi", mcpConfigPath: "m", resume: "s-1" })).toEqual(expect.arrayContaining(["--resume", "s-1"]));
+    const tools = args.indexOf("--tools");
+    expect(args[tools + 1]).toBe(""); // no built-in tools (Bash, Read, Edit...) at all
+    expect(args).toEqual(expect.arrayContaining(["--system-prompt-file", "/x/sys.md"]));
+    expect(args.some((a) => a.includes(" "))).toBe(false); // nothing a Windows shell could split
+    expect(claudeArgs({ mcpConfigPath: "m", resume: "s-1" })).toEqual(expect.arrayContaining(["--resume", "s-1"]));
   });
 });
 
@@ -61,5 +64,27 @@ describe("replay engine", () => {
   it("fails loudly when the fixture is missing", async () => {
     const engine = new ReplayEngine("claude-code", mkdtempSync(path.join(tmpdir(), "llm-")), async () => ({}));
     await expect(engine.run({ prompt: "unknown", mcpConfigPath: "m", onEvent: () => {} })).rejects.toThrow(/fixture missing/);
+  });
+});
+
+describe("templated fixtures (project ids differ between runs)", () => {
+  it("keys on the prompt with variables templated out and substitutes them back on replay", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "llm-"));
+    const recorded = [
+      { type: "system", subtype: "init", session_id: "s-9" },
+      { type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "mcp__statreel__set_props", input: { project: "{{PROJECT}}", props: {} } }] } },
+      { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "{}" }] } },
+      { type: "result", subtype: "success", result: "ok", session_id: "s-9" },
+    ];
+    const key = fixtureKey("claude-code", "Draft project {{PROJECT}} now", undefined);
+    writeFileSync(path.join(dir, `${key}.jsonl`), recorded.map((l) => JSON.stringify(l)).join("\n"));
+    const calls: unknown[] = [];
+    const engine = new ReplayEngine("claude-code", dir, async (_t, input) => (calls.push(input), {}));
+    await engine.run({ prompt: "Draft project p-77aa now", vars: { PROJECT: "p-77aa" }, mcpConfigPath: "m", onEvent: () => {} });
+    expect(calls).toEqual([{ project: "p-77aa", props: {} }]);
+  });
+
+  it("templates values out of what it records", () => {
+    expect(templateOut('{"project":"p-1"} p-1', { PROJECT: "p-1" })).toBe('{"project":"{{PROJECT}}"} {{PROJECT}}');
   });
 });
