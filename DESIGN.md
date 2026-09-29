@@ -128,7 +128,7 @@ statreel/
   docs/decisions/           # ADRs
 ```
 
-**Toolchain:** Node 22 LTS, pnpm 9+, TypeScript 5.x strict, Vitest, Playwright, Biome (lint+format), Python 3.12 via `uv`, dbt-duckdb, ffmpeg/ffprobe ≥ 6, OPA ≥ 1.0 (Rego v1 syntax), DuckDB (Node: `@duckdb/node-api`; Python: `duckdb`), SQLite via `better-sqlite3` + Drizzle ORM, MCP via `@modelcontextprotocol/sdk`, secrets via OS keychain (`@napi-rs/keyring`).
+**Toolchain:** Node 22 LTS (Fox runs Node 24 arm64 for the app and a Node 22 x64 render worker, ADR 004), pnpm 9+, TypeScript 5.x strict, Vitest, Playwright, Biome (lint+format), Python 3.12 via `uv`, dbt-duckdb, ffmpeg/ffprobe ≥ 6, OPA ≥ 1.0 (Rego v1 syntax), DuckDB (Node: `@duckdb/node-api`; Python: `duckdb`), SQLite via `better-sqlite3` + Drizzle ORM, MCP via `@modelcontextprotocol/sdk`, secrets via OS keychain (`@napi-rs/keyring`).
 
 ---
 
@@ -456,6 +456,16 @@ DuckDB `warehouse.duckdb`: schemas `staging_*`, `core`, `marts`, `llm` (views), 
 ## 10. Milestones
 
 Each milestone ends with its DoD passing. Estimates assume one agent working with owner review.
+
+**Status (2026-09-30):**
+- **M0 done.** `pnpm test` (244), `opa test policy` (72), pytest (56), and the studio serves.
+- **M1 done except one owner-gated step.** `pnpm e2e:live` 5/5 through the UI: live Claude, live
+  ElevenLabs, render, −14.0 LUFS / −2.1 dBTP, 0 safe-zone violations, gate ALLOW, negative gate. `pnpm e2e`
+  (replay) 5/5. The YouTube upload runs `PUBLISH_MODE=dry` (exact request plan asserted) until the owner
+  creates the Google Cloud app (`packages/publish/SETUP.md`); then set `PUBLISH_MODE=live` for the live
+  e2e (upload private → verify → `videos.delete`).
+- **UI baseline:** contest variant A/3 "Patchbay", temporary until the landing contest is rerun with the
+  proper `--landing` seats.
 
 ### M0 — Foundations
 - Monorepo scaffold (§4), Biome, TS strict, Vitest, Playwright, uv project, dbt project, OPA, justfile.
