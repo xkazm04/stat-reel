@@ -116,6 +116,36 @@ export type HeatmapResponse = {
 export type SourcesResponse = { sources: Source[]; capabilities: Capability[] };
 export type NewProject = { title: string; use_case_id: string; sport: string; format: string; mode: string };
 export type PublishBody = { platform: "youtube"; title: string; description: string; tags: string[] };
+
+/** GET /api/metrics (apps/server/src/metrics.ts): unavailable fields stay null; dry runs say so. */
+export type MetricsPublication = {
+  publication_id: string;
+  project_id: string;
+  title: string;
+  use_case_id: string;
+  sport: string;
+  platform: string;
+  external_id: string | null;
+  visibility: string;
+  url: string | null;
+  published_at: string | null;
+  mode: string;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  watch_time_s: number | null;
+  subs_delta: number | null;
+  avg_view_duration_s: number | null;
+  daily: { date: string; views: number | null; likes: number | null; avg_view_duration_s: number | null }[];
+  data: string;
+};
+export type MetricsGroup = { key: string; publications: number; views: number | null };
+export type MetricsResponse = {
+  publications: MetricsPublication[];
+  by_use_case: MetricsGroup[];
+  by_sport: MetricsGroup[];
+};
 export type PolicyVerdict = PolicyResult & { target?: PublishTarget };
 /** Produce target as sent: the server defaults visibility to "private". */
 export type ProduceTarget = Omit<PublishTarget, "visibility"> & { visibility?: PublishTarget["visibility"] };
@@ -176,8 +206,18 @@ export const api = {
     request<{ job_id: string }>("POST", `/api/projects/${enc(id)}/produce`, { target }),
   publish: (id: string, body: PublishBody) =>
     request<{ job_id: string }>("POST", `/api/projects/${enc(id)}/publish`, body),
+  /** Read-only gate evaluation: the latest manifest plus one extra source (nothing is stored). */
+  policyProbe: (
+    id: string,
+    target: ProduceTarget,
+    with_source: { id: string; license_class: string; verdict: string },
+  ) => request<PolicyResult>("POST", `/api/projects/${enc(id)}/policy-probe`, { target, with_source }),
+  metrics: () => request<MetricsResponse>("GET", "/api/metrics"),
+  refreshMetrics: () => request<{ job_id: string }>("POST", "/api/metrics/refresh"),
   jobs: () => request<{ jobs: Job[] }>("GET", "/api/jobs"),
   cancelJob: (id: string) => request<{ ok: boolean }>("POST", `/api/jobs/${enc(id)}/cancel`),
+  /** A JSON file the server exposes under /files (e.g. a render's manifest.json). */
+  file: <T>(path: string) => request<T>("GET", path),
 };
 
 /** Query keys, shared by pages and the SSE invalidation in events.ts. */
@@ -188,6 +228,8 @@ export const qk = {
   project: (id: string) => ["project", id] as const,
   llmEvents: (session: string) => ["llm-events", session] as const,
   jobs: ["jobs"] as const,
+  metrics: ["metrics"] as const,
+  file: (path: string) => ["file", path] as const,
   health: ["health"] as const,
 };
 

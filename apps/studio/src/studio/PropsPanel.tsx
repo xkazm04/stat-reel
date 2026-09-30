@@ -1,287 +1,312 @@
-/** Left rack: use case + dataset and the props, as a readable form or raw JSON (validated by the server). */
-import type { EraAdjustedProps, UseCase } from "@statreel/schemas";
+/**
+ * Left column: the use case and its dataset (the cell's required kinds and the sources that clear
+ * them), then the props as a readable form (raw vs adjusted ranks with fact keys, scenes with the
+ * script's narration, hook shape) or as JSON that POSTs /api/projects/:id/props, errors verbatim.
+ */
+import type { EraAdjustedProps, HeatmapCell, Mode, UseCase } from "@statreel/schemas";
+import { sceneDisplayText } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { api, errorText, type ProjectDetail, qk } from "../api";
-import { KindPin, Led } from "../components/glyphs";
-import { Module, Toggle } from "../components/ui";
-import { factGroup, relTime } from "../logic";
+import { LicChip, NotEqual, StatusChip } from "../components/glyphs";
+import { Empty } from "../components/ui";
+import { cellOf, factGroup } from "../logic";
+import { fmtValue, kindLong } from "../onair";
 
-export function PropsPanel({ detail, usecase }: { detail: ProjectDetail; usecase: UseCase | undefined }) {
-  const [view, setView] = useState<"form" | "json">("form");
-  const cur = detail.props;
-  const p = cur?.props;
-  return (
-    <Module
-      id="m-props"
-      title="Dataset · props"
-      tag={cur ? `v${cur.version} · by ${cur.created_by}` : "no props yet"}
-      className="mod props-mod"
-      actions={
-        <Toggle
-          label="Props view"
-          value={view}
-          onChange={setView}
-          testIdPrefix="props-view-"
-          options={[
-            { value: "form", label: "Form" },
-            { value: "json", label: "JSON" },
-          ]}
-        />
-      }
-    >
-      <dl className="facts compact">
-        <dt>Use case</dt>
-        <dd>
-          {usecase?.name ?? detail.project.use_case_id}{" "}
-          {usecase ? (
-            <span className="pins">
-              {usecase.requires.kinds.map((k) => (
-                <KindPin key={k} kind={k} />
-              ))}
-            </span>
-          ) : null}
-        </dd>
-        <dt>Dataset</dt>
-        <dd className="mono">
-          {detail.project.sport} · llm.* views
-          {usecase?.requires.min_seasons ? ` · ≥ ${usecase.requires.min_seasons} seasons` : ""}
-        </dd>
-        {usecase ? (
-          <>
-            <dt>Duration</dt>
-            <dd className="mono">
-              {usecase.duration_s.min}–{usecase.duration_s.max} s band
-            </dd>
-          </>
-        ) : null}
-        {detail.props_history.length > 1 ? (
-          <>
-            <dt>History</dt>
-            <dd className="mono">
-              {detail.props_history
-                .slice(0, 4)
-                .map((h) => `v${h.version} ${h.created_by} ${relTime(h.created_at)}`)
-                .join(" · ")}
-            </dd>
-          </>
-        ) : null}
-      </dl>
-      <div className="props-scroll">
-        {view === "json" ? <JsonEditor detail={detail} /> : p ? <PropsForm p={p} /> : <NoProps />}
-      </div>
-    </Module>
-  );
-}
-
-function NoProps() {
-  return (
-    <div className="display empty">
-      <b>No props yet.</b> Press <b>Draft with Claude</b>: the co-pilot queries the llm.* views and stores fact-bound
-      props here. You can also paste props in JSON mode.
-    </div>
-  );
-}
-
-function PropsForm({ p }: { p: EraAdjustedProps }) {
-  const hi = p.highlight_player_id;
+function OnScreen({ text }: { text: string }) {
+  const parts = text.split("≠");
   return (
     <>
-      <dl className="facts compact">
-        <dt>Title</dt>
-        <dd className="p-title">{p.title}</dd>
-        <dt>Hook shape</dt>
-        <dd>
-          <span className="kind-pin">{p.hook_shape}</span>
-        </dd>
-        <dt>Format</dt>
-        <dd className="mono">{p.format}</dd>
-        <dt>Metrics</dt>
-        <dd>
-          raw: {p.metric_raw_label}
-          <br />
-          adjusted: {p.metric_adjusted_label} <span className="lic lic-legal">era-adjusted</span>
-        </dd>
-        <dt>Safe zone</dt>
-        <dd className="mono">{p.show_safe_zone ? "overlay on" : "overlay off"}</dd>
-      </dl>
-
-      <h4 className="subhead">Rows · raw vs adjusted rank</h4>
-      <table className="rtable">
-        <thead>
-          <tr>
-            <th scope="col">Driver</th>
-            <th scope="col" className="numc">
-              Raw
-            </th>
-            <th scope="col" className="numc">
-              Adj
-            </th>
-            <th scope="col" className="numc">
-              Δ
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {p.rows.map((r) => {
-            const g = factGroup([r.raw_rank_fact_key, r.adjusted_rank_fact_key, r.raw_fact_key, r.adjusted_fact_key]);
-            const d = r.raw_rank - r.adjusted_rank;
-            return [
-              <tr key={r.player_id} className={r.player_id === hi ? "hi" : undefined}>
-                <th scope="row">
-                  {r.name}
-                  {r.player_id === hi ? <span className="hi-tag">highlight</span> : null}
-                </th>
-                <td className="numc">
-                  #{r.raw_rank}
-                  <div className="val">{r.raw_value.toLocaleString("en-US")}</div>
-                </td>
-                <td className="numc">
-                  #{r.adjusted_rank}
-                  <div className="val">{r.adjusted_value.toLocaleString("en-US")}</div>
-                </td>
-                <td className={`numc ${d > 0 ? "up" : d < 0 ? "down" : ""}`}>
-                  {d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "="}
-                </td>
-              </tr>,
-              <tr key={`${r.player_id}-f`} className="factrow">
-                <td colSpan={4}>
-                  {g.prefix ? (
-                    <>
-                      <span className="fk">{g.prefix}</span>
-                      <span className="fcols">#{g.columns.join(" · #")}</span>
-                    </>
-                  ) : (
-                    g.columns.map((c) => (
-                      <span key={c} className="fk">
-                        {c}
-                      </span>
-                    ))
-                  )}
-                </td>
-              </tr>,
-            ];
-          })}
-        </tbody>
-      </table>
-      <p className="mono muted">fact order: raw rank · adjusted rank · raw value · adjusted value</p>
-
-      <h4 className="subhead">Scenes</h4>
-      <ol className="scenes-list">
-        {p.scenes.map((s) => (
-          <li key={s.id}>
-            <span className={`kind-pin scene-${s.kind}`}>{s.kind}</span>
-            <span className="os">{s.on_screen}</span>
-            <span className="mono muted">
-              {s.id}
-              {s.focus.length ? ` · focus ${s.focus.join(", ")}` : ""}
-            </span>
-          </li>
-        ))}
-      </ol>
-      <dl className="facts compact">
-        <dt>Attribution</dt>
-        <dd>{p.attribution}</dd>
-        <dt>Method</dt>
-        <dd>{p.method_note}</dd>
-      </dl>
+      {parts.map((p, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static split
+        <span key={i}>
+          {i ? <NotEqual /> : null}
+          {p}
+        </span>
+      ))}
     </>
   );
 }
 
-function JsonEditor({ detail }: { detail: ProjectDetail }) {
+function Dataset({ usecase, cell }: { usecase: UseCase | undefined; cell: HeatmapCell | undefined }) {
+  if (!usecase) return <p className="sum-p">Use case not in the registry.</p>;
+  return (
+    <div className="ds">
+      <div className="ds__h">
+        <b>{usecase.name}</b>
+        {cell ? <StatusChip status={cell.status} size={13} /> : null}
+      </div>
+      <p className="ds__m">
+        {usecase.duration_s.min}–{usecase.duration_s.max} s · composition {usecase.composition ?? "none"} · schema{" "}
+        {usecase.props_schema ?? "none"}
+        {usecase.query_templates.length ? ` · templates ${usecase.query_templates.join(", ")}` : ""}
+      </p>
+      <ul className="ds__kinds">
+        {(cell?.kinds ?? usecase.requires.kinds.map((k) => ({ kind: k, best: null, tested: false, sources: [] }))).map(
+          (k) => {
+            const pass = k.sources.filter((s) => s.status === "pass");
+            return (
+              <li key={k.kind}>
+                <span className="ds__k">{kindLong(k.kind)}</span>
+                {pass.length ? (
+                  pass.map((s) => (
+                    <span key={s.id} className="ds__src">
+                      <b className="mono">{s.id}</b> <LicChip cls={s.license_class} />
+                    </span>
+                  ))
+                ) : (
+                  <span className="label">{k.tested ? "no passing source" : "not tested"}</span>
+                )}
+              </li>
+            );
+          },
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function Readable({ props, detail }: { props: EraAdjustedProps; detail: ProjectDetail }) {
+  const script = detail.script?.script;
+  const narration = new Map((script?.scenes ?? []).map((s) => [s.scene_id, sceneDisplayText(s)]));
+  const rows = [...props.rows].sort((a, b) => a.adjusted_rank - b.adjusted_rank);
+  const cols = (r: EraAdjustedProps["rows"][number]) =>
+    [r.raw_rank_fact_key, r.adjusted_rank_fact_key, r.raw_fact_key, r.adjusted_fact_key].map((k) =>
+      k.slice(k.lastIndexOf("#")),
+    );
+  const shared = rows.every((r) => cols(r).join() === cols(rows[0] ?? r).join()) && rows[0] ? cols(rows[0]) : null;
+  return (
+    <div className="pf">
+      <dl className="pf__kv">
+        <div>
+          <dt>Title</dt>
+          <dd className="pf__title">{props.title}</dd>
+        </div>
+        <div>
+          <dt>Hook shape</dt>
+          <dd>{props.hook_shape}</dd>
+        </div>
+        <div>
+          <dt>Format</dt>
+          <dd>{props.format}</dd>
+        </div>
+        <div>
+          <dt>Raw metric</dt>
+          <dd>{props.metric_raw_label}</dd>
+        </div>
+        <div>
+          <dt>Adjusted metric</dt>
+          <dd>{props.metric_adjusted_label}</dd>
+        </div>
+      </dl>
+      <h3 className="sec-h">
+        <span>Rows · raw vs era-adjusted · {props.rows.length}</span>
+      </h3>
+      {shared ? (
+        <p className="rows-facts mono">
+          Every figure cites its fact: <b>{"<row fact_key>"}</b> {shared.join(" · ")} (raw rank · adjusted rank · raw
+          value · adjusted value)
+        </p>
+      ) : null}
+      <div className="table-wrap">
+        <table className="tbl tbl--rows">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th className="num">Rank raw → adj.</th>
+              <th className="num">Value raw → adj.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const up = r.adjusted_rank < r.raw_rank;
+              const g = factGroup([r.raw_rank_fact_key, r.adjusted_rank_fact_key, r.raw_fact_key, r.adjusted_fact_key]);
+              return (
+                <tr key={r.player_id} className={r.player_id === props.highlight_player_id ? "is-hi" : ""}>
+                  <td>
+                    {r.name}
+                    <span
+                      className="tbl__sub mono"
+                      title={g.prefix ? `${g.prefix} # ${g.columns.join(", ")}` : g.columns.join(" · ")}
+                    >
+                      {g.prefix ? (shared ? g.prefix : `${g.prefix} # ${g.columns.join(", ")}`) : g.columns.join(" · ")}
+                    </span>
+                  </td>
+                  <td className="num">
+                    {r.raw_rank} → <b className={up ? "is-up" : "is-down"}>{r.adjusted_rank}</b>
+                  </td>
+                  <td className="num">
+                    {fmtValue(r.raw_value)} → <b>{fmtValue(r.adjusted_value)}</b>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <h3 className="sec-h">
+        <span>Scenes · {props.scenes.length}</span>
+        <span>{script ? `script v${detail.script?.version}` : "no script yet"}</span>
+      </h3>
+      <ol className="pscenes">
+        {props.scenes.map((s) => (
+          <li key={s.id} className="pscene">
+            <span className="pscene__tc">
+              <b>{s.kind}</b>
+              {s.id}
+            </span>
+            <span>
+              <span className="pscene__on">
+                <OnScreen text={s.on_screen} />
+              </span>
+              <span className="pscene__vo">{narration.get(s.id) ?? "No narration for this scene yet."}</span>
+              {s.focus.length ? <span className="pscene__f mono">focus: {s.focus.join(", ")}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <dl className="pf__kv">
+        <div>
+          <dt>Attribution</dt>
+          <dd>{props.attribution}</dd>
+        </div>
+        <div>
+          <dt>Method</dt>
+          <dd>{props.method_note}</dd>
+        </div>
+        <div>
+          <dt>Timing</dt>
+          <dd>
+            {props.timing
+              ? `${props.timing.duration_s.toFixed(1)} s · ${props.timing.cues.length} caption cues · ${props.timing.music.length} music cues`
+              : "none yet (Produce generates it)"}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function JsonEdit({ detail, onDone }: { detail: ProjectDetail; onDone: () => void }) {
   const qc = useQueryClient();
   const initial = detail.props ? JSON.stringify(detail.props.props, null, 2) : "";
   const [text, setText] = useState(initial);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ version: number | null; errors: string[] } | null>(null);
-  // follow new versions while the editor is untouched
-  const [base, setBase] = useState(initial);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only react to new server versions
-  useEffect(() => {
-    if (text === base) {
-      setText(initial);
-      setBase(initial);
-    }
-  }, [initial]);
-
+  const [errors, setErrors] = useState<string[] | null>(null);
   const save = useMutation({
     mutationFn: (body: unknown) => api.setProps(detail.project.id, body),
     onSuccess: (r) => {
-      setResult(r);
-      if (r.version !== null) void qc.invalidateQueries({ queryKey: qk.project(detail.project.id) });
+      if (r.errors.length) setErrors(r.errors);
+      else {
+        setErrors(null);
+        void qc.invalidateQueries({ queryKey: qk.project(detail.project.id) });
+        onDone();
+      }
     },
   });
   const submit = () => {
-    setResult(null);
+    let body: unknown;
     try {
-      const body = JSON.parse(text) as unknown;
-      setParseError(null);
-      save.mutate(body);
+      body = JSON.parse(text);
     } catch (e) {
-      setParseError(errorText(e));
+      setErrors([`JSON: ${errorText(e)}`]);
+      return;
     }
+    save.mutate(body);
   };
   return (
-    <div className="json-edit">
-      <label className="legend" htmlFor="props-json">
-        Props JSON · validated server-side (schema + every figure against its fact)
+    <div className="json">
+      <label className="sr-only" htmlFor="props-json">
+        Props JSON
       </label>
       <textarea
         id="props-json"
-        className="code"
+        className="json__ta mono"
         spellCheck={false}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        rows={18}
-        data-testid="props-json"
-        placeholder='{"format": "vertical", "hook_shape": "payoff-first", ...}'
       />
-      <div className="row-actions">
+      <div className="json__bar">
         <button
           type="button"
-          className="key primary small"
+          className="btn btn--primary btn--sm"
           onClick={submit}
           disabled={save.isPending || !text.trim()}
-          data-testid="save-props"
         >
-          {save.isPending ? "Validating…" : "Save props"}
+          {save.isPending ? "Validating" : "Save props"}
         </button>
-        <button type="button" className="key small" onClick={() => setText(initial)} disabled={text === initial}>
-          Revert
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setText(initial)}>
+          Reset
         </button>
+        <span className="label">Every figure is checked against the fact it cites</span>
       </div>
-      <div aria-live="polite" data-testid="props-result">
-        {parseError ? (
-          <div className="errbox">
-            <Led status="blocked" label="NOT JSON" />
-            <span className="mono">{parseError}</span>
-          </div>
-        ) : null}
-        {save.isError ? (
-          <div className="errbox">
-            <Led status="blocked" label="ERROR" />
-            <span className="mono">{errorText(save.error)}</span>
-          </div>
-        ) : null}
-        {result && result.errors.length ? (
-          <div className="errbox">
-            <Led status="blocked" label={`REJECTED · ${result.errors.length}`} />
-            <ul>
-              {result.errors.map((e) => (
-                <li key={e} className="mono">
-                  {e}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {result && result.version !== null ? (
-          <div className="okbox">
-            <Led status="pass" label="STORED" /> <span className="mono">as v{result.version}</span>
-          </div>
-        ) : null}
-      </div>
+      {save.isError ? <p className="joberr">{errorText(save.error)}</p> : null}
+      {errors ? (
+        <ul className="json__errs" role="alert">
+          {errors.map((e) => (
+            <li key={e} className="mono">
+              {e}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
+  );
+}
+
+export function PropsPanel({
+  detail,
+  usecase,
+  cells,
+}: {
+  detail: ProjectDetail;
+  usecase: UseCase | undefined;
+  cells: HeatmapCell[];
+}) {
+  const [mode, setMode] = useState<"read" | "json">("read");
+  const p = detail.project;
+  const cell = cellOf(cells, p.use_case_id, p.sport, p.mode as Mode);
+  const props = detail.props?.props;
+  return (
+    <section className="props panel-col" aria-labelledby="h-props">
+      <div className="col-h">
+        <h2 id="h-props" className="sec-h">
+          <span>Use case · dataset</span>
+          <Link
+            to="/heatmap"
+            search={{ mode: p.mode as Mode, cell: `${p.use_case_id}|${p.sport}` }}
+            className="sec-h__a"
+          >
+            heatmap cell
+          </Link>
+        </h2>
+        <Dataset usecase={usecase} cell={cell} />
+      </div>
+      <div className="col-h col-h--row">
+        <h2 className="sec-h">
+          <span>Props{detail.props ? ` · v${detail.props.version} by ${detail.props.created_by}` : ""}</span>
+        </h2>
+        <div className="seg seg--sm" role="group" aria-label="Props view">
+          <button type="button" aria-pressed={mode === "read"} onClick={() => setMode("read")}>
+            Read
+          </button>
+          <button type="button" aria-pressed={mode === "json"} onClick={() => setMode("json")}>
+            JSON
+          </button>
+        </div>
+      </div>
+      <div className="col-body">
+        {mode === "json" ? (
+          <JsonEdit key={detail.props?.version ?? 0} detail={detail} onDone={() => setMode("read")} />
+        ) : props ? (
+          <Readable props={props} detail={detail} />
+        ) : (
+          <Empty title="No props yet">
+            Draft with Claude: the co-pilot queries the warehouse and stores props whose figures cite facts. Or paste
+            props in JSON.
+          </Empty>
+        )}
+      </div>
+    </section>
   );
 }

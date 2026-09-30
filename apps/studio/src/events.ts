@@ -1,7 +1,8 @@
 /**
  * One EventSource('/events') for the whole app, shared through React context. The provider also
  * keeps TanStack Query honest: every job state change (job.* except progress), render.done and
- * co-pilot tool results invalidate the caches they can change.
+ * co-pilot tool results invalidate the caches they can change. Named listeners are registered for
+ * job.queued/started/progress/succeeded/failed/cancelled/refused, llm.event and render.done.
  */
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { createContext, createElement, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -49,6 +50,7 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
     void qc.invalidateQueries({ queryKey: qk.projects });
     void qc.invalidateQueries({ queryKey: qk.jobs });
     if (pid) void qc.invalidateQueries({ queryKey: qk.project(pid) });
+    if (e.kind === "publish" || e.kind === "metrics") void qc.invalidateQueries({ queryKey: qk.metrics });
     if (e.type === "job.succeeded" && (e.kind === "ingest" || e.kind === "transform")) {
       void qc.invalidateQueries({ queryKey: qk.heatmap });
       void qc.invalidateQueries({ queryKey: qk.sources });

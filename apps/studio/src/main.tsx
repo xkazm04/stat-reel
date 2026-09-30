@@ -1,5 +1,8 @@
 import "@statreel/design-tokens/tokens.css";
-import "./styles/app.css";
+import "./styles/base.css";
+import "./styles/front.css";
+import "./styles/heatmap.css";
+import "./styles/studio.css";
 import "./styles/pages.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";

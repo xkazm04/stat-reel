@@ -1,200 +1,230 @@
-/** Projects (A/3 sequencer): every project across the six stages, with its next action. */
-import type { ProjectStatus } from "@statreel/schemas";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { api, type ProjectWithJobs, qk } from "../api";
-import { FormatGlyph, Led, Screws } from "../components/glyphs";
-import { ErrorState, Loading, Toggle } from "../components/ui";
+/**
+ * 03 Rundown: every project across idea -> data ready -> scripted -> rendered -> gated -> published,
+ * sorted by "needs you". Live job progress from SSE; a metrics sparkline where platform numbers
+ * exist (dry-run publications have none, and say so).
+ */
+import type { Mode } from "@statreel/schemas";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import type { MetricsPublication, ProjectWithJobs } from "../api";
+import { FormatIcon } from "../components/glyphs";
+import { identVar } from "../components/idents";
+import { artStyle, Empty, Failure, Loading, Sparkline } from "../components/ui";
+import { useMetrics, useProjects } from "../data";
 import { useJobProgress } from "../events";
-import { MODE_LABEL, nextAction, relTime, STAGE_LABEL, STAGE_SHORT, STAGES, stageIndex } from "../logic";
+import { MODE_LABEL, nextAction, relTime, STAGE_LABEL, STAGES, stageIndex } from "../logic";
+import { activeJob, fmtNum, formatLabel, pad2, pct, rundownOrder } from "../onair";
+import type { ProjectsSearch } from "../router";
 
-const PRIORITY: Record<string, number> = { blocked: 0, you: 1, wait: 2, done: 3 };
-
-export function ProjectsPage() {
-  const q = useQuery({ queryKey: qk.projects, queryFn: api.projects });
-  const navigate = useNavigate();
-  const [sort, setSort] = useState<"needs" | "recent">("needs");
-  const [filter, setFilter] = useState<ProjectStatus | null>(null);
-  const live = useJobProgress(null);
-  const list = q.data?.projects ?? [];
-
-  const rows = useMemo(() => {
-    const withAction = list.map((p) => {
-      const job = p.jobs[0];
-      const lp = job ? live.get(job.id) : undefined;
-      return { p, action: nextAction(p.status, job ? { ...job, progress: lp?.progress ?? job.progress } : null) };
-    });
-    return withAction
-      .filter((r) => !filter || r.p.status === filter)
-      .sort(
-        (a, b) =>
-          (sort === "needs" ? (PRIORITY[a.action.tone] ?? 9) - (PRIORITY[b.action.tone] ?? 9) : 0) ||
-          b.p.created_at.localeCompare(a.p.created_at),
-      );
-  }, [list, filter, sort, live]);
-
-  const counts = Object.fromEntries(STAGES.map((s) => [s, list.filter((p) => p.status === s).length])) as Record<
-    ProjectStatus,
-    number
-  >;
-  const need = rows.filter((r) => r.action.tone === "you" || r.action.tone === "blocked").length;
-
+function Pips({ i }: { i: number }) {
   return (
-    <main id="main" className="page wrap projects-page">
-      <section className="module seq" aria-labelledby="seq-title">
-        <Screws at={["tl", "bl"]} />
-        <div className="seq-top">
-          <h1 id="seq-title">Projects</h1>
-          <span className="mono muted">idea → data ready → scripted → rendered → gated → published</span>
-          <span className="spacer" />
-          <Toggle
-            title="Sort"
-            label="Sort projects"
-            value={sort}
-            onChange={setSort}
-            options={[
-              { value: "needs", label: "Needs you" },
-              { value: "recent", label: "Recent" },
-            ]}
-          />
-        </div>
-        {q.isError ? (
-          <ErrorState error={q.error} what="Projects" />
-        ) : q.isLoading ? (
-          <Loading what="Reading projects…" />
-        ) : (
-          <>
-            <div className="seq-grid seq-head">
-              <span className="lab">Project · sport · frame · mode</span>
-              {STAGES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className="stagebtn"
-                  aria-pressed={filter === s}
-                  aria-label={`${STAGE_LABEL[s]}: ${counts[s]} projects. Filter`}
-                  onClick={() => setFilter(filter === s ? null : s)}
-                  data-testid={`stage-filter-${s}`}
-                >
-                  <span className="display-num">{counts[s]}</span>
-                  <span className="sn">{STAGE_SHORT[s]}</span>
-                </button>
-              ))}
-              <span className="lab lab-next">Next action</span>
-            </div>
-            <ul className="seq-rows" aria-label="Projects in the sequencer">
-              {rows.map(({ p, action }) => (
-                <SeqRow
-                  key={p.id}
-                  p={p}
-                  action={action}
-                  onOpen={() => void navigate({ to: "/studio/$projectId", params: { projectId: p.id } })}
-                />
-              ))}
-              {!rows.length ? (
-                <li className="display empty">
-                  {filter ? (
-                    <>
-                      No project at stage <b>{STAGE_LABEL[filter]}</b>.{" "}
-                      <button type="button" className="key small" onClick={() => setFilter(null)}>
-                        Show all
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <b>No projects yet.</b> Open the <Link to="/heatmap">heatmap</Link>, select a GO cell and press
-                      Create project.
-                    </>
-                  )}
-                </li>
-              ) : null}
-            </ul>
-            <div className="seq-foot">
-              <span>
-                <b className="accent-ink">{need}</b> need you · {counts.published} published · {list.length} total
-              </span>
-              {filter ? (
-                <span className="filterchip">
-                  stage = {STAGE_LABEL[filter]}{" "}
-                  <button type="button" className="key small" onClick={() => setFilter(null)}>
-                    clear
-                  </button>
-                </span>
-              ) : null}
-              <span className="spacer" />
-              <span className="mono">publishing: private / draft only</span>
-            </div>
-          </>
-        )}
-      </section>
-    </main>
+    <span className="pips" aria-hidden="true">
+      {STAGES.map((s, k) => (
+        <i key={s} className={k < i ? "on" : k === i ? "now" : ""} />
+      ))}
+    </span>
   );
 }
 
-function SeqRow({
+function Card({
   p,
-  action,
-  onOpen,
+  live,
+  pubs,
 }: {
   p: ProjectWithJobs;
-  action: ReturnType<typeof nextAction>;
-  onOpen: () => void;
+  live: Map<string, { progress: number; note?: string }>;
+  pubs: MetricsPublication[];
 }) {
-  const i = stageIndex(p.status);
-  const job = p.jobs[0];
+  const job = activeJob(p.jobs);
+  const next = nextAction(p.status, p.jobs[0]);
+  const lp = job ? live.get(job.id) : undefined;
+  const progress = lp?.progress ?? job?.progress ?? 0;
+  const views = pubs.flatMap((x) => x.daily.map((d) => d.views));
+  const hasNumbers = views.some((v) => typeof v === "number");
+  const dry = pubs.length > 0 && pubs.every((x) => x.mode === "dry");
   return (
-    <li className="srow-li">
-      <div className="srow seq-grid" data-testid={`project-row-${p.id}`}>
-        <span className="tt">
-          <Link to="/studio/$projectId" params={{ projectId: p.id }} className="t">
-            {p.title}
-          </Link>
-          <span className="m">
-            <span>{p.id}</span>
-            <span>{p.sport}</span>
-            <FormatGlyph format={p.format} />
-            <span>{MODE_LABEL[p.mode as keyof typeof MODE_LABEL] ?? p.mode}</span>
-            <span>created {relTime(p.created_at)}</span>
+    <Link
+      to="/studio/$projectId"
+      params={{ projectId: p.id }}
+      className="card"
+      style={artStyle(identVar(p.use_case_id))}
+    >
+      <span className="card__t">{p.title}</span>
+      <span className="card__m">
+        <span>{p.id}</span>
+        <span>{p.sport}</span>
+        <span>
+          <FormatIcon format={p.format} h={11} /> {formatLabel(p.format)}
+        </span>
+        <span>{p.mode === "monetized" ? "monetized" : "non-comm."}</span>
+      </span>
+      <span className="card__s">
+        <span className="row__stage">
+          <Pips i={stageIndex(p.status)} />
+          {STAGE_LABEL[p.status] ?? p.status}
+        </span>
+        <span className={`row__next row__next--${next.tone}`}>{next.verb}</span>
+      </span>
+      {job ? (
+        <span className="card__job" role="status">
+          <span className="bar-track">
+            <span className="bar-fill" style={{ width: pct(progress) }} />
+          </span>
+          <span className="mono">
+            {job.kind} · {job.status} · {pct(progress)}
+            {lp?.note ? ` · ${lp.note}` : ""}
           </span>
         </span>
-        {STAGES.map((s, k) => (
-          <span
-            key={s}
-            className={`step${k <= i ? " lit" : ""}${k === i ? " head" : ""}${k === i && action.tone === "wait" ? " act" : ""}${k === i && action.tone === "blocked" ? " refused" : ""}${p.status === "published" ? " pub" : ""}`}
-            aria-hidden="true"
-          >
-            <i />
-          </span>
-        ))}
-        <span className="gl">
-          <span className="sr-only">Stage {STAGE_LABEL[p.status] ?? p.status}. </span>
-          <span className="stage-now">
-            <Led
-              status={
-                action.tone === "done"
-                  ? "pass"
-                  : action.tone === "blocked"
-                    ? "refuse"
-                    : action.tone === "wait"
-                      ? "running"
-                      : "idle"
-              }
-              label={(STAGE_LABEL[p.status] ?? p.status).toUpperCase()}
-              className="on-display"
-            />
-          </span>
-          <button type="button" className={`act act-${action.tone}`} onClick={onOpen}>
-            {action.verb} →
-          </button>
-          <span className="hint">{action.hint}</span>
-          {job && job.status !== "succeeded" && action.tone !== "wait" && action.tone !== "blocked" ? (
-            <span className="hint">
-              last job: {job.kind} {job.status}
+      ) : next.tone === "blocked" ? (
+        <span className="card__warn">{next.hint}</span>
+      ) : null}
+      {pubs.length ? (
+        <span className="card__met">
+          {hasNumbers ? (
+            <>
+              <Sparkline values={views} w={120} h={24} label={`Daily views of ${p.title}`} />
+              <span className="num">{fmtNum(pubs.reduce((a, x) => a + (x.views ?? 0), 0))} views</span>
+            </>
+          ) : (
+            <span className="label">
+              {dry ? "Dry-run publication · no platform numbers" : "Metrics not pulled yet"}
             </span>
-          ) : null}
+          )}
         </span>
-      </div>
-    </li>
+      ) : null}
+      <span className="card__age">created {relTime(p.created_at)}</span>
+    </Link>
+  );
+}
+
+export function ProjectsPage() {
+  const search = useSearch({ from: "/projects" }) as ProjectsSearch;
+  const navigate = useNavigate({ from: "/projects" });
+  const view = search.view ?? "board";
+  const pr = useProjects();
+  const met = useMetrics();
+  const live = useJobProgress(null);
+  const projects = rundownOrder(pr.data?.projects ?? []);
+  const pubsOf = (id: string) => (met.data?.publications ?? []).filter((x) => x.project_id === id);
+  const needs = projects.filter((p) => ["you", "blocked"].includes(nextAction(p.status, p.jobs[0]).tone)).length;
+
+  return (
+    <main id="main" className="page rundown-page">
+      <header className="page__head">
+        <div>
+          <p className="eyebrow">
+            <i />
+            Rundown
+          </p>
+          <h1 className="page__title display">Every video, closest to air first</h1>
+          <p className="page__sub">
+            {pr.data
+              ? `${projects.length} project${projects.length === 1 ? "" : "s"} · ${needs} need you`
+              : "Reading the rundown"}
+          </p>
+        </div>
+        <div className="page__tools">
+          <div className="seg" role="group" aria-label="View">
+            <button type="button" aria-pressed={view === "board"} onClick={() => void navigate({ search: {} })}>
+              Board
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "list"}
+              onClick={() => void navigate({ search: { view: "list" } })}
+            >
+              List
+            </button>
+          </div>
+          <Link className="btn btn--primary btn--sm" to="/heatmap" search={{ mode: "monetized" }}>
+            New from a Go cell
+          </Link>
+        </div>
+      </header>
+
+      {pr.isError ? (
+        <Failure error={pr.error} what="The rundown" />
+      ) : pr.isLoading ? (
+        <Loading what="the rundown" />
+      ) : !projects.length ? (
+        <Empty title="No project yet">
+          Create one from a Go cell on the <Link to="/heatmap">rights grid</Link>: open the cell, then Create project.
+        </Empty>
+      ) : view === "board" ? (
+        <div className="board">
+          {STAGES.map((s) => {
+            const col = projects.filter((p) => p.status === s);
+            return (
+              <section className="board__col" key={s} aria-label={STAGE_LABEL[s]}>
+                <h2 className="board__h">
+                  <b className="num">{pad2(col.length)}</b>
+                  {STAGE_LABEL[s]}
+                </h2>
+                {col.length ? (
+                  col.map((p) => <Card key={p.id} p={p} live={live} pubs={pubsOf(p.id)} />)
+                ) : (
+                  <p className="board__none">Nothing here</p>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Project</th>
+                <th>Stage</th>
+                <th>Next</th>
+                <th>Sport</th>
+                <th>Format</th>
+                <th>Mode</th>
+                <th>Job</th>
+                <th>Views</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((p, i) => {
+                const job = activeJob(p.jobs);
+                const n = nextAction(p.status, p.jobs[0]);
+                const pubs = pubsOf(p.id);
+                const views = pubs.some((x) => x.views !== null) ? pubs.reduce((a, x) => a + (x.views ?? 0), 0) : null;
+                return (
+                  <tr key={p.id} style={artStyle(identVar(p.use_case_id))}>
+                    <td className="num">{pad2(i + 1)}</td>
+                    <td>
+                      <Link to="/studio/$projectId" params={{ projectId: p.id }} className="tbl__link">
+                        {p.title}
+                      </Link>
+                      <span className="tbl__sub mono">{p.id}</span>
+                    </td>
+                    <td>{STAGE_LABEL[p.status] ?? p.status}</td>
+                    <td className={`row__next--${n.tone}`}>{n.verb}</td>
+                    <td>{p.sport}</td>
+                    <td>{formatLabel(p.format)}</td>
+                    <td>{MODE_LABEL[p.mode as Mode] ?? p.mode}</td>
+                    <td className="mono">
+                      {job ? `${job.kind} ${pct(live.get(job.id)?.progress ?? job.progress)}` : "—"}
+                    </td>
+                    <td className="num">
+                      {pubs.length
+                        ? views === null
+                          ? pubs.every((x) => x.mode === "dry")
+                            ? "— dry run"
+                            : "—"
+                          : fmtNum(views)
+                        : "—"}
+                    </td>
+                    <td>{relTime(p.created_at)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </main>
   );
 }

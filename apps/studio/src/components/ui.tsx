@@ -1,120 +1,145 @@
-/** Small Patchbay controls: module shell, hardware toggle, states (loading / error / empty). */
-import type { ReactNode } from "react";
+/** Small shared pieces: empty states, errors, sparkline, section heads, reduced-motion, wipe. */
+import {
+  type CSSProperties,
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { errorText } from "../api";
-import { Led, Screws } from "./glyphs";
+import { sparkPoints } from "../onair";
 
-export function Module({
+/** An honest, labelled empty state. */
+export function Empty({
   title,
-  tag,
-  actions,
   children,
-  className,
-  screws = ["tl", "tr"],
-  id,
-  testId,
-  headingLevel = 2,
+  className = "",
 }: {
-  title: ReactNode;
-  tag?: ReactNode;
-  actions?: ReactNode;
-  children: ReactNode;
+  title: string;
+  children?: ReactNode;
   className?: string;
-  screws?: ("tl" | "tr" | "bl" | "br")[];
-  id?: string;
-  testId?: string;
-  headingLevel?: 2 | 3;
 }) {
-  const H = headingLevel === 2 ? "h2" : "h3";
-  const hid = id ? `${id}-h` : undefined;
   return (
-    <section className={`module${className ? ` ${className}` : ""}`} aria-labelledby={hid} id={id} data-testid={testId}>
-      <Screws at={screws} />
-      <div className="module-head">
-        <H id={hid}>{title}</H>
-        {tag ? <span className="tag">{tag}</span> : null}
-        <span className="spacer" />
-        {actions}
-      </div>
+    <div className={`empty ${className}`}>
+      <b>{title}</b>
       {children}
-    </section>
+    </div>
   );
 }
 
-export function Toggle<T extends string>({
-  title,
-  value,
-  options,
-  onChange,
+export function Failure({ error, what }: { error: unknown; what: string }) {
+  return (
+    <div className="failure" role="alert">
+      <b>{what} did not load</b>
+      <span className="mono">{errorText(error)}</span>
+      <span>Is the API running on 127.0.0.1:8787? (`pnpm dev` starts both.)</span>
+    </div>
+  );
+}
+
+export const Loading = ({ what }: { what: string }) => (
+  <p className="loading label" aria-live="polite">
+    Loading {what}
+  </p>
+);
+
+export function SecH({ children, right }: { children: ReactNode; right?: ReactNode }) {
+  return (
+    <h3 className="sec-h">
+      <span>{children}</span>
+      {right ? <span>{right}</span> : null}
+    </h3>
+  );
+}
+
+/** Line sparkline; renders a labelled dash when there is no number at all. */
+export function Sparkline({
+  values,
+  w = 120,
+  h = 28,
   label,
-  testIdPrefix,
+  className = "spark",
 }: {
-  title?: string;
-  value: T;
-  options: { value: T; label: ReactNode }[];
-  onChange: (v: T) => void;
+  values: (number | null)[];
+  w?: number;
+  h?: number;
   label: string;
-  testIdPrefix?: string;
+  className?: string;
 }) {
+  const pts = sparkPoints(values, w, h);
+  if (!pts)
+    return (
+      <span className="spark-none" role="img" aria-label={`${label}: no data`}>
+        —
+      </span>
+    );
   return (
-    <div className="toggle">
-      {title ? <span className="toggle-title">{title}</span> : null}
-      <fieldset className="toggle-body" aria-label={label}>
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            aria-pressed={o.value === value}
-            onClick={() => onChange(o.value)}
-            data-testid={testIdPrefix ? `${testIdPrefix}${o.value.replace(/_/g, "-")}` : undefined}
-          >
-            {o.label}
-          </button>
-        ))}
-      </fieldset>
-    </div>
+    <svg className={className} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={label}>
+      <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      {pts
+        .split(" ")
+        .slice(-1)
+        .map((p) => {
+          const [x, y] = p.split(",");
+          return <circle key={p} cx={x} cy={y} r="2.6" fill="currentColor" />;
+        })}
+    </svg>
   );
 }
 
-export function Loading({ what }: { what: string }) {
+export function useReducedMotion(): boolean {
+  const q = "(prefers-reduced-motion: reduce)";
+  const [r, setR] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(q);
+    if (!m) return;
+    const on = () => setR(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return r;
+}
+
+// ------------------------------------------------------------------ parallelogram wipe
+
+type WipeFn = (color: string, then: () => void) => void;
+const WipeCtx = createContext<WipeFn>((_c, then) => then());
+
+/** One fixed parallelogram that crosses the screen between levels; reduced motion skips it. */
+export function WipeProvider({ children }: { children: ReactNode }) {
+  const reduced = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const run = useCallback<WipeFn>(
+    (color, then) => {
+      const el = ref.current;
+      if (reduced || !el) {
+        then();
+        return;
+      }
+      el.style.setProperty("--art", color);
+      el.classList.remove("run");
+      void el.offsetWidth;
+      el.classList.add("run");
+      window.setTimeout(then, 340);
+    },
+    [reduced],
+  );
   return (
-    <div className="state state-loading" role="status">
-      <Led status="running" label="LOADING" />
-      <span>{what}</span>
-    </div>
+    <WipeCtx.Provider value={run}>
+      {children}
+      <div
+        className="wipe"
+        ref={ref}
+        aria-hidden="true"
+        onAnimationEnd={(e) => e.currentTarget.classList.remove("run")}
+      />
+    </WipeCtx.Provider>
   );
 }
 
-export function ErrorState({ error, what }: { error: unknown; what: string }) {
-  return (
-    <div className="state state-error" role="alert">
-      <Led status="blocked" label="NO SIGNAL" />
-      <div>
-        <b>{what} unavailable.</b> <span className="mono">{errorText(error)}</span>
-        <p className="state-hint">
-          The studio reads live data from the StatReel server (127.0.0.1:8787). Start it with{" "}
-          <span className="mono">pnpm --filter @statreel/server dev</span>.
-        </p>
-      </div>
-    </div>
-  );
-}
+export const useWipe = (): WipeFn => useContext(WipeCtx);
 
-export function Empty({ children, onDisplay = true }: { children: ReactNode; onDisplay?: boolean }) {
-  return <div className={onDisplay ? "display empty" : "empty-plain"}>{children}</div>;
-}
-
-export function ProgressBar({ value, label }: { value: number; label: string }) {
-  const pct = Math.max(0, Math.min(1, value)) * 100;
-  return (
-    <div
-      className="progress"
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(pct)}
-      aria-label={label}
-    >
-      <div className="progress-fill" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
+export const artStyle = (color: string): CSSProperties => ({ ["--art" as string]: color });

@@ -1,172 +1,186 @@
 /**
- * Patchbay glyphs: LEDs (shape + label; colour is only the third channel), licence jacks, the
- * logo mark, format glyphs, screws. Colours come from tokens via CSS classes (app.css).
+ * The On Air vocabulary, drawn (the font subsets carry no arrows): status glyphs (shape before
+ * hue), status chips (glyph + label as text), licence chips, arrows, the logo mark, sport fields.
  */
-import type { LicenseClass } from "@statreel/schemas";
+import type { CellStatus, LicenseClass } from "@statreel/schemas";
 import type { ReactNode } from "react";
-import { type LedStatus, LICENCE_META, STATUS_META } from "../logic";
+import { LICENCE_WORD, STATUS_WORD } from "../onair";
 
-export function LedSvg({ status }: { status: LedStatus }) {
-  const shape = STATUS_META[status].shape;
-  let inner: ReactNode;
-  if (shape === "go") inner = <circle className="glow" cx="7" cy="7" r="6" fill="currentColor" />;
-  else if (shape === "data-ready")
+export type GlyphKind = CellStatus;
+
+export function Glyph({ status, size = 16 }: { status: GlyphKind; size?: number }) {
+  let inner: ReactNode = null;
+  if (status === "go")
     inner = (
       <>
-        <circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        <path className="glow" d="M7 1.4a5.6 5.6 0 0 0 0 11.2z" fill="currentColor" />
+        <circle cx="8" cy="8" r="7" fill="currentColor" />
+        <path d="M6.3 4.7 11.4 8l-5.1 3.3z" fill="var(--color-bg)" />
       </>
     );
-  else if (shape === "ask") inner = <path className="glow" d="M7 .8 13.4 12.6H.6z" fill="currentColor" />;
-  else if (shape === "idle")
+  else if (status === "data-ready")
     inner = (
-      <circle cx="7" cy="7" r="5.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeDasharray="2 1.6" />
+      <>
+        <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M1.75 8a6.25 6.25 0 0 0 12.5 0z" fill="currentColor" />
+      </>
+    );
+  else if (status === "ask")
+    inner = (
+      <>
+        <path d="M8 1.7 15 14.2H1z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M8 6.2v3.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <circle cx="8" cy="11.9" r=".95" fill="currentColor" />
+      </>
     );
   else
     inner = (
       <>
-        <rect className="glow" x="1" y="1" width="12" height="12" rx="1.5" fill="currentColor" />
-        <path className="led-slash" d="M3.4 10.6 10.6 3.4" strokeWidth="2.2" strokeLinecap="round" />
+        <rect x="1.75" y="1.75" width="12.5" height="12.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       </>
     );
   return (
-    <svg viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+    <svg className={`glyph glyph--${status}`} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
       {inner}
     </svg>
   );
 }
 
-/** LED glyph with its label. `label` overrides the default word (e.g. "ALLOW"). */
-export function Led({
-  status,
-  label,
-  hideLabel,
-  className,
-}: {
-  status: LedStatus;
-  label?: string;
-  hideLabel?: boolean;
-  className?: string;
-}) {
-  const meta = STATUS_META[status];
+/** Glyph + label. The label is literal text (GO / DATA READY / ASK / BLOCKED), never CSS-only. */
+export function StatusChip({ status, size = 16, label }: { status: CellStatus; size?: number; label?: string }) {
   return (
-    <span className={`led st-${status}${className ? ` ${className}` : ""}`}>
-      <LedSvg status={status} />
-      {hideLabel ? (
-        <span className="sr-only">{label ?? meta.word}</span>
-      ) : (
-        <span className="led-label">{label ?? meta.label}</span>
-      )}
+    <span className={`st st--${status}`}>
+      <Glyph status={status} size={size} />
+      <span>{label ?? STATUS_WORD[status]}</span>
     </span>
   );
 }
 
-export function JackSvg({ cls }: { cls: LicenseClass | string }) {
-  if (cls === "legal")
-    return (
-      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-        <circle className="jack-ring" cx="8" cy="8" r="6.6" strokeWidth="1.6" />
-        <circle className="jack-hole" cx="8" cy="8" r="2.8" />
-      </svg>
-    );
-  if (cls === "non_commercial")
-    return (
-      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-        <circle cx="8" cy="8" r="7.2" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2 1.4" />
-        <circle className="jack-ring" cx="8" cy="8" r="5.4" strokeWidth="2.4" />
-        <circle className="jack-hole" cx="8" cy="8" r="2.2" />
-      </svg>
-    );
-  if (cls === "paid")
-    return (
-      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-        <circle className="jack-ring" cx="8" cy="8" r="6.6" strokeWidth="1.6" />
-        <circle className="jack-hole" cx="8" cy="8" r="2.8" />
-        <rect x="7" y="1" width="2" height="4" fill="currentColor" />
-      </svg>
-    );
+/** Pass / fail / declared / needs-review for a tested source: borrows the status shapes. */
+export function TestChip({ status }: { status: string }) {
+  const map: Record<string, { g: CellStatus; label: string }> = {
+    pass: { g: "go", label: "PASS" },
+    fail: { g: "blocked", label: "FAIL" },
+    declared: { g: "data-ready", label: "DECLARED · NOT TESTED" },
+    needs_review: { g: "ask", label: "NEEDS REVIEW" },
+  };
+  const m = map[status] ?? { g: "blocked" as CellStatus, label: status.toUpperCase() };
   return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <circle cx="8" cy="8" r="7" fill="currentColor" />
-      <path className="jack-cap" d="M5 5l6 6M11 5l-6 6" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/** Licence jack: glyph + optional source id + class tag (text, never colour alone). */
-export function Jack({
-  cls,
-  id,
-  noTag,
-  strike,
-}: {
-  cls: LicenseClass | string;
-  id?: string;
-  noTag?: boolean;
-  strike?: boolean;
-}) {
-  const meta = LICENCE_META[cls as LicenseClass] ?? { label: String(cls).toUpperCase(), word: String(cls) };
-  return (
-    <span className={`jack lic-${cls}`}>
-      <JackSvg cls={cls} />
-      {id ? <span className={`mono jack-id${strike ? " struck" : ""}`}>{id}</span> : null}
-      {noTag ? null : <span className={`lic lic-${cls}`}>{meta.label}</span>}
+    <span className={`st st--sm st--${m.g}`}>
+      <Glyph status={m.g} size={13} />
+      <span>{m.label}</span>
     </span>
   );
 }
 
-export function LogoMark() {
+export function LicChip({ cls }: { cls: string }) {
+  const known = cls in LICENCE_WORD;
   return (
-    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" className="logo">
-      <circle className="logo-ring" cx="16" cy="16" r="13.5" strokeWidth="3" />
-      <circle className="logo-hole" cx="16" cy="16" r="7.2" />
-      <circle className="logo-dot" cx="18.6" cy="13.4" r="3.1" />
-      <path className="logo-stem" d="M16 29.5v2.5" strokeWidth="3" />
+    <span className={`lic lic--${known ? cls : "unknown"}`}>{known ? LICENCE_WORD[cls as LicenseClass] : cls}</span>
+  );
+}
+
+export function Arrow({ dir = "right", size = 16 }: { dir?: "right" | "left" | "up" | "down"; size?: number }) {
+  const r = { right: 0, left: 180, up: -90, down: 90 }[dir];
+  return (
+    <svg
+      width={size}
+      height={Math.round((size * 12) / 16)}
+      viewBox="0 0 16 12"
+      aria-hidden="true"
+      style={{ transform: `rotate(${r}deg)`, flex: "none" }}
+    >
+      <path
+        d="M1 6h13M9.5 1.5 14 6l-4.5 4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="square"
+      />
     </svg>
   );
 }
 
-export function FormatGlyph({ format }: { format: string }) {
-  const v = format === "vertical";
+export function Mark({ className = "logo__mark" }: { className?: string }) {
   return (
-    <span className="fmt-glyph">
-      <svg viewBox="0 0 18 18" aria-hidden="true" focusable="false" width="14" height="14">
-        {v ? (
-          <rect x="5" y="1.5" width="8" height="15" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-        ) : (
-          <rect x="1.5" y="4.5" width="15" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-        )}
-      </svg>
-      <span className="mono">{v ? "9:16" : "16:9"}</span>
-    </span>
-  );
-}
-
-export function Screws({ at = ["tl", "tr", "bl", "br"] }: { at?: ("tl" | "tr" | "bl" | "br")[] }) {
-  return (
-    <>
-      {at.map((p) => (
-        <span key={p} className={`screw ${p}`} aria-hidden="true" />
-      ))}
-    </>
-  );
-}
-
-export function KindPin({ kind, partial }: { kind: string; partial?: boolean }) {
-  return <span className={`kind-pin${partial ? " partial" : ""}`}>{partial ? `${kind} · partial` : kind}</span>;
-}
-
-export function Sparkline({ values, label }: { values: number[]; label: string }) {
-  if (values.length < 2) return null;
-  const W = 60;
-  const H = 18;
-  const max = Math.max(1, ...values);
-  const pts = values
-    .map((v, i) => `${((i / (values.length - 1)) * W).toFixed(1)},${(H - 2 - (v / max) * (H - 4)).toFixed(1)}`)
-    .join(" ");
-  return (
-    <svg className="spark" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={label}>
-      <polyline points={pts} fill="none" strokeWidth="1.6" />
+    <svg className={className} viewBox="0 0 34 24" aria-hidden="true">
+      <path d="M7 0h27l-7 24H0z" fill="currentColor" />
+      <path
+        d="M9.3 18.5l1.6-5.5h3.2l-1.6 5.5zM14.9 18.5l2.9-10h3.2l-2.9 10zM20.5 18.5l4.2-14.4h3.2l-4.2 14.4z"
+        fill="var(--color-bg)"
+      />
     </svg>
   );
 }
+
+export function FormatIcon({ format, h = 12 }: { format: string; h?: number }) {
+  const w = format === "landscape" ? Math.round((h * 16) / 9) : Math.round((h * 9) / 16);
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ flex: "none" }}>
+      <rect x=".75" y=".75" width={w - 1.5} height={h - 1.5} fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+/** Sport fields: plain geometry, no marks. */
+export function Field({ sport }: { sport: string }) {
+  let p: ReactNode = null;
+  if (sport === "F1")
+    p = (
+      <path d="M8 30C4 18 12 8 24 9l26 3c8 1 9 9 2 11l-14 4c-5 2-4 7 1 7l32-2c9 0 12-12 3-16L70 12c-4-2-2-8 3-7l14 3c8 2 10 12 6 20-5 10-15 12-26 12H24C16 40 10 37 8 30Z" />
+    );
+  else if (sport === "NBA")
+    p = (
+      <>
+        <rect x="4" y="5" width="92" height="38" />
+        <path d="M4 14h18v20H4M22 18a6 6 0 0 1 0 12M96 14H78v20h18M78 18a6 6 0 0 0 0 12M50 5v38" />
+        <circle cx="50" cy="24" r="7" />
+      </>
+    );
+  else if (sport === "NHL")
+    p = (
+      <>
+        <rect x="4" y="5" width="92" height="38" rx="14" />
+        <path d="M50 5v38M34 5v38M66 5v38M14 8v32M86 8v32" />
+        <circle cx="50" cy="24" r="6" />
+        <circle cx="24" cy="15" r="3" />
+        <circle cx="24" cy="33" r="3" />
+        <circle cx="76" cy="15" r="3" />
+        <circle cx="76" cy="33" r="3" />
+      </>
+    );
+  else if (sport === "Soccer")
+    p = (
+      <>
+        <rect x="4" y="5" width="92" height="38" />
+        <path d="M50 5v38M4 13h13v22H4M96 13H83v22h13M4 19h5v10H4M96 19h-5v10h5" />
+        <circle cx="50" cy="24" r="8" />
+      </>
+    );
+  return (
+    <svg
+      className="field"
+      viewBox="0 0 100 48"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+    >
+      {p}
+    </svg>
+  );
+}
+
+/** "≠" drawn (the subsets carry no maths symbols). */
+export function NotEqual() {
+  return (
+    <svg className="neq" viewBox="0 0 40 40" role="img" aria-label="is not">
+      <path d="M5 14h30M5 26h30" stroke="currentColor" strokeWidth="5.5" />
+      <path d="M27 4 13 36" stroke="currentColor" strokeWidth="5" />
+    </svg>
+  );
+}
+
+/** Kbd hint. */
+export const Kbd = ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>;
