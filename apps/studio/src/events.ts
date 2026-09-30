@@ -4,6 +4,7 @@
  * co-pilot tool results invalidate the caches they can change. Named listeners are registered for
  * job.queued/started/progress/succeeded/failed/cancelled/refused, llm.event and render.done.
  * Calendar slots follow their publish job, so job.* also invalidates the calendar.
+ * board.decided (the owner's gate on a Board item) invalidates the board.
  */
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { createContext, createElement, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -41,7 +42,15 @@ export const JOB_EVENTS = [
   "job.refused",
 ] as const;
 /** Named SSE events (the server writes `event: <type>`; EventSource needs one listener per name). */
-const NAMED = [...JOB_EVENTS, "llm.event", "render.done", "heatmap.updated", "project.updated", "ping"];
+const NAMED = [
+  ...JOB_EVENTS,
+  "llm.event",
+  "render.done",
+  "heatmap.updated",
+  "project.updated",
+  "board.decided",
+  "ping",
+];
 
 const Ctx = createContext<Hub | null>(null);
 
@@ -65,6 +74,8 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
     if (pid) void qc.invalidateQueries({ queryKey: qk.project(pid) });
     void qc.invalidateQueries({ queryKey: qk.projects });
     void qc.invalidateQueries({ queryKey: qk.calendar });
+  } else if (e.type === "board.decided") {
+    void qc.invalidateQueries({ queryKey: qk.board });
   } else if (e.type === "heatmap.updated") {
     void qc.invalidateQueries({ queryKey: qk.heatmap });
   } else if (e.type === "llm.event" && e.event?.type === "tool_result" && pid) {

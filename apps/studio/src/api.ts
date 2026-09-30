@@ -198,6 +198,35 @@ export type ScheduleBody = {
 /** Produce target as sent: the server defaults visibility to "private". */
 export type ProduceTarget = Omit<PublishTarget, "visibility"> & { visibility?: PublishTarget["visibility"] };
 
+/** GET /api/board (apps/server/src/board.ts, ADR 006): design outputs behind the owner's gate. */
+export const BOARD_DECISIONS = ["accept", "reject_style", "reject_case", "reject_both"] as const;
+export type BoardDecision = (typeof BOARD_DECISIONS)[number];
+export type BoardStatus = "pending" | "accepted" | "rejected";
+export type BoardStyle = { id: string; name: string; notes?: string };
+export type BoardProposedCase = { name: string; pitch: string; requires?: string[] };
+export type BoardItem = {
+  id: string;
+  /** path under data/board (e.g. items/loop-001-A1.png) */
+  image: string;
+  /** same-origin URL of the shot (/files/board/<image>) */
+  image_url: string;
+  width: number | null;
+  height: number | null;
+  title: string;
+  summary: string | null;
+  use_case_id: string | null;
+  proposed_case: BoardProposedCase | null;
+  style: BoardStyle | null;
+  /** provenance: skill, loop, contest, seat, variant, facts ([fact_key#column]) */
+  source: Record<string, unknown> | null;
+  status: BoardStatus | string;
+  decision: BoardDecision | null;
+  note: string | null;
+  decided_at: string | null;
+  created_at: string;
+};
+export type BoardResponse = { items: BoardItem[]; decisions: BoardDecision[] };
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -270,6 +299,16 @@ export const api = {
   reschedule: (id: string, publish_at: string) =>
     request<CalendarSlot>("PATCH", `/api/calendar/${enc(id)}`, { publish_at }),
   cancelSlot: (id: string) => request<CalendarSlot>("DELETE", `/api/calendar/${enc(id)}`),
+  /** The Board: every item, newest first (optionally one status). */
+  board: (status?: BoardStatus) =>
+    request<BoardResponse>("GET", status ? `/api/board?status=${enc(status)}` : "/api/board"),
+  boardItem: (id: string) => request<BoardItem>("GET", `/api/board/${enc(id)}`),
+  /** The owner's gate: accept | reject_style | reject_case | reject_both, with an optional note (the reply has no image_url). */
+  decideBoard: (id: string, decision: BoardDecision, note?: string) =>
+    request<Omit<BoardItem, "image_url">>("POST", `/api/board/${enc(id)}/decision`, {
+      decision,
+      note: note?.trim() || undefined,
+    }),
   /** A JSON file the server exposes under /files (e.g. a render's manifest.json). */
   file: <T>(path: string) => request<T>("GET", path),
 };
@@ -284,6 +323,7 @@ export const qk = {
   jobs: ["jobs"] as const,
   metrics: ["metrics"] as const,
   calendar: ["calendar"] as const,
+  board: ["board"] as const,
   file: (path: string) => ["file", path] as const,
   health: ["health"] as const,
 };
