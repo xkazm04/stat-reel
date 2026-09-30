@@ -35,7 +35,7 @@
     "tsx": "^4.20.0"
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts"
+    "dev": "tsx watch src/serve.ts",
+    "start": "tsx src/serve.ts"
   }
 }

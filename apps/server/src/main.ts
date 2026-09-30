@@ -1,7 +1,6 @@
 /** StatReel server: http://127.0.0.1:8787 (api, events, mcp, files; serves the built studio in `pnpm start`). */
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { buildApp } from "./app";
 import { modes, paths, repoRoot, server } from "./config";
@@ -42,11 +41,4 @@ export async function createServer() {
     app.get("*", serveStatic({ path: path.relative(process.cwd(), path.join(dist, "index.html")) }));
   }
   return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board };
-}
-
-if (process.argv[1] && /main\.(ts|js)$/.test(process.argv[1])) {
-  const s = await createServer();
-  serve({ fetch: s.app.fetch, hostname: server.host, port: server.port }, (info) => {
-    console.log(`statreel server http://${info.address}:${info.port}  llm=${modes.llm} audio=${modes.audio} publish=${modes.publish}`);
-  });
 }
