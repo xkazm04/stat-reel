@@ -47,14 +47,16 @@ export function loopPhase(ledger, { minDecisions = 12 } = {}) {
 const bullets = (rows) => (rows.length ? rows.map((r) => `- ${r}`).join("\n") : "- (none yet)");
 const quoteNotes = (notes) => (notes.length ? ` - owner: ${notes.slice(-3).map((n) => `"${n}"`).join("; ")}` : "");
 
-export function renderBrief({ template, ledger, shots, extra = {} }) {
+export function renderBrief({ template, ledger, shots, board = [], extra = {} }) {
   const styles = Object.entries(ledger.styles);
   const accepted = styles.filter(([, s]) => s.accepts > 0 && s.accepts >= s.style_rejects)
     .map(([id, s]) => `**${s.name}** (\`${id}\`) - ${s.accepts} accepted, ${s.style_rejects} style-rejected${quoteNotes(s.notes)}`);
   const rejected = styles.filter(([, s]) => s.style_rejects > s.accepts)
     .map(([id, s]) => `**${s.name}** (\`${id}\`) - ${s.style_rejects} style-rejected${quoteNotes(s.notes)}`);
   const cases = Object.entries(ledger.cases).map(([id, c]) => `\`${id}\` ${c.name}${c.pitch ? ` - ${c.pitch}` : ""}: ${c.accepts} accepted, ${c.case_rejects} case-rejected${quoteNotes(c.notes)}`);
-  const vars = { phase: loopPhase(ledger), shots: String(shots), styles_accepted: bullets(accepted), styles_rejected: bullets(rejected), cases: bullets(cases), decisions: String(ledger.seen.length), ...extra };
+  const tried = board.filter((i) => i.status === "pending")
+    .map((i) => `**${i.style?.name}** (\`${i.style?.id}\`) on ${i.use_case_id ?? `proposed: ${i.proposed_case?.name}`} - "${i.title}"`);
+  const vars = { phase: loopPhase(ledger), shots: String(shots), tried: bullets(tried), styles_accepted: bullets(accepted), styles_rejected: bullets(rejected), cases: bullets(cases), decisions: String(ledger.seen.length), ...extra };
   return template.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? vars[k] : m));
 }
 

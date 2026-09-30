@@ -35,6 +35,10 @@ Rejected styles, never repeat these:
 Use cases so far:
 {{cases}}
 
+Already on the Board and waiting for the owner. Do **not** repeat these styles, and do not repeat
+these style + case pairings. Explore elsewhere, so the owner sees a wider field:
+{{tried}}
+
 ## Deliverable, per variant (in addition to the contract below)
 
 - `variant-N/index.html` is the artboard: `body { margin: 0 }` and one element exactly 1080×1920

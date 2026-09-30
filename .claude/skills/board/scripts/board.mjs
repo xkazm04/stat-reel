@@ -132,7 +132,8 @@ async function loop() {
   const contestId = `board-${id}`;
   const stageDir = path.join(REPO, ".contest", "staging", contestId);
   const data = await stage(stageDir);
-  const brief = renderBrief({ template: readFileSync(path.join(HERE, "..", "references", "loop-brief.md"), "utf8"), ledger, shots });
+  const { items: board } = await api("/api/board");
+  const brief = renderBrief({ template: readFileSync(path.join(HERE, "..", "references", "loop-brief.md"), "utf8"), ledger, shots, board });
   writeFileSync(path.join(stageDir, "BRIEF.md"), brief);
   const init = ["init", "--id", contestId, "--title", `StatReel Board - ${id} (${loopPhase(ledger)})`, "--brief", path.join(stageDir, "BRIEF.md"),
     "--variants", String(shots), "--review", "owner", "--data", data, "--timeout-min", opt("timeout-min", "45"),

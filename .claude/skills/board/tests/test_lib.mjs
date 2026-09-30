@@ -60,3 +60,15 @@ test("the ledger renders as Obsidian-readable markdown tables", () => {
   assert.match(md, /\| floodlit \| 1 \| 0 \|/);
   assert.match(md, /## Cases/);
 });
+
+test("the brief lists shots already on the board awaiting the owner, so later loops explore elsewhere", () => {
+  const pending = [
+    { status: "pending", title: "Loom", style: { id: "loom", name: "Loom" }, use_case_id: "era-adjusted-rankings", proposed_case: null },
+    { status: "pending", title: "River", style: { id: "river", name: "Halftone river" }, use_case_id: null, proposed_case: { name: "Dynasty river", pitch: "p" } },
+    { status: "accepted", title: "Old", style: { id: "old", name: "Old" }, use_case_id: "x", proposed_case: null },
+  ];
+  const b = renderBrief({ template: "{{tried}}", ledger: emptyLedger(), shots: 3, board: pending });
+  assert.match(b, /Loom.*era-adjusted-rankings/);
+  assert.match(b, /Halftone river.*proposed: Dynasty river/);
+  assert.doesNotMatch(b, /Old/);
+});
