@@ -52,6 +52,7 @@
 | D9 | **Burned-in captions everywhere + SRT/VTT sidecar on YouTube** | TikTok/Instagram APIs have no caption-file field | — |
 | D10 | **OFL fonts only, self-hosted, pinned** | Commercial-safe, server-render-safe, deterministic | Adobe Fonts / desktop EULAs (no server rendering) |
 | D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
+| D15 | **Two themes (A/1 dark, A/3 light), Calendar, Board** ([ADR 006](docs/decisions/006-two-themes-studio-modules.md)) | Owner: keep both winners until one dominates; studio composes, Calendar publishes; Board gates visual direction | Single baseline |
 | D14 | **"On Air" brand + UI baseline, real data only** ([ADR 005](docs/decisions/005-on-air-brand-baseline.md)) | Owner verdict on the `--landing` contest | Patchbay (temporary) |
 | D13 | **Knowledge-review changes adopted** ([ADR 003](docs/decisions/003-media-generation-knowledge-review.md)) | Fail-closed gate, fact binding, spoken/display tokens, hook/close craft, mix and peak targets | — |
 | D12 | **Capability tests declared in YAML, evaluated in Python** ([ADR 002](docs/decisions/002-capability-tests-in-python.md)) | One row per capability with coverage, rows and a reason; dbt tests keep schema integrity | dbt tests as capability carriers |
@@ -211,15 +212,36 @@ Raw snapshots are immutable. A `current` pointer per source selects the snapshot
 
 ### 6.1 Screens (single-page app)
 
-Brand: "On Air" broadcast package (ADR 005). Volt means cleared to air; status is shape + pattern + label; every screen shows real data or a labelled empty state.
+Two winning themes on one module structure (ADR 006): **On Air** (`onair`, dark, contest A/1) and
+**Photo Finish** (`photofinish`, light, contest A/3). The owner switches between them in the nav. Every
+screen shows real data or a labelled empty state (ADR 005).
 
-1. **Heatmap** (home) — use case × sport grid, mode toggle monetized / non-commercial, drill-down to sources and failing tests (§7).
-2. **Projects** — list/kanban: idea → data ready → scripted → rendered → gated → published; per-project metrics sparkline.
-3. **Studio** (per project) — left: use case + dataset picker, props form (auto-generated from Zod schema); center: Remotion Player (9:16 / 16:9 toggle, scrubber, safe-zone overlay toggle); right: LLM chat panel with tool-call log; bottom: timeline (scenes, voice, music, captions tracks).
-4. **Render & Gate** — render progress (SSE), ffprobe report, policy verdict with reasons, provenance manifest viewer.
-5. **Publish** — per-platform form (title, description, tags, visibility, AI-disclosure flags), status, links.
-6. **Metrics** — cross-channel table + charts (views, avg view duration, retention where available, likes/comments/shares), per use case and per sport.
-7. **Sources** — registry view, verdicts, last ingest, terms hash status.
+1. **Front**: the brand's front door, with a fast lane (heatmap, studio, resume) and the latest real
+   project on the monitor or finish strip.
+2. **Heatmap**, in two layers:
+   - layer 1 is the dedicated grid (use case × sport, monetized / non-commercial mode, trend);
+   - layer 2 is a cell's detail (kinds, sources, licence text, reason, make-next picks, Create
+     project) (§7).
+3. **Rundown** (projects): idea → data ready → scripted → rendered → gated → published, with a metrics
+   sparkline per project.
+4. **Studio** (per project) is for **composing only**:
+   - the player is the centred main content;
+   - the tracks timeline spans the full width (scenes, voice, music, captions);
+   - the script opens in a modal;
+   - the side columns hold parametrisation: use case, dataset and props form on the left, the LLM
+     co-pilot with its tool-call log on the right.
+
+   A tab holds **Render & Gate**: render progress (SSE), ffprobe report, policy verdict with reasons,
+   provenance manifest viewer.
+5. **Calendar**: channel management (YouTube; TikTok and Instagram from M5) and timing on top of
+   composed videos. Schedule a gated render on a channel at a time; a scheduler publishes due items
+   (private or draft only).
+6. **Board**: a grid of visual-only design outputs and use-case ideas behind the owner's gate:
+   accept, reject style, reject case, reject both. It is fed by the `board` skill, whose Obsidian
+   ledger loops on the feedback (ADR 006).
+7. **Metrics**: cross-channel table and charts (views, average view duration, retention where
+   available, likes, comments, shares), per use case and per sport.
+8. **Sources**: registry view, verdicts, tested capabilities, terms-hash status.
 
 ### 6.2 Composition model
 
