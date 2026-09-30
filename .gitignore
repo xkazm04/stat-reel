@@ -32,7 +32,6 @@ pipeline/dbt/dbt_packages/
 .statreel/
 
 # registry-linked skills and installed rule copies are machine state
-.claude/skills/
 .claude/rules/ai-registry-*.md
 .claude/settings.local.json
 
