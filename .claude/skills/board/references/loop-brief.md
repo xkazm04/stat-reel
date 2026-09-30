@@ -54,6 +54,10 @@ these style + case pairings:
 - **Pacing.** The data clock advances monotonically over the whole run. Pick seconds per season (or
   per round) so the viewer can follow; slow down at the turns of the story and move faster through
   quiet stretches, but never stop the clock for long.
+- **The clock and the picture agree on every frame.** The season or round printed on screen, `dataClock(t)`
+  and the values drawn are the same moment. A new season appears only when its first race is drawn, and
+  "round 16 / 16" never sits under the next season's year. Annotations disappear once their moment has
+  passed (after their hold), so they never contradict the current values.
 - **Readability in motion.** The running clock is always visible and large. Entities that move keep
   their identity (colour or label follows them); rank swaps animate so the eye can track them. Labels
   never flicker. Counters use tabular figures. Everything is legible at phone size.

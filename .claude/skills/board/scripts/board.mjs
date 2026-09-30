@@ -223,7 +223,7 @@ async function harvest() {
       const cut = await renderCutout(page, meta, w, h, path.join(outDir, `${base}.mp4`), path.join(outDir, `${base}.png`));
       const longevity = await measureLongevity(page, meta, w, h);
       await page.close();
-      console.log(`  ${meta.duration_s}s run, cut-out ${cut.excerpt.start_s}-${(cut.excerpt.start_s + cut.excerpt.duration_s).toFixed(1)}s, seek-stable: ${cut.seek_stable}, longevity: ${longevity.ok ? "ok" : longevity.problems.join("; ")}`);
+      console.log(`  ${meta.duration_s}s run, cut-out ${cut.excerpt.start_s.toFixed(1)}-${(cut.excerpt.start_s + cut.excerpt.duration_s).toFixed(1)}s, seek-stable: ${cut.seek_stable}, longevity: ${longevity.ok ? "ok" : longevity.problems.join("; ")}`);
       const item = await api("/api/board", {
         image: `items/${base}.png`, video: `items/${base}.mp4`, duration_s: cut.excerpt.duration_s, width: w, height: h,
         title: meta.title, summary: meta.summary ?? null,
