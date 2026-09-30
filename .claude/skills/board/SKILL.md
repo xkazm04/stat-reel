@@ -19,7 +19,7 @@ the next precisely. This skill produces the shots and carries that feedback forw
 only judge. There is no LLM panel.
 
 Everything runs through `scripts/board.mjs` (Node builtins, plus Playwright from the repo for
-screenshots). Its pure half, `scripts/lib.mjs`, is pinned by `node --test tests/`. The StatReel server
+screenshots). Its pure half, `scripts/lib.mjs`, is pinned by `node --test tests/test_lib.mjs`. The StatReel server
 must be running on 127.0.0.1:8787.
 
 ## The loop
