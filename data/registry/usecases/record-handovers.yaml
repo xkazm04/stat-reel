@@ -1,0 +1,26 @@
+id: record-handovers
+name: The record changes hands
+family: time-evolution
+stage: 3
+requires:
+  kinds:
+  - hist
+  min_seasons: 20
+data_time:
+  unit: race
+  from: first season
+  to: latest race
+chart_form: stepped record line with holder handovers
+arc: The all-time record (most wins, poles or titles) climbs over time; each handover is a beat, and the gaps between
+  them show how long a record lasts.
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 45
+  max: 75
+props_schema: null
+query_templates: []
+notes: null

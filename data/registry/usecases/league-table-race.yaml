@@ -1,0 +1,27 @@
+id: league-table-race
+name: League table race
+family: time-evolution
+stage: 4
+requires:
+  kinds:
+  - hist
+sports:
+- Soccer
+data_time:
+  unit: matchday
+  from: matchday 1
+  to: final matchday
+chart_form: league table race (points by matchday)
+arc: 'A league season matchday by matchday: the table reshuffles, the title race and relegation fight separate,
+  the decisive run-ins.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 30
+  max: 60
+props_schema: null
+query_templates: []
+notes: null

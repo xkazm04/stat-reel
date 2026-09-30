@@ -1,0 +1,25 @@
+id: season-so-far
+name: The season so far
+family: time-evolution
+stage: 5
+requires:
+  kinds:
+  - live
+data_time:
+  unit: race
+  from: round 1
+  to: latest round
+chart_form: standings race (current season, updated after each race)
+arc: 'The current season''s standings replayed round by round up to last weekend: who moved, who stalled, what the
+  last race changed.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 30
+  max: 60
+props_schema: null
+query_templates: []
+notes: null

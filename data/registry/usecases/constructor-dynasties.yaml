@@ -1,0 +1,26 @@
+id: constructor-dynasties
+name: Team dynasties
+family: time-evolution
+stage: 3
+requires:
+  kinds:
+  - hist
+  min_seasons: 20
+data_time:
+  unit: season
+  from: first season
+  to: latest season
+chart_form: bar-chart race of teams (wins per season, rolling window)
+arc: 'Teams rise and fall season by season: the rolling five-year win tally shows each dynasty arriving, peaking
+  and fading.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 60
+  max: 90
+props_schema: null
+query_templates: []
+notes: null

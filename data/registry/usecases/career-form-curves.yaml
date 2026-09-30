@@ -1,0 +1,25 @@
+id: career-form-curves
+name: Careers side by side
+family: time-evolution
+stage: 4
+requires:
+  kinds:
+  - hist
+data_time:
+  unit: career-start
+  from: start 1
+  to: final start
+chart_form: rolling-form lines aligned by start number
+arc: 'Several careers drawn at once, aligned by start number: rolling points per start rise, peak and decline, so
+  fast starters, late bloomers and long plateaus become visible.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 45
+  max: 75
+props_schema: null
+query_templates: []
+notes: null

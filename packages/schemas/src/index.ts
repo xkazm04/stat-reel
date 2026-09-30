@@ -37,7 +37,16 @@ export type Source = z.infer<typeof SourceSchema>;
 export const UseCaseSchema = z.object({
   id: z.string(),
   name: z.string(),
+  /** time-evolution = the format (ADR 007); headline = legacy M1 walking skeleton */
+  family: z.enum(["time-evolution", "headline"]).default("time-evolution"),
   stage: z.number().int(),
+  /** sport-specific formats; absent = any sport */
+  sports: z.array(Sport).optional(),
+  /** what the video's clock runs through: data time maps monotonically to video time */
+  data_time: z.object({ unit: z.enum(["season", "race", "matchday", "career-start", "date"]), from: z.string(), to: z.string() }).optional(),
+  chart_form: z.string().optional(),
+  /** what the visualization reveals as time passes */
+  arc: z.string().optional(),
   requires: z.object({ kinds: z.array(DataKind), min_seasons: z.number().int().optional() }),
   composition: z.string().nullable(),
   formats: z.array(Format),

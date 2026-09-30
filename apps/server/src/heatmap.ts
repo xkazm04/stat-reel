@@ -44,8 +44,12 @@ export function computeHeatmap(input: {
         let status: CellStatus;
         let reason: string;
         const blocked = kinds.filter((k) => !k.best);
+        const notApplicable = uc.sports && !uc.sports.includes(sport);
         const notAllowed = kinds.filter((k) => k.best && !ALLOWED[mode].has(k.best));
-        if (blocked.length) {
+        if (notApplicable) {
+          status = "blocked";
+          reason = `not applicable: ${uc.name} is a ${uc.sports!.join("/")} format`;
+        } else if (blocked.length) {
           status = "blocked";
           reason = blocked.map((k) =>
             k.failing.length ? `${k.kind}: failing capability test (${k.failing.join(", ")})`

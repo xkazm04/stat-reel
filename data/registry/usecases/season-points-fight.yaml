@@ -1,0 +1,25 @@
+id: season-points-fight
+name: Season points fight
+family: time-evolution
+stage: 3
+requires:
+  kinds:
+  - hist
+data_time:
+  unit: race
+  from: round 1
+  to: final round
+chart_form: line race (cumulative points per contender)
+arc: 'One championship, race by race: the contenders'' points lines pull apart and close in; the swing races and
+  the moment it is decided.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 30
+  max: 60
+props_schema: null
+query_templates: []
+notes: null

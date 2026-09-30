@@ -1,0 +1,26 @@
+id: career-wins-race
+name: Career wins race
+family: time-evolution
+stage: 3
+requires:
+  kinds:
+  - hist
+  min_seasons: 20
+data_time:
+  unit: race
+  from: first season
+  to: latest race
+chart_form: bar-chart race (top 10, cumulative)
+arc: 'Cumulative career wins race after race, from the first season to today: who leads, for how long, when the
+  lead changes hands, and how a longer calendar lets modern totals run away.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 60
+  max: 90
+props_schema: null
+query_templates: []
+notes: null

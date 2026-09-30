@@ -1,0 +1,27 @@
+id: winner-age-drift
+name: How old are winners
+family: time-evolution
+stage: 4
+requires:
+  kinds:
+  - hist
+  - bio
+  min_seasons: 20
+data_time:
+  unit: season
+  from: first season
+  to: latest season
+chart_form: drifting beeswarm / ridgeline of winners' ages per season
+arc: 'Each season''s winners placed by age: the distribution drifts through the decades, from veterans'' eras to
+  the youngest generation.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: landscape
+duration_s:
+  min: 45
+  max: 75
+props_schema: null
+query_templates: []
+notes: null

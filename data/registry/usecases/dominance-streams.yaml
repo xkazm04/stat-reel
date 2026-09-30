@@ -1,0 +1,26 @@
+id: dominance-streams
+name: Who owned each era
+family: time-evolution
+stage: 4
+requires:
+  kinds:
+  - hist
+  min_seasons: 20
+data_time:
+  unit: season
+  from: first season
+  to: latest season
+chart_form: streamgraph (share of wins per season)
+arc: 'Share of wins per season flows through the decades: eras of one dominant name, crowded seasons, and how long
+  each dynasty''s current lasts.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: landscape
+duration_s:
+  min: 60
+  max: 90
+props_schema: null
+query_templates: []
+notes: null

@@ -1,0 +1,28 @@
+id: grid-to-victory
+name: Where winners start
+family: time-evolution
+stage: 4
+requires:
+  kinds:
+  - hist
+  min_seasons: 20
+sports:
+- F1
+data_time:
+  unit: season
+  from: first season
+  to: latest season
+chart_form: stacked share of wins by grid slot, rolling
+arc: 'Share of wins from pole, front row and further back, season by season: when overtaking-era wins disappear
+  and qualifying becomes the race.'
+composition: null
+formats:
+- vertical
+- landscape
+default_format: vertical
+duration_s:
+  min: 45
+  max: 75
+props_schema: null
+query_templates: []
+notes: null

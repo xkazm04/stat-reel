@@ -16,4 +16,6 @@ duration_s:
 props_schema: EraAdjustedProps
 query_templates:
 - top_n_raw_vs_adjusted
-notes: M1 slice (F1)
+notes: LEGACY M1 walking skeleton (headline format, ADR 007) - replaced by a time-evolution
+  composition in the M1 rework; not offered to Board loops
+family: headline
