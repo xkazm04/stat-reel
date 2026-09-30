@@ -2,7 +2,7 @@
 vault: ["C:/Users/mkdol/Documents/Obsidian/statreel"]
 vault_subdir: Contest
 arena: .contest/arena
-participants: "claude:claude-opus-5-5@xhigh,codex:gpt-6-sol@high,grok:grok-4.7@high"
+participants: ""                      # empty: the skill default / preset roster applies (landing: `--landing`)
 judges: ""
 variants: 3
 timeout_min: 90
