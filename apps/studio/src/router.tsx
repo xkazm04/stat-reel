@@ -1,18 +1,26 @@
-/** Code-based TanStack Router: front, heatmap, rundown, studio (control room / render & gate / publish), metrics, sources. */
+/**
+ * Code-based TanStack Router (DESIGN §6.1 revised by ADR 006): Front, Heatmap (grid layer +
+ * cell layer), Rundown, Studio (compose + Render & Gate), Calendar, Board, Metrics, Sources.
+ * The front has one component per theme; every other screen is one module in both themes.
+ */
 import type { Mode, Sport } from "@statreel/schemas";
-import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, Link, Navigate, Outlet } from "@tanstack/react-router";
+import { BoardPage } from "./board/BoardPage";
 import { Nav } from "./components/Nav";
 import { WipeProvider } from "./components/ui";
+import { CalendarPage } from "./routes/Calendar";
 import { FrontPage } from "./routes/Front";
+import { FrontPhotoFinish } from "./routes/FrontPhotoFinish";
 import { HeatmapPage } from "./routes/Heatmap";
+import { HeatmapCellLayer } from "./routes/HeatmapCell";
 import { MetricsPage } from "./routes/Metrics";
 import { ProjectsPage } from "./routes/Projects";
 import { SourcesPage } from "./routes/Sources";
 import { StudioIndex } from "./routes/StudioIndex";
 import { ControlRoom } from "./studio/ControlRoom";
-import { PublishPage } from "./studio/PublishPage";
 import { RenderGatePage } from "./studio/RenderGatePage";
 import { StudioLayout } from "./studio/StudioLayout";
+import { useTheme } from "./theme";
 
 function RootLayout() {
   return (
@@ -47,12 +55,18 @@ function RouteError({ error }: { error: unknown }) {
 }
 
 const SPORTS: readonly string[] = ["F1", "NBA", "NHL", "Soccer"];
-const asMode = (v: unknown): Mode | undefined =>
+export const asMode = (v: unknown): Mode | undefined =>
   v === "non_commercial" ? "non_commercial" : v === "monetized" ? "monetized" : undefined;
-const asSport = (v: unknown): Sport | undefined =>
+export const asSport = (v: unknown): Sport | undefined =>
   typeof v === "string" && SPORTS.includes(v) ? (v as Sport) : undefined;
 
 const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: NotFound, errorComponent: RouteError });
+
+/** The front: A/1's floodlit front in On Air, A/3's finish frame in Photo Finish. */
+function FrontRoute() {
+  const { theme } = useTheme();
+  return theme === "photofinish" ? <FrontPhotoFinish /> : <FrontPage />;
+}
 
 export type FrontSearch = { format?: string; sport?: Sport; mode?: Mode };
 const indexRoute = createRoute({
@@ -63,18 +77,29 @@ const indexRoute = createRoute({
     sport: asSport(s.sport),
     mode: asMode(s.mode),
   }),
-  component: FrontPage,
+  component: FrontRoute,
 });
 
-export type HeatmapSearch = { mode?: Mode; cell?: string };
-const heatmapRoute = createRoute({
+/**
+ * Heatmap layer 1 (the grid) is the parent; layer 2 (one cell) is a child rendered as a full layer
+ * over the grid, so the grid keeps its place and focus when the layer closes.
+ * `focus` = "<usecase>|<sport>" names the cell to focus on the grid (`cell` is its legacy name).
+ */
+export type HeatmapSearch = { mode?: Mode; focus?: string };
+export const heatmapRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/heatmap",
   validateSearch: (s: Record<string, unknown>): HeatmapSearch => ({
     mode: asMode(s.mode),
-    cell: typeof s.cell === "string" ? s.cell : undefined,
+    focus: typeof s.focus === "string" ? s.focus : typeof s.cell === "string" ? s.cell : undefined,
   }),
   component: HeatmapPage,
+});
+const heatmapIndexRoute = createRoute({ getParentRoute: () => heatmapRoute, path: "/", component: () => null });
+export const heatmapCellRoute = createRoute({
+  getParentRoute: () => heatmapRoute,
+  path: "$usecase/$sport",
+  component: HeatmapCellLayer,
 });
 
 export type ProjectsSearch = { view?: "board" | "list" };
@@ -94,17 +119,26 @@ export const studioRoute = createRoute({
 });
 const controlRoute = createRoute({ getParentRoute: () => studioRoute, path: "/", component: ControlRoom });
 const renderRoute = createRoute({ getParentRoute: () => studioRoute, path: "render", component: RenderGatePage });
-const publishRoute = createRoute({ getParentRoute: () => studioRoute, path: "publish", component: PublishPage });
+/** Publishing moved to the Calendar (ADR 006); old links land there. */
+const publishRoute = createRoute({
+  getParentRoute: () => studioRoute,
+  path: "publish",
+  component: () => <Navigate to="/calendar" replace />,
+});
 
+const calendarRoute = createRoute({ getParentRoute: () => rootRoute, path: "/calendar", component: CalendarPage });
+const boardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/board", component: BoardPage });
 const metricsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/metrics", component: MetricsPage });
 const sourcesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sources", component: SourcesPage });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  heatmapRoute,
+  heatmapRoute.addChildren([heatmapIndexRoute, heatmapCellRoute]),
   projectsRoute,
   studioIndexRoute,
   studioRoute.addChildren([controlRoute, renderRoute, publishRoute]),
+  calendarRoute,
+  boardRoute,
   metricsRoute,
   sourcesRoute,
 ]);

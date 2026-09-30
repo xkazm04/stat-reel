@@ -1,14 +1,68 @@
 /**
- * The On Air vocabulary, drawn (the font subsets carry no arrows): status glyphs (shape before
+ * The status vocabulary, drawn (the font subsets carry no arrows): status glyphs (shape before
  * hue), status chips (glyph + label as text), licence chips, arrows, the logo mark, sport fields.
+ * Each theme owns its glyph set: On Air draws disc / half-disc / triangle / crossed square;
+ * Photo Finish draws a position relative to the finish line (bar across with a flag, bar at the
+ * line with a hollow end, hatched bar short with a query dot, barred gate at the start).
  */
 import type { CellStatus, LicenseClass } from "@statreel/schemas";
 import type { ReactNode } from "react";
 import { LICENCE_WORD, STATUS_WORD } from "../onair";
+import { useTheme } from "../theme";
 
 export type GlyphKind = CellStatus;
 
+/** Photo Finish status glyph: 36 x 16 units, the clay line at x = 26 (A/3 SR.glyph). */
+export function LineGlyph({ status, size = 16 }: { status: GlyphKind; size?: number }) {
+  const w = Math.round(size * 2.25 * 10) / 10;
+  let body: ReactNode;
+  if (status === "go")
+    body = (
+      <>
+        <rect x="1" y="6" width="33" height="4.5" className="g-fill" />
+        <path d="M33 6.2V.8l-5.2 2.4L33 5.6z" className="g-fill" />
+        <rect x="32.6" y=".8" width="1.4" height="6" className="g-fill" />
+      </>
+    );
+  else if (status === "data-ready")
+    body = (
+      <>
+        <rect x="1" y="6" width="18.5" height="4.5" className="g-fill" />
+        <circle cx="21.4" cy="8.25" r="3.4" className="g-hollow" />
+      </>
+    );
+  else if (status === "ask")
+    body = (
+      <>
+        <path d="M1.75 5.75H14l-2.2 2.5 2.2 2.5H1.75z" className="g-stroke" />
+        <path d="M3.2 10.4l2.7-4.3M6.2 10.4l2.7-4.3M9.2 10.4l2.4-3.8" className="g-stroke" />
+        <circle cx="18.3" cy="8.25" r="1.5" className="g-fill" />
+      </>
+    );
+  else
+    body = (
+      <>
+        <rect x="1.9" y="2.9" width="10.7" height="10.7" className="g-stroke" style={{ strokeWidth: 1.8 }} />
+        <path d="M2 3l10.5 10.5M12.5 3L2 13.5" className="g-stroke" />
+        <path d="M15.5 8.25h9" className="g-faint" />
+      </>
+    );
+  return (
+    <svg className={`glyph glyph--line glyph--${status}`} viewBox="0 0 36 16" width={w} height={size} aria-hidden="true">
+      {body}
+      <line x1="26" y1="0.5" x2="26" y2="15.5" className="g-line" />
+    </svg>
+  );
+}
+
 export function Glyph({ status, size = 16 }: { status: GlyphKind; size?: number }) {
+  const { theme } = useTheme();
+  if (theme === "photofinish") return <LineGlyph status={status} size={size} />;
+  return <DiscGlyph status={status} size={size} />;
+}
+
+/** On Air status glyph: disc / half-disc / triangle / crossed square. */
+export function DiscGlyph({ status, size = 16 }: { status: GlyphKind; size?: number }) {
   let inner: ReactNode = null;
   if (status === "go")
     inner = (
@@ -101,6 +155,7 @@ export function Arrow({ dir = "right", size = 16 }: { dir?: "right" | "left" | "
   );
 }
 
+/** The On Air logo mark (a slanted volt plate with three rising bars). */
 export function Mark({ className = "logo__mark" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 34 24" aria-hidden="true">

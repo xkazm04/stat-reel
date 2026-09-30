@@ -1,10 +1,19 @@
 /**
- * Design tokens. `tokens.css` is the source of truth for the studio UI (CSS custom properties).
- * `videoTheme` is the same brand as plain values for Remotion compositions.
+ * Design tokens. `tokens.css` is the source of truth for the studio UI (CSS custom properties):
+ * one semantic vocabulary, two themes selected by `data-theme` on <html> (ADR 006):
+ * `onair` (A/1, dark, default) and `photofinish` (A/3, light).
+ * `videoTheme` is the On Air brand as plain values for Remotion compositions (the videos stay
+ * `onair` for now; a per-channel video theme is future work).
  *
- * Baseline: contest `landing-screens` variant A/1 "On Air" (owner verdict 2026-09-30, ADR 005).
- * Volt means one thing everywhere: cleared to air.
+ * Volt means one thing everywhere in On Air: cleared to air. In Photo Finish the one signal is
+ * the clay-red finish line.
  */
+
+/** Studio UI themes (ADR 006). `onair` is dark, `photofinish` is light. */
+export const themes = ["onair", "photofinish"] as const;
+export type ThemeName = (typeof themes)[number];
+/** The scheme each theme answers (`prefers-color-scheme` picks the default). */
+export const themeScheme: Record<ThemeName, "dark" | "light"> = { onair: "dark", photofinish: "light" };
 
 export const fontFamilies = {
   display: '"Barlow Condensed", "Arial Narrow", sans-serif',

@@ -1,10 +1,10 @@
 /**
- * Pieces the three studio screens share: the project context, the live job line, the gate verdict
- * (data-testid policy-verdict holds only the verdict word) and the publication status
+ * Pieces the studio screens share: the project context, the live job line, the gate verdict
+ * (data-testid policy-verdict holds only the verdict word) and a read-only publication line
  * (data-testid publication-status holds only the status, so "private" appears only once published).
  */
 import type { UseCase } from "@statreel/schemas";
-import { useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import type { Job, ProjectDetail } from "../api";
 import { StatusChip } from "../components/glyphs";
 import { latestRender, renderPolicy, useHeatmap, useProject } from "../data";
@@ -87,24 +87,16 @@ export function Verdict({ detail, size = "md" }: { detail: ProjectDetail; size?:
   );
 }
 
-/** Publication status word: NOT SENT / UPLOADING / REFUSED / the stored visibility. */
+/**
+ * Read-only publication line (publishing itself happens in the Calendar): the stored visibility
+ * of the newest publication, its platform and whether it was a dry run; links to the Calendar.
+ */
 export function PublicationStatus({ detail }: { detail: ProjectDetail }) {
   const pub = detail.publications[0];
   const job = publishJob(detail);
-  const last = lastJobOf(detail, ["publish"]);
-  const word = pub
-    ? pub.status
-    : job
-      ? job.status === "queued"
-        ? "queued"
-        : "uploading"
-      : last?.status === "refused"
-        ? "refused"
-        : last?.status === "failed"
-          ? "failed"
-          : "not sent";
+  const word = pub ? pub.status : job ? (job.status === "queued" ? "queued" : "uploading") : "not on the calendar";
   return (
-    <span className={`pubstat ${pub ? "pubstat--on" : "pubstat--off"}`}>
+    <Link to="/calendar" className={`pubstat ${pub ? "pubstat--on" : "pubstat--off"}`}>
       <i aria-hidden="true" />
       <b data-testid="publication-status">{word}</b>
       {pub ? (
@@ -113,6 +105,7 @@ export function PublicationStatus({ detail }: { detail: ProjectDetail }) {
           {pub.mode === "dry" ? " · dry run" : ""}
         </span>
       ) : null}
-    </span>
+      <span className="pubstat__m pubstat__cal">· calendar</span>
+    </Link>
   );
 }

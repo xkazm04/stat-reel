@@ -1,67 +1,55 @@
 /**
- * 02 Heatmap: the rights grid. Four sport channels x the formats, MODE monetized / non-commercial,
- * every cell a glyph + pattern + label. The lower third never goes empty: a summary with "make
- * next" picks, or one cell's kinds, every source with its test status and licence text, the
- * never-fetched list and the cell reason verbatim, plus Create project.
+ * Heatmap layer 1: the grid alone, full height. Use case x sport in the current mode, each cell a
+ * status as shape + label (the literal word is text: GO / DATA READY / ASK / BLOCKED), legend with
+ * counts, per-format GO trend, snapshot age + Recompute. Opening a cell (click, Enter) records its
+ * rect and routes to layer 2 (/heatmap/$usecase/$sport), which expands from it over the grid;
+ * closing returns here with that cell focused. Keyboard: arrows / Home / End move, Enter opens,
+ * M flips the mode, Esc closes layer 2.
+ * On Air draws the A/1 rights grid (sports as rows, formats as columns); Photo Finish draws the
+ * A/3 finish sheet (four heats as columns, ten lanes as rows, a bar per cell toward the line).
  */
-import type { CellStatus, HeatmapCell, Mode, Source, Sport, UseCase } from "@statreel/schemas";
+import type { CellStatus, HeatmapCell, Mode, Sport, UseCase } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { type KeyboardEvent, useEffect, useMemo, useRef } from "react";
-import { api, errorText, type ProjectWithJobs, qk } from "../api";
-import { useCreateProject } from "../components/createProject";
-import { Arrow, Field, LicChip, StatusChip, TestChip } from "../components/glyphs";
+import { Outlet, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { api, errorText, qk } from "../api";
+import { LaneBar, ModeSwitch } from "../components/finish";
+import { Field, FormatIcon, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
+import { setLayerOrigin } from "../components/layerTransition";
 import { artStyle, Failure, Loading, Sparkline } from "../components/ui";
-import { useHeatmap, useProjects, useSources } from "../data";
-import {
-  allowedIn,
-  type Capability,
-  cellOf,
-  countStatuses,
-  decisionAid,
-  MODE_LABEL,
-  relTime,
-  SPORTS,
-  STAGE_LABEL,
-  trendSeries,
-} from "../logic";
-import {
-  bestCells,
-  formatLabel,
-  kindLong,
-  LICENCE_WORD,
-  modeDiff,
-  neverFetchedFor,
-  pad2,
-  STATUS_AIR,
-  STATUS_ORDER,
-  STATUS_WORD,
-  trendSummary,
-} from "../onair";
+import { useHeatmap, useSources } from "../data";
+import { LINE, REACH } from "../finishline";
+import { cellHint, focusKey, gridMove, parseFocus, sportCounts } from "../heatmap";
+import { cellOf, countStatuses, MODE_LABEL, relTime, SPORTS, trendSeries } from "../logic";
+import { formatLabel, pad2, STATUS_ORDER, STATUS_WORD, trendSummary } from "../onair";
 import type { HeatmapSearch } from "../router";
+import { useTheme } from "../theme";
 
-/** The short second line inside a cell: why, in three words. */
-function cellHint(c: HeatmapCell): string {
-  if (c.status === "go") return "cleared, built";
-  if (c.status === "data-ready") return "not built yet";
-  if (c.status === "ask") {
-    const k = c.kinds.find((x) => x.best && !allowedIn(c.mode, x.best));
-    return k?.best === "paid" ? "paid licence" : "NC only";
-  }
-  const k = c.kinds.find((x) => !x.best);
-  if (!k) return "blocked";
-  if (k.tested) return "failing test";
-  return k.sources.length ? "not tested" : "no source";
-}
+type OpenCell = (uc: UseCase, sport: Sport, el: HTMLElement) => void;
+type GridProps = {
+  usecases: UseCase[];
+  cells: HeatmapCell[];
+  mode: Mode;
+  trend: { at: string; go: Record<string, number> }[];
+  cur: string;
+  selected: string | null;
+  changed: Set<string>;
+  onOpen: OpenCell;
+  onFocusCell: (key: string) => void;
+  register: (key: string, el: HTMLButtonElement | null) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
+};
 
 export function HeatmapPage() {
   const search = useSearch({ from: "/heatmap" }) as HeatmapSearch;
-  const navigate = useNavigate({ from: "/heatmap" });
+  const navigate = useNavigate();
+  const params = useParams({ strict: false }) as { usecase?: string; sport?: string };
+  const open = !!(params.usecase && params.sport);
   const mode: Mode = search.mode ?? "monetized";
+  const { theme } = useTheme();
   const hm = useHeatmap();
   const src = useSources();
-  const pr = useProjects();
   const qc = useQueryClient();
   const recompute = useMutation({
     mutationFn: api.recomputeHeatmap,
@@ -70,24 +58,57 @@ export function HeatmapPage() {
 
   const usecases = hm.data?.usecases ?? [];
   const cells = hm.data?.cells ?? [];
-  const [selUc, selSport] = (search.cell ?? "").split("|");
-  const sel =
-    usecases.find((u) => u.id === selUc) && SPORTS.includes(selSport as Sport)
-      ? { uc: selUc as string, sport: selSport as Sport }
-      : null;
+  const trend = hm.data?.trend ?? [];
 
-  const setSearch = (next: HeatmapSearch) => void navigate({ search: next, replace: true, resetScroll: false });
-  const setMode = (m: Mode) => setSearch({ mode: m, cell: search.cell });
-  const select = (uc: string | null, sport?: Sport) =>
-    setSearch({ mode, cell: uc && sport ? `${uc}|${sport}` : undefined });
+  const setMode = (m: Mode) =>
+    void navigate({
+      to: ".",
+      search: (s: HeatmapSearch) => ({ ...s, mode: m }),
+      replace: true,
+      resetScroll: false,
+    } as never);
 
-  // flip animation: cells whose status changed since the last render in this view
+  // roving focus: the focus param wins (a closed layer names its cell), else era-adjusted x F1
+  const fallback = focusKey(usecases.find((u) => u.id === "era-adjusted-rankings")?.id ?? usecases[0]?.id ?? "", "F1");
+  const [cur, setCur] = useState<string | null>(null);
+  const current = cur ?? (parseFocus(search.focus, usecases) ? (search.focus as string) : fallback);
+  const selected = open ? focusKey(params.usecase as string, params.sport as string) : null;
+
+  const refs = useRef(new Map<string, HTMLButtonElement>());
+  const register = (key: string, el: HTMLButtonElement | null) => {
+    if (el) refs.current.set(key, el);
+    else refs.current.delete(key);
+  };
+
+  // back from layer 2 (or a deep link with ?focus=): focus that cell on the grid
+  const wasOpen = useRef(open);
+  const loaded = !!hm.data;
+  useEffect(() => {
+    const closedNow = wasOpen.current && !open;
+    wasOpen.current = open;
+    if (open || !loaded) return;
+    const f = parseFocus(search.focus, usecases);
+    if (!f) return;
+    const key = focusKey(f.uc, f.sport);
+    setCur(key);
+    const el = refs.current.get(key);
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (closedNow) {
+      el.classList.remove("is-back");
+      void el.offsetWidth;
+      el.classList.add("is-back");
+    }
+  }, [open, loaded, search.focus, usecases]);
+
+  // A/1 flip: cells whose status changed since the last render in this mode
   const prev = useRef<Map<string, CellStatus>>(new Map());
   const changed = useMemo(() => {
     const out = new Set<string>();
     for (const c of cells) {
       if (c.mode !== mode) continue;
-      const k = `${c.usecase}|${c.sport}`;
+      const k = focusKey(c.usecase, c.sport);
       const was = prev.current.get(k);
       if (was && was !== c.status) out.add(k);
     }
@@ -95,42 +116,43 @@ export function HeatmapPage() {
   }, [cells, mode]);
   useEffect(() => {
     const m = new Map<string, CellStatus>();
-    for (const c of cells) if (c.mode === mode) m.set(`${c.usecase}|${c.sport}`, c.status);
+    for (const c of cells) if (c.mode === mode) m.set(focusKey(c.usecase, c.sport), c.status);
     prev.current = m;
   });
 
-  const grid = useRef<HTMLDivElement>(null);
-  const focusCell = (r: number, c: number) => {
-    const el = grid.current?.querySelector<HTMLButtonElement>(`[data-r="${r}"][data-c="${c}"]`);
-    el?.focus();
+  const onOpen: OpenCell = (uc, sport, el) => {
+    setCur(focusKey(uc.id, sport));
+    setLayerOrigin(focusKey(uc.id, sport), el);
+    void navigate({
+      to: "/heatmap/$usecase/$sport",
+      params: { usecase: uc.id, sport },
+      search: { mode },
+      resetScroll: false,
+    });
   };
-  const onGridKey = (e: KeyboardEvent<HTMLDivElement>) => {
+
+  const pf = theme === "photofinish";
+  const rows = pf ? usecases.length : SPORTS.length;
+  const cols = pf ? SPORTS.length : usecases.length;
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-r]");
     if (!el) return;
-    let r = Number(el.dataset.r);
-    let c = Number(el.dataset.c);
-    if (e.key === "ArrowRight") c = Math.min(usecases.length - 1, c + 1);
-    else if (e.key === "ArrowLeft") c = Math.max(0, c - 1);
-    else if (e.key === "ArrowDown") r = Math.min(SPORTS.length - 1, r + 1);
-    else if (e.key === "ArrowUp") r = Math.max(0, r - 1);
-    else if (e.key === "Home") c = 0;
-    else if (e.key === "End") c = usecases.length - 1;
-    else return;
+    const next = gridMove(Number(el.dataset.r), Number(el.dataset.c), e.key, rows, cols);
+    if (!next) return;
     e.preventDefault();
-    focusCell(r, c);
+    const target = e.currentTarget.querySelector<HTMLButtonElement>(`[data-r="${next[0]}"][data-c="${next[1]}"]`);
+    if (target) {
+      setCur(target.dataset.key ?? null);
+      target.focus();
+    }
   };
+
+  // M flips the mode (not while typing)
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select")) return;
-      if (e.key === "Escape" && search.cell) {
-        e.preventDefault();
-        const [u, s] = search.cell.split("|");
-        const r = SPORTS.indexOf(s as Sport);
-        const c = usecases.findIndex((x) => x.id === u);
-        setSearch({ mode });
-        window.setTimeout(() => focusCell(r, c), 0);
-      } else if ((e.key === "m" || e.key === "M") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (t.closest("input, textarea, select, [contenteditable]")) return;
+      if ((e.key === "m" || e.key === "M") && !e.ctrlKey && !e.metaKey && !e.altKey) {
         setMode(mode === "monetized" ? "non_commercial" : "monetized");
       }
     };
@@ -138,574 +160,334 @@ export function HeatmapPage() {
     return () => document.removeEventListener("keydown", onKey);
   });
 
-  const focus = sel
-    ? { r: SPORTS.indexOf(sel.sport), c: usecases.findIndex((u) => u.id === sel.uc) }
-    : {
-        r: 0,
-        c: Math.max(
-          0,
-          usecases.findIndex((u) => u.id === "era-adjusted-rankings"),
-        ),
-      };
   const n = countStatuses(cells, mode);
   const per = usecases.length * SPORTS.length;
-  const lastSnap = hm.data?.trend.at(-1)?.at;
+  const lastSnap = trend.at(-1)?.at;
   const caps = src.data?.capabilities ?? [];
-  const selUsecase = sel ? usecases.find((u) => u.id === sel.uc) : undefined;
+
+  const gridProps: GridProps = {
+    usecases,
+    cells,
+    mode,
+    trend,
+    cur: current,
+    selected,
+    changed,
+    onOpen,
+    onFocusCell: setCur,
+    register,
+    onKeyDown,
+  };
 
   return (
-    <main id="main" className="hm">
-      <div className="bar">
-        <h1>
-          Rights grid
-          <small>
-            {SPORTS.length} sport channels × {usecases.length || "—"} formats
-          </small>
-        </h1>
-        <div className="ctl">
-          <span className="label">
-            Mode <kbd>M</kbd>
-          </span>
-          <div className="seg" role="group" aria-label="Mode">
-            {(["monetized", "non_commercial"] as const).map((m) => (
-              <button
-                type="button"
-                key={m}
-                aria-pressed={mode === m}
-                data-testid={`mode-${m}`}
-                onClick={() => setMode(m)}
-              >
-                {MODE_LABEL[m]}
-              </button>
+    <main id="main" className={`hm hm--${theme}`} data-layer={open ? "2" : "1"}>
+      <div className="hm-layer1" inert={open}>
+        <header className="hm-head">
+          <div className="hm-title">
+            <p className="eyebrow">
+              {pf ? null : <i />}
+              {pf
+                ? `The finish sheet · ${SPORTS.length} heats × ${usecases.length || "—"} lanes`
+                : `${SPORTS.length} sport channels × ${usecases.length || "—"} formats`}
+            </p>
+            <h1>{pf ? "What can cross the line" : "Rights grid"}</h1>
+          </div>
+          <ul className="hm-legend" aria-label={`Status counts, ${MODE_LABEL[mode]}`}>
+            {STATUS_ORDER.map((k) => (
+              <li key={k} className={`st--${k}${n[k] ? "" : " is-zero"}`}>
+                <span className="hm-legend__n num">{pf ? n[k] : pad2(n[k])}</span>
+                <StatusChip status={k} size={14} />
+                <small>{n[k] ? `of ${per}` : "none"}</small>
+              </li>
             ))}
+          </ul>
+          <div className="hm-ctl">
+            <ModeSwitch mode={mode} onChange={setMode} label={pf ? "Line at" : "Mode"} testid />
+            <span className="hm-ctl__k">
+              <kbd>M</kbd> flips the mode
+            </span>
           </div>
-        </div>
-        <div className="ctl">
-          <span className="label">{lastSnap ? `Snapshot ${relTime(lastSnap)}` : "No snapshot yet"}</span>
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() => recompute.mutate()}
-            disabled={recompute.isPending}
-          >
-            {recompute.isPending ? "Recomputing" : "Recompute"}
-          </button>
-        </div>
-        <ul className="legend" aria-label="Status legend and counts">
-          {STATUS_ORDER.map((k) => (
-            <li key={k} className={`st--${k}${n[k] ? "" : " zero"}`}>
-              <span className="n num">{pad2(n[k])}</span>
-              <StatusChip status={k} size={14} />
-              <small>{n[k] ? `of ${per}` : "none"}</small>
-            </li>
-          ))}
-        </ul>
-      </div>
-      {recompute.isError ? <p className="bar-msg is-error">Recompute failed: {errorText(recompute.error)}</p> : null}
-
-      {hm.isError ? (
-        <div className="grid-wrap">
-          <Failure error={hm.error} what="The heatmap" />
-        </div>
-      ) : hm.isLoading ? (
-        <div className="grid-wrap">
-          <Loading what="the rights grid" />
-        </div>
-      ) : (
-        <div className="grid-wrap">
-          <div
-            className="grid"
-            ref={grid}
-            role="grid"
-            aria-label={`Feasibility by sport and format, ${MODE_LABEL[mode]}`}
-            onKeyDown={onGridKey}
-            style={{ ["--cols" as string]: usecases.length }}
-          >
-            <div className="corner" role="presentation">
-              <span>{SPORTS.length} sports</span>
-              <span>× {usecases.length} formats</span>
-            </div>
-            {usecases.map((u, j) => {
-              const series = trendSeries(hm.data?.trend ?? [], u.id, mode);
-              const t = trendSummary(series);
-              return (
-                <div
-                  key={u.id}
-                  className={`colh${sel?.uc === u.id ? " hot" : ""}`}
-                  role="columnheader"
-                  style={artStyle(identVar(u.id))}
-                >
-                  <b className="num">
-                    {pad2(j + 1)} · {formatLabel(u.default_format)}
-                  </b>
-                  <span>{u.name}</span>
-                  <i>{u.requires.kinds.join("+")}</i>
-                  <em className="colh__trend" title={`${t.snapshots} snapshot${t.snapshots === 1 ? "" : "s"}`}>
-                    <Sparkline
-                      values={series}
-                      w={40}
-                      h={14}
-                      label={`Go count over ${t.snapshots} snapshots`}
-                      className="spark spark--tiny"
-                    />
-                    <span className="num">
-                      go {t.now}/{SPORTS.length}
-                      {t.delta === null ? "" : t.delta === 0 ? " · =" : ` · ${t.delta > 0 ? "+" : ""}${t.delta}`}
-                    </span>
-                  </em>
-                </div>
-              );
-            })}
-            {SPORTS.map((sp, i) => {
-              const rc: Partial<Record<CellStatus, number>> = {};
-              for (const u of usecases) {
-                const c = cellOf(cells, u.id, sp, mode);
-                if (c) rc[c.status] = (rc[c.status] ?? 0) + 1;
-              }
-              return (
-                <RowCells key={sp}>
-                  <div className={`rowh${sel?.sport === sp ? " hot" : ""}`} role="rowheader">
-                    <Field sport={sp} />
-                    <b>{sp}</b>
-                    <small className="num">
-                      {STATUS_ORDER.filter((k) => rc[k]).map((k) => (
-                        <span key={k} className={`st--${k}`} title={`${rc[k]} ${STATUS_WORD[k]}`}>
-                          <StatusChip status={k} size={12} label={String(rc[k])} />
-                        </span>
-                      ))}
-                    </small>
-                  </div>
-                  {usecases.map((u, j) => {
-                    const c = cellOf(cells, u.id, sp, mode);
-                    if (!c)
-                      return (
-                        <div key={u.id} className="cell cell--none">
-                          no cell
-                        </div>
-                      );
-                    const isSel = sel?.uc === u.id && sel.sport === sp;
-                    const k = `${u.id}|${sp}`;
-                    return (
-                      <button
-                        type="button"
-                        key={u.id}
-                        role="gridcell"
-                        data-testid={`cell-${u.id}-${sp}`}
-                        data-r={i}
-                        data-c={j}
-                        tabIndex={focus.r === i && focus.c === j ? 0 : -1}
-                        aria-selected={isSel}
-                        aria-label={`${u.name}, ${sp}, ${MODE_LABEL[mode]}: ${STATUS_WORD[c.status]}. ${c.reason}`}
-                        className={`cell st--${c.status} pat--${c.status}${changed.has(k) ? " flip" : ""}`}
-                        style={{ ["--d" as string]: i * 3 + j * 2 }}
-                        onClick={() => select(isSel ? null : u.id, sp)}
-                      >
-                        <StatusChip status={c.status} />
-                        <span className="cell__hint">{cellHint(c)}</span>
-                      </button>
-                    );
-                  })}
-                </RowCells>
-              );
-            })}
-          </div>
-          <p className="grid-foot">
-            <span>
-              <kbd>Arrows</kbd> move
-            </span>
-            <span>
-              <kbd>Enter</kbd> open a cell
-            </span>
-            <span>
-              <kbd>Esc</kbd> back to the summary
-            </span>
-            <span>
-              Basis: tested capabilities ({caps.filter((c) => c.status === "pass").length} pass of {caps.length}) ×
-              registry × built compositions · {hm.data?.trend.length ?? 0} snapshot
-              {(hm.data?.trend.length ?? 0) === 1 ? "" : "s"}
-            </span>
+        </header>
+        {recompute.isError ? (
+          <p className="hm-msg" role="alert">
+            Recompute failed: {errorText(recompute.error)}
           </p>
-        </div>
-      )}
+        ) : null}
 
-      {hm.data ? (
-        sel && selUsecase ? (
-          <CellDetail
-            key={`${sel.uc}|${sel.sport}|${mode}`}
-            uc={selUsecase}
-            sport={sel.sport}
-            mode={mode}
-            cells={cells}
-            sources={src.data?.sources ?? []}
-            caps={caps}
-            projects={pr.data?.projects ?? []}
-            onBack={() => select(null)}
-            onMode={setMode}
-          />
+        {hm.isError ? (
+          <div className="hm-state">
+            <Failure error={hm.error} what="The heatmap" />
+          </div>
+        ) : hm.isLoading ? (
+          <div className="hm-state">
+            <Loading what="the heatmap" />
+          </div>
+        ) : !usecases.length ? (
+          <div className="hm-state">
+            <div className="empty">
+              <b>No use cases</b>
+              data/registry/usecases holds no use case, so there is nothing to grid.
+            </div>
+          </div>
         ) : (
-          <Summary key={mode} mode={mode} cells={cells} usecases={usecases} onPick={(u, s) => select(u, s)} />
-        )
-      ) : null}
+          <div className="hm-wrap">{pf ? <FinishSheet {...gridProps} /> : <RightsGrid {...gridProps} />}</div>
+        )}
+
+        <p className="hm-foot">
+          <span>
+            <kbd>Arrows</kbd> move
+          </span>
+          <span>
+            <kbd>Enter</kbd> open a cell
+          </span>
+          <span>
+            <kbd>Esc</kbd> back to the grid
+          </span>
+          <span>
+            Basis: tested capabilities ({caps.filter((c) => c.status === "pass").length} pass of {caps.length}) ×
+            registry × built compositions · {trend.length} snapshot{trend.length === 1 ? "" : "s"}
+          </span>
+          <span className="hm-snap">
+            <span>{lastSnap ? `Snapshot ${relTime(lastSnap)}` : "No snapshot yet"}</span>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => recompute.mutate()}
+              disabled={recompute.isPending}
+            >
+              {recompute.isPending ? "Recomputing" : "Recompute"}
+            </button>
+          </span>
+        </p>
+      </div>
+      <Outlet />
     </main>
   );
 }
 
-/** Row fragment: keeps the grid flat (display: contents) while grouping one sport's cells. */
-const RowCells = ({ children }: { children: React.ReactNode }) => (
-  <div className="grid__row" role="row">
-    {children}
-  </div>
-);
+// ------------------------------------------------------------------ shared cell pieces
 
-// ------------------------------------------------------------------ detail: one cell
+function trendOf(trend: GridProps["trend"], id: string, mode: Mode) {
+  const series = trendSeries(trend, id, mode);
+  return { series, t: trendSummary(series) };
+}
 
-function CellDetail({
-  uc,
-  sport,
-  mode,
-  cells,
-  sources,
-  caps,
-  projects,
-  onBack,
-  onMode,
-}: {
-  uc: UseCase;
-  sport: Sport;
-  mode: Mode;
-  cells: HeatmapCell[];
-  sources: Source[];
-  caps: Capability[];
-  projects: ProjectWithJobs[];
-  onBack: () => void;
-  onMode: (m: Mode) => void;
-}) {
-  const c = cellOf(cells, uc.id, sport, mode);
-  const other: Mode = mode === "monetized" ? "non_commercial" : "monetized";
-  const oc = cellOf(cells, uc.id, sport, other);
-  const create = useCreateProject();
-  const srcById = new Map(sources.map((s) => [s.id, s]));
-  const never = neverFetchedFor(sources, sport, uc.requires.kinds);
-  const mine = projects.filter((p) => p.use_case_id === uc.id && p.sport === sport);
-  if (!c) return null;
-  const attributions = [
-    ...new Set(
-      c.kinds
-        .flatMap((k) => k.sources.filter((s) => s.status === "pass").map((s) => srcById.get(s.id)?.attribution))
-        .filter(Boolean),
-    ),
-  ];
+function TrendLine({ series, t, w = 40 }: { series: number[]; t: ReturnType<typeof trendSummary>; w?: number }) {
   return (
-    <div className="detail in" aria-live="polite" style={artStyle(identVar(uc.id))}>
-      <section>
-        <div className="d-crumb">
-          <button type="button" onClick={onBack}>
-            <Arrow dir="left" />
-            Grid summary <kbd>Esc</kbd>
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
-            data-testid="create-project"
-            disabled={create.isPending}
-            onClick={() => create.mutate({ usecase: uc, sport, mode })}
-          >
-            {create.isPending ? "Creating" : "Create project"} <Arrow />
-          </button>
+    <span className="hm-trend">
+      <Sparkline
+        values={series}
+        w={w}
+        h={14}
+        label={`Go count over ${t.snapshots} snapshots`}
+        className="spark spark--tiny"
+      />
+      <span className="num">
+        go {t.now}/{SPORTS.length}
+        {t.delta === null ? "" : t.delta === 0 ? " · =" : ` · ${t.delta > 0 ? "+" : ""}${t.delta}`}
+      </span>
+    </span>
+  );
+}
+
+function cellLabel(u: UseCase, sport: string, mode: Mode, c: HeatmapCell): string {
+  return `${u.name}, ${sport}, ${MODE_LABEL[mode]}: ${STATUS_WORD[c.status]}. ${c.reason}. Open the cell.`;
+}
+
+// ------------------------------------------------------------------ On Air: the rights grid
+
+function RightsGrid({
+  usecases,
+  cells,
+  mode,
+  trend,
+  cur,
+  selected,
+  changed,
+  onOpen,
+  onFocusCell,
+  register,
+  onKeyDown,
+}: GridProps) {
+  return (
+    <div
+      className="oa-grid"
+      role="grid"
+      aria-label={`Feasibility by sport and format, ${MODE_LABEL[mode]}`}
+      onKeyDown={onKeyDown}
+      style={{ ["--cols" as string]: usecases.length }}
+    >
+      <div className="oa-grid__row oa-grid__row--head" role="row">
+        <div className="oa-corner" role="columnheader">
+          <span>{SPORTS.length} sports</span>
+          <span>× {usecases.length} formats</span>
         </div>
-        {create.isError ? <p className="d-warn">Could not create the project: {errorText(create.error)}</p> : null}
-        <h2 className="d-name">
-          {uc.name} <em>× {sport}</em>
-        </h2>
-        <div className="d-status">
-          <StatusChip status={c.status} size={22} />
-          <small>
-            {STATUS_AIR[c.status]} · {MODE_LABEL[mode]}
-          </small>
-        </div>
-        <p className="d-why">
-          <span className="label">Reason, verbatim</span>
-          {c.reason}
-        </p>
-        {oc ? (
-          <p className="d-other">
-            In {MODE_LABEL[other].toLowerCase()} mode: <StatusChip status={oc.status} size={14} />
-            <button type="button" onClick={() => onMode(other)}>
-              switch
-            </button>
-          </p>
-        ) : null}
-        {c.status === "ask" || c.status === "blocked" ? (
-          <p className="d-warn">
-            You can draft it, but the gate will refuse a {MODE_LABEL[mode].toLowerCase()} publish until every kind
-            clears.
-          </p>
-        ) : null}
-        <p className="d-inst">
-          {mine.length ? (
-            <>
-              In the studio:{" "}
-              {mine.map((p, i) => (
-                <span key={p.id}>
-                  {i ? ", " : ""}
-                  <Link to="/studio/$projectId" params={{ projectId: p.id }}>
-                    {p.id} · {STAGE_LABEL[p.status] ?? p.status} · {MODE_LABEL[p.mode as Mode] ?? p.mode}
-                  </Link>
-                </span>
-              ))}
-            </>
-          ) : (
-            "No project for this pairing yet."
-          )}
-        </p>
-      </section>
-      <section>
-        <h3 className="sec-h">
-          <span>
-            What it needs · {c.kinds.length} data kind{c.kinds.length === 1 ? "" : "s"}
-          </span>
-          <span>complexity stage {uc.stage}</span>
-        </h3>
-        {c.kinds.map((k) => {
-          const ok = allowedIn(mode, k.best);
+        {usecases.map((u, j) => {
+          const { series, t } = trendOf(trend, u.id, mode);
+          const hot = selected?.startsWith(`${u.id}|`) || cur.startsWith(`${u.id}|`);
           return (
-            <div className="kind" key={k.kind}>
-              <div className="kind__k">
-                <b>{kindLong(k.kind)}</b>
-                <span className="label">
-                  {k.kind} · {k.tested ? "tested" : "not tested"}
-                </span>
-                <span className="kind__best">
-                  best: {k.best ? <LicChip cls={k.best} /> : <span className="label">none passing</span>}
-                </span>
-                <span className={`verdict verdict--${ok ? "ok" : "no"}`}>
-                  <StatusChip
-                    status={ok ? "go" : k.best ? "ask" : "blocked"}
-                    size={13}
-                    label={
-                      ok ? "CLEARS" : k.best ? `BEST IS ${LICENCE_WORD[k.best].toUpperCase()}` : "NO PASSING SOURCE"
-                    }
-                  />
-                </span>
-              </div>
-              <div className="srcs">
-                {k.sources.length ? (
-                  k.sources.map((s) => {
-                    const reg = srcById.get(s.id);
-                    const cap = caps.find((x) => x.sport === sport && x.kind === k.kind && x.source_id === s.id);
-                    const best = !!k.best && s.status === "pass" && s.license_class === k.best;
-                    return (
-                      <div
-                        className={`src${best ? " src--best" : ""}${allowedIn(mode, s.license_class) ? "" : " src--out"}`}
-                        key={s.id}
-                      >
-                        <i className="src__dot" />
-                        <div>
-                          <div className="src__h">
-                            <b>{s.id}</b>
-                            <LicChip cls={s.license_class} />
-                            <TestChip status={s.status} />
-                            {best ? <em>best</em> : null}
-                            {allowedIn(mode, s.license_class) ? null : (
-                              <span className="verdict verdict--no">not in this mode</span>
-                            )}
-                          </div>
-                          {reg?.license ?? "not in the registry"}
-                          {reg?.verdict_note ? ` · ${reg.verdict_note}` : ""}
-                          {cap ? (
-                            <span className="src__cap">
-                              test: {cap.detail} · {cap.rows.toLocaleString("en-US")} rows
-                              {cap.coverage_from ? ` · ${cap.coverage_from}–${cap.coverage_to ?? "now"}` : ""}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="sum-p">No source in the registry declares this kind for {sport}.</p>
-                )}
-              </div>
+            <div
+              key={u.id}
+              className={`oa-colh${hot ? " hot" : ""}`}
+              role="columnheader"
+              style={artStyle(identVar(u.id))}
+            >
+              <b className="num">
+                {pad2(j + 1)} · {formatLabel(u.default_format)}
+              </b>
+              <span className="oa-colh__name">{u.name}</span>
+              <i>{u.requires.kinds.join("+")}</i>
+              <TrendLine series={series} t={t} />
             </div>
           );
         })}
-      </section>
-      <section>
-        <h3 className="sec-h">
-          <span>Never fetched · {never.length}</span>
-        </h3>
-        {never.length ? (
-          <ul className="off-list">
-            {never.map((s) => (
-              <li key={s.id}>
-                <b>{s.id}</b>
-                {s.license}
-                {s.notes ? ` · ${s.notes}` : ""}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="sum-p">No off-limits source touches this cell.</p>
-        )}
-        {attributions.length ? (
-          <p className="attr">
-            Attribution every video from this cell carries:
-            <br />
-            <b>{attributions.join(" · ")}</b>
-          </p>
-        ) : null}
-        <p className="attr">
-          {uc.notes ? `${uc.notes} · ` : ""}default {formatLabel(uc.default_format)} · {uc.duration_s.min}–
-          {uc.duration_s.max} s · composition{" "}
-          {uc.composition
-            ? `${uc.composition} ${c.composition_implemented ? "(built)" : "(not built)"}`
-            : "none designed"}
-        </p>
-      </section>
+      </div>
+      {SPORTS.map((sp, i) => {
+        const rc = sportCounts(cells, mode, sp);
+        return (
+          <div className="oa-grid__row" role="row" key={sp}>
+            <div className={`oa-rowh${cur.endsWith(`|${sp}`) ? " hot" : ""}`} role="rowheader">
+              <Field sport={sp} />
+              <b>{sp}</b>
+              <small className="num">
+                {STATUS_ORDER.filter((k) => rc[k]).map((k) => (
+                  <StatusChip key={k} status={k} size={12} label={`${rc[k]}`} />
+                ))}
+              </small>
+            </div>
+            {usecases.map((u, j) => {
+              const c = cellOf(cells, u.id, sp, mode);
+              const key = focusKey(u.id, sp);
+              if (!c)
+                return (
+                  <div key={u.id} className="oa-cell oa-cell--none" role="gridcell">
+                    no cell
+                  </div>
+                );
+              return (
+                <button
+                  type="button"
+                  key={u.id}
+                  ref={(el) => register(key, el)}
+                  role="gridcell"
+                  data-testid={`cell-${u.id}-${sp}`}
+                  data-r={i}
+                  data-c={j}
+                  data-key={key}
+                  tabIndex={cur === key ? 0 : -1}
+                  aria-selected={selected === key}
+                  aria-label={cellLabel(u, sp, mode, c)}
+                  className={`oa-cell st--${c.status} pat--${c.status}${changed.has(key) ? " flip" : ""}`}
+                  style={{ ["--d" as string]: i * 3 + j * 2 }}
+                  onFocus={() => onFocusCell(key)}
+                  onClick={(e) => onOpen(u, sp, e.currentTarget)}
+                >
+                  <StatusChip status={c.status} />
+                  <span className="oa-cell__hint">{cellHint(c)}</span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ detail: summary
+// ------------------------------------------------------------------ Photo Finish: the finish sheet
 
-function Summary({
-  mode,
-  cells,
-  usecases,
-  onPick,
-}: {
-  mode: Mode;
-  cells: HeatmapCell[];
-  usecases: UseCase[];
-  onPick: (uc: string, sport: Sport) => void;
-}) {
-  const n = countStatuses(cells, mode);
-  const diff = modeDiff(cells);
-  const nd = [...diff.values()].reduce((a, s) => a + s.length, 0);
-  const aid = decisionAid(cells, mode).slice(0, 5);
-  const stage = (id: string) => usecases.find((u) => u.id === id)?.stage ?? 9;
-  const name = (id: string) => usecases.find((u) => u.id === id)?.name ?? id;
-  const picks = bestCells(cells, mode, stage, 5);
+function FinishSheet({ usecases, cells, mode, trend, cur, selected, onOpen, onFocusCell, register, onKeyDown }: GridProps) {
   return (
-    <div className="detail in" aria-live="polite">
-      <section>
-        <h2 className="sec-h">
-          <span>{MODE_LABEL[mode]} · today</span>
-        </h2>
-        <div className="sum-n">
-          {STATUS_ORDER.map((k) => (
-            <div key={k} className={`st--${k}`}>
-              <b className="num">{pad2(n[k])}</b>
-              <StatusChip status={k} size={16} />
+    <div
+      className="pf-heats"
+      role="grid"
+      aria-label={`Feasibility: ${usecases.length} use cases by ${SPORTS.length} sports, ${MODE_LABEL[mode]}`}
+      onKeyDown={onKeyDown}
+      style={{ ["--line" as string]: `${LINE[mode]}%`, ["--lanes" as string]: usecases.length }}
+    >
+      <div className="pf-heats__head" role="row">
+        <div className="pf-corner" role="columnheader">
+          <span className="eyebrow">Lane · use case</span>
+        </div>
+        {SPORTS.map((sp, si) => {
+          const k = sportCounts(cells, mode, sp);
+          const parts = STATUS_ORDER.filter((s) => k[s]).map((s) => `${k[s]} ${STATUS_WORD[s].toLowerCase()}`);
+          return (
+            <div className={`pf-heat${cur.endsWith(`|${sp}`) ? " hot" : ""}`} role="columnheader" key={sp}>
+              <div className="pf-heat__title">
+                <span className="eyebrow">Heat {si + 1}</span>
+                <b>{sp}</b>
+                <span className="pf-heat__count">{parts.join(" · ") || "no cells"}</span>
+              </div>
+              <div className="pf-scale" aria-hidden="true">
+                <span style={{ left: `${REACH.paid}%` }}>paid</span>
+                <span style={{ left: `${REACH.non_commercial}%` }}>nc</span>
+                <span style={{ left: `${REACH.legal}%` }}>legal</span>
+                <i />
+              </div>
             </div>
-          ))}
-        </div>
-        <p className="sum-p">
-          {mode === "monetized"
-            ? "Monetized videos may carry legal sources only."
-            : "Non-commercial videos may carry legal and non-commercial sources."}{" "}
-          A registry declaration alone never makes a cell ready: <b>declared but not tested is Blocked</b>, and says so.
-        </p>
-      </section>
-      <section>
-        <h2 className="sec-h">
-          <span>
-            What the mode switch changes · {nd} cell{nd === 1 ? "" : "s"}
-          </span>
-        </h2>
-        {nd ? (
-          <>
-            <p className="sum-p">These pairings have a different status in the other mode.</p>
-            <ul className="delta">
-              {[...diff.entries()].map(([id, sports]) => (
-                <li key={id}>
-                  <b>{name(id)}</b>
-                  {sports.map((sp) => (
-                    <span className="chip" key={sp}>
-                      {sp}
-                    </span>
-                  ))}
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p className="sum-p">
-            <b>Nothing changes today.</b> No tested source is non-commercial-only for a pairing that would otherwise
-            clear, so both modes show the same grid.
-          </p>
-        )}
-        <h2 className="sec-h sec-h--gap">
-          <span>Best cells to make · status, then simplest</span>
-        </h2>
-        <div className="sum-list">
-          {picks.map((c, i) => (
-            <button type="button" key={`${c.usecase}|${c.sport}`} onClick={() => onPick(c.usecase, c.sport)}>
-              <b className="num">{i + 1}</b>
-              <span>
-                {name(c.usecase)} × {c.sport}
-                <small>complexity stage {stage(c.usecase)}</small>
+          );
+        })}
+      </div>
+      {usecases.map((u, ui) => {
+        const { series, t } = trendOf(trend, u.id, mode);
+        const hot = cur.startsWith(`${u.id}|`) || selected?.startsWith(`${u.id}|`);
+        return (
+          <div className={`pf-row${hot ? " is-row" : ""}`} role="row" key={u.id} style={artStyle(identVar(u.id))}>
+            <div className="pf-rowhead" role="rowheader">
+              <span className="pf-rowhead__no num">{pad2(ui + 1)}</span>
+              <span className="pf-rowhead__bar" aria-hidden="true" />
+              <span className="pf-rowhead__text">
+                <span className="pf-rowhead__name">{u.name}</span>
+                <span className="pf-rowhead__meta">
+                  <span className="pf-rowhead__kinds">{u.requires.kinds.join("+")}</span>
+                  <TrendLine series={series} t={t} w={32} />
+                </span>
               </span>
-              <StatusChip status={c.status} size={14} />
-            </button>
-          ))}
-        </div>
-      </section>
-      <section>
-        <h2 className="sec-h">
-          <span>Make next · which legal source flips the most cells</span>
-        </h2>
-        {aid.length ? (
-          <ol className="aid">
-            {aid.map((a) => (
-              <li key={`${a.kind}|${a.sport}`}>
-                <div className="aid__h">
-                  <b>
-                    {kindLong(a.kind)} × {a.sport}
-                  </b>
-                  <span className="aid__n num">
-                    flips {a.flips.length} cell{a.flips.length === 1 ? "" : "s"}
+              <span className="pf-rowhead__fmt" role="img" aria-label={`default format ${formatLabel(u.default_format)}`}>
+                <FormatIcon format={u.default_format} h={14} />
+              </span>
+            </div>
+            {SPORTS.map((sp, si) => {
+              const c = cellOf(cells, u.id, sp, mode);
+              const key = focusKey(u.id, sp);
+              if (!c)
+                return (
+                  <div key={sp} className="pf-hc pf-hc--none" role="gridcell">
+                    no cell
+                  </div>
+                );
+              return (
+                <button
+                  type="button"
+                  key={sp}
+                  ref={(el) => register(key, el)}
+                  role="gridcell"
+                  data-testid={`cell-${u.id}-${sp}`}
+                  data-r={ui}
+                  data-c={si}
+                  data-key={key}
+                  data-status={c.status}
+                  tabIndex={cur === key ? 0 : -1}
+                  aria-selected={selected === key}
+                  aria-label={cellLabel(u, sp, mode, c)}
+                  className="pf-hc"
+                  onFocus={() => onFocusCell(key)}
+                  onClick={(e) => onOpen(u, sp, e.currentTarget)}
+                >
+                  <span className="pf-hc__track">
+                    <LaneBar cell={c} status={c.status} />
                   </span>
-                </div>
-                <p className="aid__to">
-                  becomes{" "}
-                  {(["go", "data-ready"] as const)
-                    .filter((k) => a.becomes[k])
-                    .map((k) => (
-                      <span key={k}>
-                        <StatusChip status={k} size={12} label={`${a.becomes[k]} ${STATUS_WORD[k]}`} />{" "}
-                      </span>
-                    ))}
-                  {a.alsoHelps ? <span className="label"> · helps {a.alsoHelps} more</span> : null}
-                </p>
-                <p className="aid__c">
-                  {a.candidates.length ? (
-                    <>
-                      Legal candidates already on the registry:{" "}
-                      {a.candidates.map((c, i) => (
-                        <span key={c.id}>
-                          {i ? ", " : ""}
-                          <b>{c.id}</b> (
-                          {c.status === "declared"
-                            ? "test it"
-                            : c.status === "needs_review"
-                              ? "review it"
-                              : "fix its test"}
-                          )
-                        </span>
-                      ))}
-                    </>
-                  ) : (
-                    "No legal source on the registry for this yet: finding one means asking the owner (a new registry entry)."
-                  )}
-                </p>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="sum-p">No single legal source would flip a cell in this mode.</p>
-        )}
-      </section>
+                  <span className={`pf-hc__label st--${c.status}`}>
+                    <b>{STATUS_WORD[c.status]}</b>
+                    <small>{cellHint(c)}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }

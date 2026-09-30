@@ -351,7 +351,7 @@ a.resume:hover {
   transform: rotateY(calc(-15deg + var(--mx, 0) * 5deg)) rotateX(calc(4deg + var(--my, 0) * -4deg)) rotateZ(1.6deg);
   transform-style: preserve-3d;
   transition: transform 0.5s var(--ease-out);
-  background: var(--color-bg);
+  background: var(--color-screen);
   border: 1px solid color-mix(in srgb, var(--color-text) 22%, transparent);
   box-shadow:
     0 0 0 calc(var(--u) * 0.45) var(--color-bg-raised),
@@ -572,6 +572,36 @@ a.resume:hover {
 .reel {
   background: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-raised) 100%);
 }
+/* decoration (On Air): a floodlit rig grid with broadcast safe-area corners, faded toward the
+   copy so it never costs body-text contrast */
+.landing .reel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--color-deco) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-deco) 1px, transparent 1px);
+  background-size: calc(var(--u) * 4) calc(var(--u) * 4);
+  background-position: -1px -1px;
+  mask-image: radial-gradient(120% 90% at 78% 30%, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 80%);
+}
+.landing .reel::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--u) * 2.4) calc(var(--u) * 2);
+  pointer-events: none;
+  --c: color-mix(in srgb, var(--color-floodlight) 34%, transparent);
+  background:
+    linear-gradient(var(--c), var(--c)) 0 0 / calc(var(--u) * 3) 1px no-repeat,
+    linear-gradient(var(--c), var(--c)) 0 0 / 1px calc(var(--u) * 3) no-repeat,
+    linear-gradient(var(--c), var(--c)) 100% 0 / calc(var(--u) * 3) 1px no-repeat,
+    linear-gradient(var(--c), var(--c)) 100% 0 / 1px calc(var(--u) * 3) no-repeat,
+    linear-gradient(var(--c), var(--c)) 0 100% / calc(var(--u) * 3) 1px no-repeat,
+    linear-gradient(var(--c), var(--c)) 0 100% / 1px calc(var(--u) * 3) no-repeat,
+    linear-gradient(var(--c), var(--c)) 100% 100% / calc(var(--u) * 3) 1px no-repeat,
+    linear-gradient(var(--c), var(--c)) 100% 100% / 1px calc(var(--u) * 3) no-repeat;
+}
 .reel__glow {
   position: absolute;
   right: -10vw;
@@ -748,6 +778,23 @@ a.resume:hover {
     color-mix(in srgb, var(--status-blocked) 10%, var(--color-bg)) 0%,
     var(--color-bg) 60%
   );
+}
+/* decoration (On Air): broadcast scan rows and one slanted barrier band behind the chain */
+.landing .gate::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      100deg,
+      transparent 58%,
+      color-mix(in srgb, var(--color-floodlight) 5%, transparent) 58% 64%,
+      transparent 64% 66%,
+      color-mix(in srgb, var(--color-floodlight) 4%, transparent) 66% 67.5%,
+      transparent 67.5%
+    ),
+    repeating-linear-gradient(180deg, transparent 0 3px, color-mix(in srgb, var(--color-floodlight) 4.5%, transparent) 3px 4px);
 }
 .gate__copy {
   left: calc(var(--u) * 5);

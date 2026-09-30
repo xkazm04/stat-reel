@@ -36,7 +36,7 @@ export function SourcesPage() {
             data/registry/sources.yaml is the single source of truth; ingestion refuses any host not listed.
           </p>
         </div>
-        <dl className="counts counts--sm">
+        <dl className="src-counts">
           {(["legal", "non_commercial", "paid", "avoid"] as LicenseClass[]).map((k) => (
             <div key={k}>
               <dt className="num" style={{ color: `var(--licence-${k.replace("_", "-")})` }}>

@@ -1,4 +1,9 @@
-/** Studio shell: the project header (ident, title, facts, stage stepper) and the tab strip over three screens. */
+/**
+ * Studio shell: the project header (crumb back to the Rundown, title, facts, the stage) and the
+ * tab strip over the two compose screens: Control room and Render & gate. The stage is drawn per
+ * theme: On Air's slanted six-step stepper, Photo Finish's race track with six gates and a marker
+ * (published = the finish line). Publishing moved to the Calendar (ADR 006).
+ */
 import type { Mode } from "@statreel/schemas";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ApiError } from "../api";
@@ -6,7 +11,7 @@ import { FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading } from "../components/ui";
 import { MODE_LABEL, relTime, STAGE_LABEL, STAGES, stageIndex } from "../logic";
-import { formatLabel } from "../onair";
+import { fmtDuration, formatLabel } from "../onair";
 import { useStudio } from "./shared";
 
 export function StudioLayout() {
@@ -34,40 +39,64 @@ export function StudioLayout() {
   }
   const p = detail.project;
   const si = stageIndex(p.status);
-  const tab = path.endsWith("/render") ? "render" : path.endsWith("/publish") ? "publish" : "room";
+  const tab = path.endsWith("/render") ? "render" : "room";
+  const timing = detail.props?.props.timing;
+  const stageWord = STAGE_LABEL[p.status] ?? p.status;
   return (
-    <main id="main" className="studio" style={artStyle(identVar(p.use_case_id))}>
+    <main id="main" className={`studio studio--${tab}`} style={artStyle(identVar(p.use_case_id))}>
       <header className="wk-head">
         <div className="wk-top">
-          <div className="wk-k">
+          <nav className="wk-crumbs" aria-label="Where you are">
             <Link to="/projects" className="wk-crumb">
               Rundown
             </Link>
-            <b>{p.id}</b>
-            <span>{usecase?.name ?? p.use_case_id}</span>
-            <span>{p.sport}</span>
-            <span>
+            <span className="wk-sep" aria-hidden="true" />
+            <span aria-current="page">{p.id}</span>
+          </nav>
+          <h1 className="wk-title">{p.title}</h1>
+          <div className="wk-k">
+            <span className="wk-tag">{usecase?.name ?? p.use_case_id}</span>
+            <span className="wk-tag">{p.sport}</span>
+            <span className="wk-tag">
               <FormatIcon format={p.format} h={11} /> {formatLabel(p.format)}
             </span>
-            <span>{MODE_LABEL[p.mode as Mode] ?? p.mode}</span>
-            <span>created {relTime(p.created_at)}</span>
+            <span className="wk-tag">{MODE_LABEL[p.mode as Mode] ?? p.mode}</span>
+            <span className="wk-tag">{timing ? fmtDuration(timing.duration_s) : "no length yet"}</span>
+            <span className="wk-tag wk-tag--quiet">created {relTime(p.created_at)}</span>
           </div>
-          <h1 className="wk-title">{p.title}</h1>
         </div>
-        <div
-          className="stepper"
-          role="img"
-          aria-label={`Stage: ${STAGE_LABEL[p.status] ?? p.status}, ${si + 1} of ${STAGES.length}`}
-        >
-          {STAGES.map((s, i) => (
-            <span key={s} className={`step ${i < si ? "done" : i === si ? "now" : ""}`}>
-              <b>{i + 1}</b>
-              {STAGE_LABEL[s]}
+        <div className="wk-stage">
+          <div className="stepper" role="img" aria-label={`Stage: ${stageWord}, ${si + 1} of ${STAGES.length}`}>
+            {STAGES.map((s, i) => (
+              <span key={s} className={`step ${i < si ? "done" : i === si ? "now" : ""}`}>
+                <b>{i + 1}</b>
+                {STAGE_LABEL[s]}
+              </span>
+            ))}
+          </div>
+          <div
+            className={`race${p.status === "published" ? " is-done" : ""}`}
+            role="img"
+            aria-label={`Stage: ${stageWord}, gate ${si + 1} of ${STAGES.length}`}
+            style={{ ["--stage" as string]: si }}
+          >
+            <span className="race__track" aria-hidden="true">
+              {STAGES.map((s, i) => (
+                <i key={s} className={`race__g${i === STAGES.length - 1 ? " race__g--fin" : ""}`} style={{ left: `${((i + 0.5) / STAGES.length) * 100}%` }} />
+              ))}
+              <span className="race__trail" />
+              <span className="race__marker" />
             </span>
-          ))}
+            <b className="race__word">{stageWord}</b>
+          </div>
         </div>
         <nav className="tabs" aria-label="Studio screens">
-          <Link to="/studio/$projectId" params={{ projectId }} aria-current={tab === "room" ? "page" : undefined}>
+          <Link
+            to="/studio/$projectId"
+            params={{ projectId }}
+            activeOptions={{ exact: true }}
+            aria-current={tab === "room" ? "page" : undefined}
+          >
             Control room
           </Link>
           <Link
@@ -76,13 +105,6 @@ export function StudioLayout() {
             aria-current={tab === "render" ? "page" : undefined}
           >
             Render &amp; gate
-          </Link>
-          <Link
-            to="/studio/$projectId/publish"
-            params={{ projectId }}
-            aria-current={tab === "publish" ? "page" : undefined}
-          >
-            Publish
           </Link>
         </nav>
       </header>

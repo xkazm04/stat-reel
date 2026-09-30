@@ -36,7 +36,7 @@ import type { FrontSearch } from "../router";
 // ------------------------------------------------------------------ programme source
 
 /** Newest project that has props (details of the five newest projects are read). */
-function useProgramme(projects: ProjectWithJobs[] | undefined) {
+export function useProgramme(projects: ProjectWithJobs[] | undefined) {
   const newest = useMemo(
     () => [...(projects ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5),
     [projects],
@@ -1006,7 +1006,7 @@ function Stage({
           <div className="stage__cta">
             {sport ? (
               <>
-                <Link className="btn btn--primary" to="/heatmap" search={{ mode, cell: `${uc.id}|${sport}` }}>
+                <Link className="btn btn--primary" to="/heatmap/$usecase/$sport" params={{ usecase: uc.id, sport }} search={{ mode }}>
                   Open in the heatmap <Arrow />
                 </Link>
                 <button

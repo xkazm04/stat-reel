@@ -94,7 +94,10 @@ async function stage(dir) {
     writeFileSync(path.join(data, `${name}.js`), `window.STATREEL = window.STATREEL || {};\nwindow.STATREEL.${name} = ${JSON.stringify(value)};\n`);
   }
   cpSync(path.join(REPO, "fonts"), path.join(data, "fonts"), { recursive: true });
-  cpSync(path.join(REPO, "packages", "design-tokens", "src", "tokens.css"), path.join(data, "statreel-tokens.css"));
+  // the brand tokens are split into shared + one file per theme (ADR 006): stage them all, for reference
+  const tokensDir = path.join(REPO, "packages", "design-tokens", "src");
+  mkdirSync(path.join(data, "statreel-tokens"), { recursive: true });
+  for (const f of readdirSync(tokensDir).filter((f) => f.endsWith(".css"))) cpSync(path.join(tokensDir, f), path.join(data, "statreel-tokens", f));
   writeFileSync(path.join(data, "SCHEMA.md"), [
     "# data/ - real StatReel material (read-only)", "",
     "Load with `<script src=\"../data/<name>.js\">` (sets `window.STATREEL.<name>`) or read the `.json`.", "",
@@ -102,7 +105,7 @@ async function stage(dir) {
     `- \`f1_era_adjusted\` (${era.rows.length} eligible drivers, >= 30 starts): the \`llm.f1_driver_era_adjusted\` view. Columns: ${era.columns.join(", ")}. Every row has a \`fact_key\`; cite a figure as \`<fact_key>#<column>\`.`,
     `- \`f1_driver_seasons\` (${seasons.rows.length} driver-seasons): the \`llm.f1_driver_seasons\` view. Columns: ${seasons.columns.join(", ")}.`,
     "- Licence of all figures: F1DB, CC BY 4.0 (`attribution` column). Adjusted = every race re-scored with today's points, per start; an estimate.",
-    "- `fonts/`: the only allowed faces (OFL). `statreel-tokens.css`: the app's current brand tokens (two themes), for reference only - discovering new presentation styles is the point.",
+    "- `fonts/`: the only allowed faces (OFL). `statreel-tokens/`: the app's current brand tokens (shared + the On Air and Photo Finish themes), for reference only - discovering new presentation styles is the point.",
   ].join("\n"));
   return data;
 }

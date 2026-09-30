@@ -147,6 +147,54 @@ export type MetricsResponse = {
   by_sport: MetricsGroup[];
 };
 export type PolicyVerdict = PolicyResult & { target?: PublishTarget };
+
+/** GET /api/calendar (apps/server/src/calendar.ts, ADR 006). */
+export type ChannelStatus = "live" | "dry" | "not_wired";
+export type Channel = {
+  id: string;
+  platform: string;
+  name: string;
+  status: ChannelStatus | string;
+  note: string | null;
+  created_at: string;
+};
+export type SlotStatus = "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+export type CalendarSlot = {
+  id: string;
+  project_id: string;
+  render_id: string;
+  channel_id: string;
+  publish_at: string;
+  status: SlotStatus | string;
+  title: string | null;
+  description: string | null;
+  tags_json: string | null;
+  job_id: string | null;
+  publication_id: string | null;
+  error: string | null;
+  created_at: string;
+  project: Project | null;
+};
+/** A composed video: its latest render passed the gate and it is not on the calendar yet. */
+export type ReadyVideo = {
+  project_id: string;
+  title: string;
+  use_case_id: string;
+  sport: string;
+  format: string;
+  mode: string;
+  render_id: string;
+  rendered_at: string;
+};
+export type CalendarResponse = { channels: Channel[]; ready: ReadyVideo[]; slots: CalendarSlot[]; now: string };
+export type ScheduleBody = {
+  project_id: string;
+  channel_id: string;
+  publish_at: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+};
 /** Produce target as sent: the server defaults visibility to "private". */
 export type ProduceTarget = Omit<PublishTarget, "visibility"> & { visibility?: PublishTarget["visibility"] };
 
@@ -161,7 +209,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+async function request<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
     headers:
@@ -216,6 +264,12 @@ export const api = {
   refreshMetrics: () => request<{ job_id: string }>("POST", "/api/metrics/refresh"),
   jobs: () => request<{ jobs: Job[] }>("GET", "/api/jobs"),
   cancelJob: (id: string) => request<{ ok: boolean }>("POST", `/api/jobs/${enc(id)}/cancel`),
+  calendar: () => request<CalendarResponse>("GET", "/api/calendar"),
+  /** Schedule a ready video on a wired channel; publish_at = now means "publish now". */
+  schedule: (b: ScheduleBody) => request<CalendarSlot>("POST", "/api/calendar", b),
+  reschedule: (id: string, publish_at: string) =>
+    request<CalendarSlot>("PATCH", `/api/calendar/${enc(id)}`, { publish_at }),
+  cancelSlot: (id: string) => request<CalendarSlot>("DELETE", `/api/calendar/${enc(id)}`),
   /** A JSON file the server exposes under /files (e.g. a render's manifest.json). */
   file: <T>(path: string) => request<T>("GET", path),
 };
@@ -229,6 +283,7 @@ export const qk = {
   llmEvents: (session: string) => ["llm-events", session] as const,
   jobs: ["jobs"] as const,
   metrics: ["metrics"] as const,
+  calendar: ["calendar"] as const,
   file: (path: string) => ["file", path] as const,
   health: ["health"] as const,
 };
@@ -243,3 +298,10 @@ export function parseJson<T>(s: string | null | undefined): T | null {
 }
 
 export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** The server's own error text (`{error}` body) verbatim, else the transport message. */
+export function serverError(e: unknown): string {
+  if (e instanceof ApiError && e.body && typeof e.body === "object" && "error" in e.body)
+    return String((e.body as { error: unknown }).error);
+  return errorText(e);
+}

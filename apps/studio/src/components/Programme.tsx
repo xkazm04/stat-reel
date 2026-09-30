@@ -114,12 +114,12 @@ export function Slate({ title, lines, kicker = "NO PROGRAMME" }: { title: string
   return (
     <div className="slate">
       <div className="slate__bars" aria-hidden="true">
-        <i style={{ background: "var(--color-text)" }} />
-        <i style={{ background: "var(--color-brand)" }} />
+        <i style={{ background: "var(--color-screen-ink)" }} />
+        <i style={{ background: "var(--color-signal)" }} />
         <i style={{ background: "var(--status-data-ready)" }} />
-        <i style={{ background: "var(--ident-spatial-career-maps)" }} />
-        <i style={{ background: "var(--ident-probability-narratives)" }} />
-        <i style={{ background: "var(--status-blocked)" }} />
+        <i style={{ background: "var(--lane-3)" }} />
+        <i style={{ background: "var(--lane-6)" }} />
+        <i style={{ background: "var(--color-screen-ink-2)" }} />
         <i style={{ background: "var(--color-floodlight)" }} />
       </div>
       <div className="slate__body">

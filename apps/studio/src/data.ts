@@ -12,6 +12,13 @@ export const useHeatmap = () => useQuery({ queryKey: qk.heatmap, queryFn: api.he
 export const useSources = () => useQuery({ queryKey: qk.sources, queryFn: api.sources, staleTime: 60_000 });
 export const useProjects = () => useQuery({ queryKey: qk.projects, queryFn: api.projects });
 export const useMetrics = () => useQuery({ queryKey: qk.metrics, queryFn: api.metrics });
+/** The calendar; polled while a slot is publishing (SSE job.* events also invalidate it). */
+export const useCalendar = () =>
+  useQuery({
+    queryKey: qk.calendar,
+    queryFn: api.calendar,
+    refetchInterval: (q) => (q.state.data?.slots.some((s) => s.status === "publishing") ? 3_000 : false),
+  });
 
 const busy = (d: ProjectDetail | undefined) => !!d?.jobs.some((j) => j.status === "queued" || j.status === "running");
 

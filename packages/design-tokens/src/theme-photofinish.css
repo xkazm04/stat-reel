@@ -1,0 +1,142 @@
+/* Theme A/3 "Photo Finish" (light): StatReel as a photo-finish camera. A timing sheet in graphite;
+   one clay-red hairline (--color-signal) splits data from video, marks the licence line and is the
+   playhead. Status is a position relative to that line. Instruments have almost no radius and use
+   rules, not shadows. Contest landing-screens A/3, owner decision 2026-09-30 (ADR 006).
+   Same semantic names as theme-onair.css; only values change. */
+
+:root[data-theme="photofinish"],
+[data-theme="photofinish"] {
+  color-scheme: light;
+
+  /* ── Colour · ground and ink (the timing sheet) ───────────────────── */
+  --color-bg: #eceff2;               /* the timing sheet */
+  --color-bg-raised: #f5f7f9;        /* raised bands, lane sheet */
+  --color-surface: #ffffff;          /* the cleared side of the line, inputs */
+  --color-surface-2: #e3e8ec;        /* alternate lane band, selected rows */
+  --color-line: #c6ced5;             /* hairline rules */
+  --color-line-strong: #8f9aa5;      /* ticks, axis rules, control outlines */
+  --color-line-faint: #dae0e5;       /* lane separators */
+  --color-text: #12161a;             /* graphite */
+  --color-text-muted: #38414a;       /* body text */
+  --color-text-dim: #56616c;         /* secondary text, still AA on the sheet */
+
+  /* ── Colour · signal: the finish line ─────────────────────────────── */
+  --color-brand: #b8321a;            /* the line as text (AA on the sheet) */
+  --color-brand-ink: #ffffff;
+  --color-brand-dim: #e4432a;
+  --color-brand-wash: rgba(228, 67, 42, 0.09);
+  --color-signal: #e4432a;           /* the finish hairline itself: the only signal colour */
+  --color-primary: #12161a;          /* primary action: graphite, the line on hover */
+  --color-primary-ink: #ffffff;
+  --color-primary-hover: #b8321a;
+  --color-floodlight: #1f73da;
+  --color-floodlight-warm: #d4820e;
+  --color-deco: rgba(86, 97, 108, 0.1); /* ticks, lane rules, scan lines, grain */
+  --color-scrim: rgba(18, 22, 26, 0.42);
+
+  /* ── Colour · the screen (player frame) ───────────────────────────── */
+  --color-screen: #0f1317;
+  --color-screen-2: #1b2229;
+  --color-screen-ink: #e9eef2;
+  --color-screen-ink-2: #9aa7b3;
+
+  /* ── Colour · status (always paired with a glyph + label) ─────────── */
+  --status-go: #08704b;
+  --status-data-ready: #1a5fc8;
+  --status-ask: #9a5b00;
+  --status-blocked: #38414a;
+  --status-go-ink: #ffffff;
+  --status-go-wash: rgba(8, 112, 75, 0.1);
+  --status-data-ready-wash: rgba(26, 95, 200, 0.09);
+  --status-ask-wash: rgba(154, 91, 0, 0.1);
+  --status-blocked-wash: rgba(56, 65, 74, 0.1);
+  /* status glyphs: positions relative to the line */
+  --status-go-glyph: "bar-through-line-with-flag";
+  --status-data-ready-glyph: "bar-at-line-hollow-end";
+  --status-ask-glyph: "hatched-bar-short-with-dot";
+  --status-blocked-glyph: "barred-gate-at-start";
+  --status-go-pattern: solid;
+  --status-data-ready-pattern: solid-hollow-end;
+  --status-ask-pattern: hatch;
+  --status-blocked-pattern: crosshatch;
+
+  /* ── Colour · licence class (markers carry the shape) ─────────────── */
+  --licence-legal: #08704b;
+  --licence-non-commercial: #9a5b00;
+  --licence-paid: #5646c8;
+  --licence-avoid: #38414a;
+
+  /* ── Colour · lanes (one per use case, used sparingly) ────────────── */
+  --lane-1: #6a5be2;   /* counterfactual timelines */
+  --lane-2: #0a93a3;   /* era-adjusted rankings */
+  --lane-3: #2c9a55;   /* spatial career maps */
+  --lane-4: #1f73da;   /* network & flow */
+  --lane-5: #b83c9b;   /* distribution races */
+  --lane-6: #d4820e;   /* probability narratives */
+  --lane-7: #d2426b;   /* similarity / DNA */
+  --lane-8: #6e8f10;   /* metric explainer shorts */
+  --lane-9: #1899cf;   /* reactive weekend */
+  --lane-10: #566a90;  /* interactive companion */
+  --ident-counterfactual-timelines: #6a5be2;
+  --ident-era-adjusted-rankings: #0a93a3;
+  --ident-spatial-career-maps: #2c9a55;
+  --ident-network-flow-timelines: #1f73da;
+  --ident-distribution-races: #b83c9b;
+  --ident-probability-narratives: #d4820e;
+  --ident-similarity-dna: #d2426b;
+  --ident-metric-explainer-shorts: #6e8f10;
+  --ident-reactive-weekend-pipeline: #1899cf;
+  --ident-interactive-companion-loop: #566a90;
+
+  /* ── Type (theme parts) ───────────────────────────────────────────── */
+  --text-base: 15px;
+  --weight-display-light: 500;
+  --weight-display: 700;
+  --weight-display-heavy: 800;
+  --tracking-display: -0.005em;
+
+  /* ── Controls: an instrument has almost no radius ─────────────────── */
+  --font-control: var(--font-ui);
+  --control-weight: 600;
+  --control-size: 13px;
+  --control-size-sm: 12px;
+  --control-case: none;
+  --control-tracking: 0;
+  --control-height: 36px;
+  --control-height-sm: 30px;
+  --control-radius: 2px;
+  --control-clip: none;
+
+  /* ── Shape ────────────────────────────────────────────────────────── */
+  --shape-slant: 0deg;           /* no broadcast slant: lanes and rules instead */
+
+  /* ── Motion: travel along a lane, settle on a tick, no bounce ─────── */
+  --motion-instant: 90ms;        /* pressed, toggled */
+  --motion-fast: 180ms;          /* hover, focus answers */
+  --motion-base: 360ms;          /* a marker settling on its tick */
+  --motion-wipe: 640ms;          /* a bar or the line travelling */
+  --motion-scene: 1100ms;        /* the hairline sweeping a scene open */
+  --ease-out: cubic-bezier(0.16, 0.84, 0.24, 1);
+  --ease-wipe: cubic-bezier(0.6, 0.02, 0.18, 1);
+  --ease-sweep: cubic-bezier(0.7, 0, 0.15, 1);
+  --ease-linear: linear;
+
+  /* ── Elevation: rules, not shadows ────────────────────────────────── */
+  --shadow-panel: 0 1px 0 #c6ced5, 0 18px 40px -28px rgba(18, 22, 26, 0.35);
+  --glow-brand: none;
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-text);
+
+  /* ── Layout ───────────────────────────────────────────────────────── */
+  --nav-height: 52px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="photofinish"],
+  [data-theme="photofinish"] {
+    --motion-instant: 1ms;
+    --motion-fast: 1ms;
+    --motion-base: 1ms;
+    --motion-wipe: 1ms;
+    --motion-scene: 1ms;
+  }
+}

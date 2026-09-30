@@ -1,0 +1,57 @@
+/* Shared, theme-independent tokens: font families, the type scale floor, spacing, layout.
+   Theme files (theme-onair.css, theme-photofinish.css) set every colour, shape and motion value. */
+
+:root {
+  /* ── Type ─────────────────────────────────────────────────────────── */
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif; /* headlines + big numerals (tnum) */
+  --font-ui: "Inter", system-ui, sans-serif;                      /* interface + reading (tnum on) */
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;         /* data labels, timecode, source ids */
+
+  --text-xs: 12px;      /* floor: nothing a user must read is smaller */
+  --text-sm: 13px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 38px;
+  --text-4xl: 52px;
+  --text-5xl: 76px;
+  --text-display: 118px;
+
+  --leading-tight: 0.86;   /* display caps */
+  --leading-snug: 1.15;
+  --leading-body: 1.55;
+  --tracking-label: 0.09em; /* mono caps labels */
+
+  /* ── Space · 4px base ─────────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
+
+  /* ── Shape (shared parts) ─────────────────────────────────────────── */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-pill: 999px;
+  --border-hair: 1px;
+  --border-strong: 2px;
+  --border-signal: 2px;    /* the signal stroke: volt rule / the finish line */
+
+  /* ── Layout ───────────────────────────────────────────────────────── */
+  --page-gutter: 24px;
+  --z-nav: 60;
+  --z-layer: 70;           /* a full-screen layer (heatmap cell, front scene) */
+  --z-modal: 80;
+  --z-wipe: 90;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --page-gutter: 16px;
+  }
+}

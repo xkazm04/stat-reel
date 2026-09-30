@@ -3,6 +3,7 @@
  * keeps TanStack Query honest: every job state change (job.* except progress), render.done and
  * co-pilot tool results invalidate the caches they can change. Named listeners are registered for
  * job.queued/started/progress/succeeded/failed/cancelled/refused, llm.event and render.done.
+ * Calendar slots follow their publish job, so job.* also invalidates the calendar.
  */
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { createContext, createElement, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -49,6 +50,8 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
   if (e.type.startsWith("job.") && e.type !== "job.progress") {
     void qc.invalidateQueries({ queryKey: qk.projects });
     void qc.invalidateQueries({ queryKey: qk.jobs });
+    // publish jobs move calendar slots; a finished render can make a video ready to schedule
+    void qc.invalidateQueries({ queryKey: qk.calendar });
     if (pid) void qc.invalidateQueries({ queryKey: qk.project(pid) });
     if (e.kind === "publish" || e.kind === "metrics") void qc.invalidateQueries({ queryKey: qk.metrics });
     if (e.type === "job.succeeded" && (e.kind === "ingest" || e.kind === "transform")) {
@@ -61,6 +64,7 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
   } else if (e.type === "render.done" || e.type === "project.updated") {
     if (pid) void qc.invalidateQueries({ queryKey: qk.project(pid) });
     void qc.invalidateQueries({ queryKey: qk.projects });
+    void qc.invalidateQueries({ queryKey: qk.calendar });
   } else if (e.type === "heatmap.updated") {
     void qc.invalidateQueries({ queryKey: qk.heatmap });
   } else if (e.type === "llm.event" && e.event?.type === "tool_result" && pid) {

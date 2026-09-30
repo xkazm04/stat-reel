@@ -1,4 +1,6 @@
-/* 03 Rundown, 06 Metrics, 07 Sources — plain pages in the On Air language. */
+/* Plain pages shared by both themes: Rundown (On Air board / Photo Finish race sheet / list),
+   Metrics, Sources, and the page frame the Calendar and Board use. Structure from tokens; the
+   Photo Finish block at the end swaps boxes for rules and adds the race sheet. */
 
 .page {
   padding: 18px var(--page-gutter) 40px;
@@ -321,5 +323,398 @@ td.row__next--blocked {
 @media (max-width: 640px) {
   .page {
     padding: 14px 16px 32px;
+  }
+}
+
+/* sources: licence counts */
+.src-counts {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 18px;
+  justify-content: start;
+}
+.src-counts dt {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 0.9;
+}
+.src-counts dd {
+  margin-top: 6px;
+}
+@media (max-width: 640px) {
+  .src-counts {
+    grid-template-columns: repeat(2, auto);
+    gap: 14px 28px;
+  }
+}
+
+/* ── Photo Finish: the timing sheet ─────────────────────────────────── */
+[data-theme="photofinish"] .page {
+  background:
+    repeating-linear-gradient(90deg, var(--color-deco) 0 1px, transparent 1px 10px) 0 0 / 100% 5px no-repeat,
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-line-strong) 40%, transparent) 0 1px, transparent 1px 100px) 0 0 / 100% 11px no-repeat,
+    var(--color-bg);
+}
+[data-theme="photofinish"] .page__head {
+  border-bottom: 1px solid var(--color-text);
+  padding-bottom: 12px;
+}
+[data-theme="photofinish"] .page__title {
+  font-size: clamp(30px, 3vw, 52px);
+}
+[data-theme="photofinish"] .sec-h--page {
+  border-bottom-color: var(--color-text);
+}
+[data-theme="photofinish"] .board__h {
+  clip-path: none;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--color-text);
+}
+[data-theme="photofinish"] .card {
+  background: var(--color-surface);
+  border-color: var(--color-line);
+  border-left-width: 3px;
+}
+[data-theme="photofinish"] .pips i {
+  transform: none;
+}
+[data-theme="photofinish"] .pips i.now {
+  background: var(--color-signal);
+  border-color: var(--color-signal);
+}
+[data-theme="photofinish"] .tbl tbody tr[style] {
+  border-left: 0;
+  box-shadow: inset 3px 0 0 var(--art);
+}
+/* metrics */
+[data-theme="photofinish"] .bars__track {
+  border-color: var(--color-text);
+  height: 10px;
+  background-image: repeating-linear-gradient(90deg, var(--color-deco) 0 1px, transparent 1px 10%);
+}
+[data-theme="photofinish"] .bars__fill {
+  background: var(--color-text);
+  box-shadow: inset -2px 0 0 var(--color-signal);
+}
+[data-theme="photofinish"] .bars__k {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+[data-theme="photofinish"] .metrics-grid {
+  gap: 28px;
+}
+/* sources */
+[data-theme="photofinish"] .tbl--sources tr.is-avoid td {
+  background: repeating-linear-gradient(45deg, var(--color-deco) 0 1px, transparent 1px 7px);
+}
+[data-theme="photofinish"] .tbl--sources s {
+  color: var(--color-text-muted);
+}
+[data-theme="photofinish"] .never-tag {
+  color: var(--color-text-dim);
+}
+[data-theme="photofinish"] .src-counts dt {
+  font-size: 48px;
+}
+
+/* ── Photo Finish: the race sheet (A/3 studio level 1) ──────────────── */
+.rs-view {
+  --rs-track: clamp(320px, 34vw, 760px);
+  --rs-next: clamp(170px, 14vw, 260px);
+  --rs-row: clamp(52px, 5.8vh, 64px);
+}
+.rs-head {
+  display: flex;
+  align-items: center;
+  gap: 12px 28px;
+  flex-wrap: wrap;
+  padding: 0 0 10px;
+}
+.rs-count {
+  flex: none;
+}
+.rs-say {
+  flex: 1 1 360px;
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-left: 2px solid var(--color-signal);
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+.rs-say b {
+  color: var(--color-text);
+  font-weight: 700;
+}
+.rs-say.is-flagged {
+  border-left-color: var(--status-ask);
+  background: var(--status-ask-wash);
+}
+.rs-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.rs {
+  border-top: 1px solid var(--color-text);
+  border-bottom: 1px solid var(--color-text);
+}
+.rs-cols,
+.rs-lane {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) var(--rs-track) var(--rs-next);
+  column-gap: clamp(10px, 1.2vw, 24px);
+  align-items: center;
+}
+.rs-cols {
+  height: 40px;
+  border-bottom: 1px solid var(--color-line-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+}
+.rs-gates {
+  position: relative;
+  height: 100%;
+}
+.rs-gates span {
+  position: absolute;
+  bottom: 7px;
+  transform: translateX(-50%);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.rs-gates span::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  height: 5px;
+  border-left: 1px solid var(--color-line-strong);
+}
+.rs-gates span.finish {
+  color: var(--color-brand);
+}
+.rs-lane {
+  position: relative;
+  min-height: var(--rs-row);
+  border-bottom: 1px solid var(--color-line-faint);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+.rs-lane:last-child {
+  border-bottom: 0;
+}
+.rs-lane:hover,
+.rs-lane:focus-within {
+  background: var(--color-bg-raised);
+}
+.rs-id {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  overflow-wrap: anywhere;
+}
+.rs-what {
+  min-width: 0;
+  padding: 6px 0;
+}
+.rs-t {
+  display: block;
+  font-size: clamp(14px, 1vw, 17px);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+.rs-t:hover {
+  color: var(--color-brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rs-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--color-text-dim);
+}
+.rs-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rs-flag {
+  color: var(--status-ask);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rs-pub {
+  font-family: var(--font-ui);
+  color: var(--color-text-muted);
+}
+.rs-track {
+  position: relative;
+  align-self: stretch;
+  min-height: 34px;
+}
+.rs-track i {
+  position: absolute;
+  display: block;
+}
+.rs-track .g {
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--color-line);
+}
+.rs-track .g.finish {
+  border-left: var(--border-signal) solid var(--color-signal);
+  margin-left: -1px;
+}
+.rs-track .rail {
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px dotted var(--color-line-strong);
+}
+.rs-track .trail {
+  left: 0;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  width: var(--at);
+  background: var(--color-text);
+  transition: width var(--motion-wipe) var(--ease-wipe);
+}
+.rs-track .marker {
+  top: 50%;
+  left: var(--at);
+  width: 11px;
+  height: 22px;
+  margin: -11px 0 0 -5.5px;
+  background: var(--color-text);
+  z-index: 2;
+  transition: left var(--motion-wipe) var(--ease-wipe);
+}
+.rs-lane.is-done .marker {
+  width: 3px;
+  height: 28px;
+  margin: -17px 0 0 -1.5px;
+}
+.rs-lane.is-done .marker::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  border-style: solid;
+  border-width: 6px 0 6px 12px;
+  border-color: transparent transparent transparent var(--color-text);
+}
+.rs-lane.is-flagged .marker {
+  background: repeating-linear-gradient(135deg, var(--status-ask) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 2px var(--status-ask);
+}
+.rs-lane.is-flagged .trail {
+  background: var(--status-ask);
+}
+.rs-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.rs-job {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  font-size: 12px;
+}
+.rs-done {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.rs-done b {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-heavy);
+  font-size: 20px;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+.rs-done span {
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
+.rs-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 22px;
+  padding: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--color-text-dim);
+}
+.rs-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.rs-key .k {
+  display: inline-block;
+  width: 9px;
+  height: 16px;
+  background: var(--color-text);
+  flex: none;
+}
+.rs-key .k--flag {
+  background: repeating-linear-gradient(135deg, var(--status-ask) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 2px var(--status-ask);
+}
+.rs-key .k--fin {
+  width: 2px;
+  background: var(--color-signal);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-track .trail,
+  .rs-track .marker {
+    transition: none;
+  }
+}
+@media (max-width: 1080px) {
+  .rs-cols,
+  .rs-lane {
+    grid-template-columns: 80px minmax(0, 1fr);
+    row-gap: 6px;
+  }
+  .rs-cols .rs-gates,
+  .rs-cols > span:last-child {
+    display: none;
+  }
+  .rs-track {
+    grid-column: 1 / -1;
+    height: 30px;
+  }
+  .rs-next {
+    grid-column: 1 / -1;
+    padding-bottom: 10px;
   }
 }

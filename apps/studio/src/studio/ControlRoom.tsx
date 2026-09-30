@@ -1,21 +1,25 @@
 /**
- * 04 Control room: props (left), programme monitor (centre), co-pilot (right), tracks (bottom) and
- * the stage bar: Produce (audio -> render -> checks -> manifest -> gate), the gate verdict and a
- * private publish with defaults (the Publish tab has the full form).
+ * 04 Control room: compose only (ADR 006). The stage bar (next action, Produce: audio -> render ->
+ * checks -> manifest -> gate, the gate verdict, the Script key, and "Schedule in Calendar" once the
+ * gate allows); parametrisation on the left (use case, dataset, props form + JSON), the programme
+ * monitor as the centred main content, the co-pilot on the right, and the tracks across the full
+ * width at the bottom. The script opens as a modal. Publishing lives in the Calendar.
  */
 import type { PlayerRef } from "@remotion/player";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { api, errorText, qk } from "../api";
 import { Arrow } from "../components/glyphs";
 import type { PlayerMeta } from "../components/Programme";
 import { latestRender, renderPolicy } from "../data";
 import { nextAction } from "../logic";
+import { canSchedule, sceneSpans } from "../studio-logic";
 import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
 import { PropsPanel } from "./PropsPanel";
-import { JobError, JobLine, lastJobOf, PublicationStatus, produceJob, publishJob, useStudio, Verdict } from "./shared";
+import { ScriptModal } from "./ScriptModal";
+import { JobError, JobLine, lastJobOf, PublicationStatus, produceJob, useStudio, Verdict } from "./shared";
 import { Tracks } from "./Tracks";
 
 export function ControlRoom() {
@@ -24,6 +28,7 @@ export function ControlRoom() {
   const playerRef = useRef<PlayerRef>(null);
   const [meta, setMeta] = useState<PlayerMeta | null>(null);
   const onMeta = useCallback((m: PlayerMeta | null) => setMeta(m), []);
+  const [script, setScript] = useState<{ open: boolean; at: string | null }>({ open: false, at: null });
   const pid = detail?.project.id ?? "";
 
   const produce = useMutation({
@@ -31,37 +36,43 @@ export function ControlRoom() {
       api.produce(pid, { platform: "youtube", monetized: detail?.project.mode === "monetized", ai_disclosure: true }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: qk.project(pid) }),
   });
-  const publish = useMutation({
-    mutationFn: () => {
-      const title = (detail?.props?.props.title ?? detail?.project.title ?? "").slice(0, 100);
-      return api.publish(pid, {
-        platform: "youtube",
-        title,
-        description: title,
-        tags: [detail?.project.sport ?? "", "data"].filter(Boolean),
-      });
+
+  const props = detail?.props?.props ?? null;
+  const duration = props?.timing?.duration_s ?? (meta ? meta.durationInFrames / meta.fps : 0);
+  const spans = useMemo(
+    () => (props ? sceneSpans(props.scenes, props.timing ?? null, duration) : []),
+    [props, duration],
+  );
+  const seekScene = useCallback(
+    (id: string) => {
+      const s = spans.find((x) => x.id === id);
+      if (!s || !meta) return;
+      playerRef.current?.seekTo(Math.max(0, Math.min(meta.durationInFrames - 1, Math.round(s.start * meta.fps))));
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.project(pid) }),
-  });
+    [spans, meta],
+  );
+  const openScript = useCallback((at: string | null) => setScript({ open: true, at }), []);
 
   if (!detail) return null;
-  const props = detail.props?.props ?? null;
   const running = produceJob(detail);
-  const pubRunning = publishJob(detail);
   const llm = detail.jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running"));
   const render = latestRender(detail);
   const policy = renderPolicy(render);
   const canProduce = !!props && !!detail.script && !running && !llm;
-  const canPublish = !!policy?.allow && !running && !pubRunning && !detail.publications.length;
   const next = nextAction(detail.project.status, detail.jobs[0]);
+  const schedulable = canSchedule(policy, !!running) && !detail.publications.length;
 
   return (
     <div className="room-wrap">
       <div className="stagebar">
         <div className="stagebar__next">
           <span className="label">Next</span>
-          <b className={`next next--${next.tone}`}>{next.verb}</b>
-          <span className="stagebar__hint">{next.hint}</span>
+          <b className={`next next--${next.tone}`}>
+            {next.verb === "Publish private" ? "Schedule it" : next.verb}
+          </b>
+          <span className="stagebar__hint">
+            {next.verb === "Publish private" ? "gate allows; publishing happens in the Calendar (private only)" : next.hint}
+          </span>
         </div>
         <div className="stagebar__produce">
           <button
@@ -89,21 +100,29 @@ export function ControlRoom() {
             </Link>
           ) : null}
         </div>
-        <div className="stagebar__pub">
+        <div className="stagebar__keys">
           <button
             type="button"
-            className="btn btn--sm"
-            data-testid="publish"
-            onClick={() => publish.mutate()}
-            disabled={!canPublish || publish.isPending}
+            className="btn btn--sm stagebar__script"
+            onClick={() => openScript(props?.scenes[0]?.id ?? null)}
+            aria-haspopup="dialog"
           >
-            {pubRunning ? "Publishing" : "Publish private"}
+            Script
+            <span className="stagebar__meta num">
+              {props ? `${props.scenes.length} scenes` : "empty"}
+              {detail.script ? ` · v${detail.script.version}` : ""}
+            </span>
           </button>
-          <PublicationStatus detail={detail} />
-          {publish.isError ? <span className="joberr">{errorText(publish.error)}</span> : null}
+          {schedulable ? (
+            <Link to="/calendar" className="btn btn--sm btn--primary stagebar__cal">
+              Schedule in Calendar <Arrow />
+            </Link>
+          ) : detail.publications.length ? (
+            <PublicationStatus detail={detail} />
+          ) : null}
         </div>
       </div>
-      <JobError job={lastJobOf(detail, ["audio", "render", "publish"])} />
+      <JobError job={lastJobOf(detail, ["audio", "render"])} />
       {policy && !policy.allow && !running ? (
         <ul className="deny-inline" role="alert">
           {policy.deny.map((d) => (
@@ -114,7 +133,12 @@ export function ControlRoom() {
         </ul>
       ) : null}
       <div className="room">
-        <PropsPanel detail={detail} usecase={usecase} cells={heatmap?.cells ?? []} />
+        <PropsPanel
+          detail={detail}
+          usecase={usecase}
+          cells={heatmap?.cells ?? []}
+          onOpenScript={() => openScript(props?.scenes[0]?.id ?? null)}
+        />
         <Monitor
           props={props}
           compositionName={usecase?.composition}
@@ -123,8 +147,27 @@ export function ControlRoom() {
           onMeta={onMeta}
         />
         <Copilot detail={detail} />
-        <Tracks props={props} playerRef={playerRef} meta={meta} />
+        <Tracks
+          props={props}
+          spans={spans}
+          duration={duration}
+          playerRef={playerRef}
+          meta={meta}
+          onScene={(id) => {
+            seekScene(id);
+            openScript(id);
+          }}
+        />
       </div>
+      <ScriptModal
+        open={script.open}
+        at={script.at}
+        onClose={() => setScript((s) => ({ ...s, open: false }))}
+        detail={detail}
+        props={props}
+        spans={spans}
+        onSeek={seekScene}
+      />
     </div>
   );
 }

@@ -1,0 +1,142 @@
+/* Theme A/1 "On Air" (dark, the default): a broadcast package for a one-person sports channel.
+   Night-stadium ground; volt #d6ff3f means one thing everywhere: cleared to air. Broadcast
+   parallelograms (--shape-slant, --control-clip) and display-scale Barlow Condensed controls.
+   Contest landing-screens A/1, owner verdict 2026-09-30 (ADR 005, ADR 006). */
+
+:root,
+[data-theme="onair"] {
+  color-scheme: dark;
+
+  /* ── Colour · ground (night stadium, floodlit) ─────────────────────── */
+  --color-bg: #05070c;               /* the void behind everything */
+  --color-bg-raised: #0a0e18;        /* page bands */
+  --color-surface: #0f1524;          /* panels */
+  --color-surface-2: #161e31;        /* raised controls, selected rows */
+  --color-line: #222c43;             /* hairlines */
+  --color-line-strong: #36446a;      /* control outlines */
+  --color-line-faint: #182033;       /* lane separators, decoration rules */
+  --color-text: #f3f6fb;
+  --color-text-muted: #a3aec4;
+  --color-text-dim: #7887a3;         /* still >= 4.5:1 on --color-bg */
+
+  /* ── Colour · signal ──────────────────────────────────────────────── */
+  --color-brand: #d6ff3f;            /* volt: "cleared to air"; safe as text on the ground */
+  --color-brand-ink: #0b1200;        /* text on volt */
+  --color-brand-dim: #8fae1d;
+  --color-brand-wash: rgba(214, 255, 63, 0.1);
+  --color-signal: #d6ff3f;           /* the signal as a stroke (rules, playhead, underline) */
+  --color-primary: #d6ff3f;          /* primary action fill */
+  --color-primary-ink: #0b1200;
+  --color-primary-hover: #e3ff7c;
+  --color-floodlight: #6f8cff;       /* cool light from the rig */
+  --color-floodlight-warm: #ffd9a0;  /* warm spill */
+  --color-deco: rgba(111, 140, 255, 0.075); /* section decoration: never behind body text at a contrast cost */
+  --color-scrim: rgba(3, 5, 9, 0.78);
+
+  /* ── Colour · the screen (player frame; always dark) ──────────────── */
+  --color-screen: #05070c;
+  --color-screen-2: #0f1524;
+  --color-screen-ink: #f3f6fb;
+  --color-screen-ink-2: #a3aec4;
+
+  /* ── Colour · status (always paired with a glyph + label) ─────────── */
+  --status-go: #d6ff3f;
+  --status-data-ready: #46d9ff;
+  --status-ask: #ffb531;
+  --status-blocked: #ff5a6e;
+  --status-go-ink: #0b1200;
+  --status-go-wash: rgba(214, 255, 63, 0.12);
+  --status-data-ready-wash: rgba(70, 217, 255, 0.1);
+  --status-ask-wash: rgba(255, 181, 49, 0.1);
+  --status-blocked-wash: rgba(255, 90, 110, 0.1);
+  /* glyph names: the shape each status owns, independent of hue */
+  --status-go-glyph: "disc-play";          /* solid disc, play notch   */
+  --status-data-ready-glyph: "half-disc";  /* ring, lower half filled  */
+  --status-ask-glyph: "triangle-bang";     /* open triangle, stroke    */
+  --status-blocked-glyph: "square-cross";  /* open square, cross       */
+  --status-go-pattern: solid;
+  --status-data-ready-pattern: dots;
+  --status-ask-pattern: hatch;
+  --status-blocked-pattern: crosshatch;
+
+  /* ── Colour · licence class ───────────────────────────────────────── */
+  --licence-legal: #d6ff3f;
+  --licence-non-commercial: #ffb531;
+  --licence-paid: #b48cff;
+  --licence-avoid: #ff5a6e;
+
+  /* ── Colour · format idents (one per use case) ────────────────────── */
+  --ident-counterfactual-timelines: #b48cff;
+  --ident-era-adjusted-rankings: #d6ff3f;
+  --ident-spatial-career-maps: #3ee6a8;
+  --ident-network-flow-timelines: #46d9ff;
+  --ident-distribution-races: #ff8a3d;
+  --ident-probability-narratives: #ff5fa2;
+  --ident-similarity-dna: #8c9bff;
+  --ident-metric-explainer-shorts: #ffd23e;
+  --ident-reactive-weekend-pipeline: #ff6b5b;
+  --ident-interactive-companion-loop: #6be3e3;
+  /* lanes 1-10 = the idents in registry order */
+  --lane-1: #b48cff;
+  --lane-2: #d6ff3f;
+  --lane-3: #3ee6a8;
+  --lane-4: #46d9ff;
+  --lane-5: #ff8a3d;
+  --lane-6: #ff5fa2;
+  --lane-7: #8c9bff;
+  --lane-8: #ffd23e;
+  --lane-9: #ff6b5b;
+  --lane-10: #6be3e3;
+
+  /* ── Type (theme parts) ───────────────────────────────────────────── */
+  --text-base: 14px;
+  --weight-display-light: 600;
+  --weight-display: 700;
+  --weight-display-heavy: 800;
+  --tracking-display: 0.005em;
+
+  /* ── Controls ─────────────────────────────────────────────────────── */
+  --font-control: var(--font-display);
+  --control-weight: 700;
+  --control-size: 18px;
+  --control-size-sm: 16px;
+  --control-case: uppercase;
+  --control-tracking: 0.07em;
+  --control-height: 40px;
+  --control-height-sm: 32px;
+  --control-radius: 0;
+  --control-clip: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%); /* broadcast parallelogram */
+
+  /* ── Shape ────────────────────────────────────────────────────────── */
+  --shape-slant: -10deg;         /* the broadcast parallelogram */
+
+  /* ── Motion ───────────────────────────────────────────────────────── */
+  --motion-instant: 90ms;        /* hover, press */
+  --motion-fast: 160ms;          /* state change */
+  --motion-base: 260ms;          /* panel content swap */
+  --motion-wipe: 560ms;          /* parallelogram wipe between levels */
+  --motion-scene: 900ms;         /* arrival of a scene */
+  --ease-out: cubic-bezier(0.16, 0.84, 0.24, 1);
+  --ease-wipe: cubic-bezier(0.72, 0, 0.18, 1);
+  --ease-sweep: cubic-bezier(0.7, 0, 0.15, 1);
+  --ease-linear: linear;
+
+  /* ── Elevation / light ────────────────────────────────────────────── */
+  --shadow-panel: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+  --glow-brand: 0 0 32px rgba(214, 255, 63, 0.28);
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-brand);
+
+  /* ── Layout ───────────────────────────────────────────────────────── */
+  --nav-height: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-theme="onair"] {
+    --motion-instant: 0ms;
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-wipe: 0ms;
+    --motion-scene: 0ms;
+  }
+}

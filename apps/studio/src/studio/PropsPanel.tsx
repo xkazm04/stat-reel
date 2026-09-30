@@ -1,33 +1,19 @@
 /**
- * Left column: the use case and its dataset (the cell's required kinds and the sources that clear
- * them), then the props as a readable form (raw vs adjusted ranks with fact keys, scenes with the
- * script's narration, hook shape) or as JSON that POSTs /api/projects/:id/props, errors verbatim.
+ * Left column (parametrisation): the use case and its dataset (the cell's required kinds and the
+ * sources that clear them), then the props as a readable form (title, hook shape, metrics, raw vs
+ * adjusted ranks with fact keys) or as JSON that POSTs /api/projects/:id/props, errors verbatim.
+ * The scenes and their narration live in the script modal (opened from here, the stage bar's
+ * Script key, or a scene on the timeline).
  */
 import type { EraAdjustedProps, HeatmapCell, Mode, UseCase } from "@statreel/schemas";
-import { sceneDisplayText } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, errorText, type ProjectDetail, qk } from "../api";
-import { LicChip, NotEqual, StatusChip } from "../components/glyphs";
+import { LicChip, StatusChip } from "../components/glyphs";
 import { Empty } from "../components/ui";
 import { cellOf, factGroup } from "../logic";
 import { fmtValue, kindLong } from "../onair";
-
-function OnScreen({ text }: { text: string }) {
-  const parts = text.split("≠");
-  return (
-    <>
-      {parts.map((p, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: static split
-        <span key={i}>
-          {i ? <NotEqual /> : null}
-          {p}
-        </span>
-      ))}
-    </>
-  );
-}
 
 function Dataset({ usecase, cell }: { usecase: UseCase | undefined; cell: HeatmapCell | undefined }) {
   if (!usecase) return <p className="sum-p">Use case not in the registry.</p>;
@@ -67,9 +53,16 @@ function Dataset({ usecase, cell }: { usecase: UseCase | undefined; cell: Heatma
   );
 }
 
-function Readable({ props, detail }: { props: EraAdjustedProps; detail: ProjectDetail }) {
+function Readable({
+  props,
+  detail,
+  onOpenScript,
+}: {
+  props: EraAdjustedProps;
+  detail: ProjectDetail;
+  onOpenScript: () => void;
+}) {
   const script = detail.script?.script;
-  const narration = new Map((script?.scenes ?? []).map((s) => [s.scene_id, sceneDisplayText(s)]));
   const rows = [...props.rows].sort((a, b) => a.adjusted_rank - b.adjusted_rank);
   const cols = (r: EraAdjustedProps["rows"][number]) =>
     [r.raw_rank_fact_key, r.adjusted_rank_fact_key, r.raw_fact_key, r.adjusted_fact_key].map((k) =>
@@ -145,27 +138,15 @@ function Readable({ props, detail }: { props: EraAdjustedProps; detail: ProjectD
           </tbody>
         </table>
       </div>
-      <h3 className="sec-h">
-        <span>Scenes · {props.scenes.length}</span>
-        <span>{script ? `script v${detail.script?.version}` : "no script yet"}</span>
-      </h3>
-      <ol className="pscenes">
-        {props.scenes.map((s) => (
-          <li key={s.id} className="pscene">
-            <span className="pscene__tc">
-              <b>{s.kind}</b>
-              {s.id}
-            </span>
-            <span>
-              <span className="pscene__on">
-                <OnScreen text={s.on_screen} />
-              </span>
-              <span className="pscene__vo">{narration.get(s.id) ?? "No narration for this scene yet."}</span>
-              {s.focus.length ? <span className="pscene__f mono">focus: {s.focus.join(", ")}</span> : null}
-            </span>
-          </li>
-        ))}
-      </ol>
+      <div className="pf__script">
+        <span>
+          <b className="num">{props.scenes.length}</b> scenes ·{" "}
+          {script ? `script v${detail.script?.version}` : "no script yet"}
+        </span>
+        <button type="button" className="btn btn--sm btn--ghost" onClick={onOpenScript}>
+          Open the script
+        </button>
+      </div>
       <dl className="pf__kv">
         <div>
           <dt>Attribution</dt>
@@ -258,10 +239,12 @@ export function PropsPanel({
   detail,
   usecase,
   cells,
+  onOpenScript,
 }: {
   detail: ProjectDetail;
   usecase: UseCase | undefined;
   cells: HeatmapCell[];
+  onOpenScript: () => void;
 }) {
   const [mode, setMode] = useState<"read" | "json">("read");
   const p = detail.project;
@@ -273,8 +256,9 @@ export function PropsPanel({
         <h2 id="h-props" className="sec-h">
           <span>Use case · dataset</span>
           <Link
-            to="/heatmap"
-            search={{ mode: p.mode as Mode, cell: `${p.use_case_id}|${p.sport}` }}
+            to="/heatmap/$usecase/$sport"
+            params={{ usecase: p.use_case_id, sport: p.sport }}
+            search={{ mode: p.mode as Mode }}
             className="sec-h__a"
           >
             heatmap cell
@@ -299,7 +283,7 @@ export function PropsPanel({
         {mode === "json" ? (
           <JsonEdit key={detail.props?.version ?? 0} detail={detail} onDone={() => setMode("read")} />
         ) : props ? (
-          <Readable props={props} detail={detail} />
+          <Readable props={props} detail={detail} onOpenScript={onOpenScript} />
         ) : (
           <Empty title="No props yet">
             Draft with Claude: the co-pilot queries the warehouse and stores props whose figures cite facts. Or paste
