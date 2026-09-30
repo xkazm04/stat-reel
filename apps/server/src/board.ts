@@ -52,9 +52,22 @@ export class BoardService {
     return hydrate(row);
   }
 
+  /** Default list hides archived items; pass status "archived" (or "all") to see them. */
   list(filter: { status?: string } = {}): BoardItem[] {
     const q = this.db.select().from(boardItems);
-    return (filter.status ? q.where(eq(boardItems.status, filter.status)) : q).orderBy(desc(boardItems.created_at)).all().map(hydrate);
+    const rows = (filter.status && filter.status !== "all" ? q.where(eq(boardItems.status, filter.status)) : q).orderBy(desc(boardItems.created_at)).all();
+    return rows.filter((r) => filter.status === "archived" || filter.status === "all" || r.status !== "archived").map(hydrate);
+  }
+
+  /** Hide off-brief items (ADR 007): status archived, reason in the note; files and history are kept. */
+  archive(ids: string[], reason: string): number {
+    let n = 0;
+    for (const id of ids) {
+      if (!this.get(id)) continue;
+      this.db.update(boardItems).set({ status: "archived", note: reason }).where(eq(boardItems.id, id)).run();
+      n++;
+    }
+    return n;
   }
 
   get(id: string): BoardItem | undefined {
@@ -73,6 +86,6 @@ export class BoardService {
   /** Decided items since an ISO time (exclusive), oldest first: the design skill's feedback feed. */
   feedback(since?: string): BoardItem[] {
     return this.db.select().from(boardItems).orderBy(asc(boardItems.decided_at)).all().map(hydrate)
-      .filter((i) => i.decided_at && (!since || i.decided_at > since));
+      .filter((i) => i.status !== "archived" && i.decided_at && (!since || i.decided_at > since));
   }
 }

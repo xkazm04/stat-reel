@@ -114,6 +114,13 @@ export function buildApp(d: AppDeps) {
   app.post("/api/board", async (c) => {
     try { return c.json(d.board.create(await c.req.json()), 201); } catch (e) { return bad(c, e); }
   });
+  app.post("/api/board/archive", async (c) => {
+    try {
+      const b = (await c.req.json()) as { ids: string[]; reason: string };
+      if (!b.reason?.trim()) throw new Error("archiving needs a reason");
+      return c.json({ archived: d.board.archive(b.ids ?? [], b.reason.trim()) });
+    } catch (e) { return bad(c, e); }
+  });
   app.post("/api/board/:id/decision", async (c) => {
     try {
       const b = (await c.req.json()) as { decision: Decision; note?: string };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyFeedback, emptyLedger, frameTimes, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateShot } from "../scripts/lib.mjs";
+import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateDesign, validateShot } from "../scripts/lib.mjs";
 
 const item = (id, decision, style, useCase, note = null, proposed = null) => ({
   id, decision, note, decided_at: `2026-09-30T10:0${id.length}:00Z`, style: { id: style, name: style }, use_case_id: useCase, proposed_case: proposed,
@@ -96,4 +96,47 @@ test("the stability probe revisits moments out of order, as a video renderer doe
   for (const t of p) firsts.set(t, (firsts.get(t) ?? 0) + 1);
   assert.ok([...firsts.values()].some((n) => n >= 2), "some moment is rendered twice");
   assert.ok(p.some((t, i) => i > 0 && t < p[i - 1]), "it seeks backwards at least once");
+});
+
+// ---- time-evolution designs (ADR 007): full 30-90 s run, one cut-out, longevity measured
+
+const tl = { title: "T", format: "vertical", style: { id: "s", name: "S" }, use_case_id: "career-wins-race", chart_form: "bar-chart race",
+  duration_s: 72, timeline: { unit: "season", from: 1950, to: 2026 } };
+
+test("a time-evolution design declares a 30-90 s run and a data timeline", () => {
+  assert.deepEqual(validateDesign(tl, { useCases: ["career-wins-race"] }), []);
+  assert.match(validateDesign({ ...tl, duration_s: 12 }, { useCases: ["career-wins-race"] }).join(), /30-90/);
+  assert.match(validateDesign({ ...tl, timeline: undefined }, { useCases: ["career-wins-race"] }).join(), /timeline/);
+  assert.match(validateDesign({ ...tl, timeline: { unit: "season", from: 2026, to: 1950 } }, { useCases: ["career-wins-race"] }).join(), /from < to/);
+  assert.match(validateDesign({ ...tl, use_case_id: "era-adjusted-rankings" }, { useCases: ["career-wins-race"] }).join(), /not a time-evolution use case/);
+  assert.deepEqual(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p", data_time: "season" } }, { useCases: [] }), []);
+  assert.match(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p" } }, { useCases: [] }).join(), /data_time/);
+});
+
+test("the cut-out comes from the middle of the run, not the finale", () => {
+  const w = excerptWindow(72, 8);
+  assert.equal(w.duration_s, 8);
+  assert.ok(w.start_s > 72 * 0.3 && w.start_s + 8 < 72 * 0.7, JSON.stringify(w));
+  assert.deepEqual(excerptWindow(30, 8), { start_s: 9.5, duration_s: 8 });
+});
+
+test("longevity: the data clock advances monotonically across the run and the picture keeps changing", () => {
+  const good = Array.from({ length: 12 }, (_, i) => ({ t: i * 6, clock: 1950 + i * 7, hash: `h${i}` }));
+  const r = assessLongevity(good, { unit: "season", from: 1950, to: 2026 });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const stalled = good.map((s, i) => ({ ...s, clock: i < 3 ? 1950 + i : 1952 }));
+  assert.match(assessLongevity(stalled, { unit: "season", from: 1950, to: 2026 }).problems.join(), /coverage|stall/);
+  const backwards = good.map((s, i) => ({ ...s, clock: i === 5 ? 1950 : s.clock }));
+  assert.match(assessLongevity(backwards, { unit: "season", from: 1950, to: 2026 }).problems.join(), /backwards/);
+  const frozen = good.map((s, i) => ({ ...s, hash: i > 3 ? "same" : s.hash }));
+  assert.match(assessLongevity(frozen, { unit: "season", from: 1950, to: 2026 }).problems.join(), /static/);
+  const noClock = good.map((s) => ({ ...s, clock: null }));
+  assert.match(assessLongevity(noClock, { unit: "season", from: 1950, to: 2026 }).problems.join(), /dataClock/);
+});
+
+test("longevity samples span the whole run", () => {
+  const s = longevitySamples(72);
+  assert.equal(s[0], 0);
+  assert.ok(s.at(-1) > 70 && s.at(-1) < 72);
+  assert.ok(s.length >= 10);
 });

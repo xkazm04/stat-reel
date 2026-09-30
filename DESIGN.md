@@ -1,6 +1,6 @@
 # StatReel — Design Document & Implementation Plan
 
-> Working name: **StatReel** (rename freely). Local-first studio that turns licensed sports data into 1–3 min data-visualization videos (9:16 shorts and 16:9), with an LLM co-pilot, a use-case × sport feasibility heatmap, and cross-channel publishing.
+> Working name: **StatReel** (rename freely). Local-first studio that turns licensed sports data into **30–90 s viz-led videos of stats evolving over time** (matplotlib-style animated charts: bar-chart races, line races, streamgraphs; data time maps to video time; no narration; 9:16 and 16:9), with an LLM co-pilot, a use-case × sport feasibility heatmap, and cross-channel publishing (ADR 007).
 >
 > **Audience of this document:** a Claude Code session running on the owner's machine that will implement it, plus the owner (Kazi) reviewing progress.
 > **Status:** approved design, v1.0 — 2026-09-29.
@@ -52,6 +52,7 @@
 | D9 | **Burned-in captions everywhere + SRT/VTT sidecar on YouTube** | TikTok/Instagram APIs have no caption-file field | — |
 | D10 | **OFL fonts only, self-hosted, pinned** | Commercial-safe, server-render-safe, deterministic | Adobe Fonts / desktop EULAs (no server rendering) |
 | D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
+| D16 | **Format: 30–90 s viz-led time-evolution videos, no narration** ([ADR 007](docs/decisions/007-format-time-evolution-videos.md)) | Owner: the data visualization tells the story over time; shorts are cut-outs of long runs | Narrated headline shorts (hook → reveal → payoff) |
 | D15 | **Two themes (A/1 dark, A/3 light), Calendar, Board** ([ADR 006](docs/decisions/006-two-themes-studio-modules.md)) | Owner: keep both winners until one dominates; studio composes, Calendar publishes; Board gates visual direction | Single baseline |
 | D14 | **"On Air" brand + UI baseline, real data only** ([ADR 005](docs/decisions/005-on-air-brand-baseline.md)) | Owner verdict on the `--landing` contest | Patchbay (temporary) |
 | D13 | **Knowledge-review changes adopted** ([ADR 003](docs/decisions/003-media-generation-knowledge-review.md)) | Fail-closed gate, fact binding, spoken/display tokens, hook/close craft, mix and peak targets | — |
@@ -243,29 +244,29 @@ screen shows real data or a labelled empty state (ADR 005).
    available, likes, comments, shares), per use case and per sport.
 8. **Sources**: registry view, verdicts, tested capabilities, terms-hash status.
 
-### 6.2 Composition model
+### 6.2 Composition model (ADR 007: time-evolution videos)
 
-- **Use case registry** `data/registry/usecases/<id>.yaml`:
+- **Use case registry** `data/registry/usecases/<id>.yaml`. Every time-evolution format declares:
+  - `data_time {unit, from, to}`: what the clock runs through (season, race, matchday, career-start, date)
+  - `chart_form`: bar-chart race, line race, streamgraph, drifting distribution, and so on
+  - `arc`: what the viz reveals as time passes
+  - `duration_s` (30–90), required data `kinds`, and optional `sports` for sport-specific formats
 
-```yaml
-id: era-adjusted-rankings
-name: Era-adjusted rankings
-stage: 3
-requires:
-  kinds: [hist]
-  min_seasons: 10
-composition: EraAdjustedSlope
-formats: [vertical, landscape]
-duration_s: {min: 45, max: 120}
-props_schema: EraAdjustedProps   # exported from packages/schemas
-query_templates: [top_n_raw_vs_adjusted]
-```
-
-- `packages/viz`: pure functions of `(data, t, theme, format)` returning SVG primitives — scales, axes, slopegraph, ridgeline, pitch, shot map, network, probability line, scatter/trajectory, bar race, diverging bars. No time source other than `t`; seeded RNG only.
-- `packages/compositions`: Remotion `<Composition>` per use case × format, reading `useCurrentFrame()` → `t`, Zod `schema`, `calculateMetadata` for duration from narration length.
-- Scene structure: **hook** (one sentence at 0 s, spoken *and* on screen; `hook_shape` prop in preference order payoff-first → contradiction → scenario → stake, never "did you know" by default) → context → reveal(s) → payoff → **close**: shorts end on a one-line *reframe* written together with the hook (loops well); end cards only in landscape. Scenes are data in props (`scenes[]`), not code. Each use case declares its own duration band; the platform ceiling is never the target (ADR 003).
-- **Figures are bound to facts:** every number in props or narration references a `fact_key` returned by `query`; `set_props` / `write_script` reject untraceable figures. Adjusted/estimated metrics are presented rank-led and labelled "era-adjusted" (ADR 003).
-- Reference visual language: the storyboard frames (Sports Viz Storyboard artifact) — replace counters' display face per §6.5.
+  `family: headline` marks the legacy M1 walking skeleton (`era-adjusted-rankings`), which the M1
+  rework replaces.
+- `packages/viz`: pure functions of `(data, t, theme, format)` returning SVG primitives. The
+  time-evolution primitives are bar race (rank interpolation, identity-stable colours), line race,
+  streamgraph, rolling-window aggregations and a data clock. There is no time source other than `t`,
+  and randomness is seeded.
+- `packages/compositions`: a Remotion `<Composition>` per use case × format. Video time maps to data
+  time through a **pacing curve**: seconds per unit, eased, slower at the story's turns, and the clock
+  never stops for long. **Annotations** are data in props (`annotations[] {at_data_time, text, facts[]}`),
+  each held ≥ 2 s. The picture is **viz-led**: title, running data clock, chart, sparse annotations.
+  No narration.
+- The co-pilot chooses the story over time: the data range, the entities, the pacing curve and the
+  annotation beats, each bound to facts. It never writes code.
+- **Board** (§6.1): designs are full 30–90 s runs, judged by one mid-run cut-out plus harness-measured
+  longevity (the `board` skill).
 
 ### 6.3 Render pipeline
 
@@ -277,6 +278,8 @@ query_templates: [top_n_raw_vs_adjusted]
 - Single render at a time; progress over SSE.
 
 ### 6.4 Audio (ElevenLabs)
+
+> ADR 007: videos are viz-led with **no narration**. Audio is a music bed (Eleven Music) plus optional SFX. The TTS, alignment and caption timing below apply only to a future format with speech; the live M1 skeleton still uses them until its rework.
 
 - **Plan requirement:** all assets destined for monetized channels must be generated on a **paid plan (Starter+)**; free-plan output is non-commercial forever. Creator+ only if tracks are ever distributed to streaming services. Record plan tier per asset.
 - **Voiceover:** generated **per scene** (a note re-renders one scene; joins are checked) with `POST /v1/text-to-speech/{voice_id}/with-timestamps` → audio + **character-level** alignment; group characters into words in `packages/captions`. Script tokens carry a `spoken` and a `display` form ("twenty-three" / "23") plus a pronunciation ledger; alignment runs on the spoken form, burn-in shows the display form. Re-timing after edits: `POST /v1/forced-alignment` (audio + transcript → word/char timings).

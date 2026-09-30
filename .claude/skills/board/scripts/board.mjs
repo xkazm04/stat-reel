@@ -19,7 +19,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync,
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { applyFeedback, emptyLedger, FORMATS, frameTimes, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateShot } from "./lib.mjs";
+import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateDesign } from "./lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../../../..");
@@ -80,33 +80,59 @@ async function sync() {
   return after;
 }
 
+/** Page through the guarded query tool (it caps each answer at 5000 rows). */
+async function mcpAll(sql, order) {
+  const rows = [];
+  let columns = [];
+  for (let offset = 0; ; offset += 5000) {
+    const page = await mcpQuery(`select * from (${sql}) order by ${order} limit 5000 offset ${offset}`);
+    columns = page.columns.length ? page.columns : columns;
+    rows.push(...page.rows);
+    if (page.rows.length < 5000) break;
+  }
+  return { rows, columns };
+}
+
+/** Only time-evolution use cases are offered to loops (ADR 007); the headline M1 skeleton is not. */
+async function timeEvolutionUseCases() {
+  const heat = await api("/api/heatmap");
+  return heat.usecases.filter((u) => (u.family ?? "time-evolution") === "time-evolution").map((u) => ({
+    ...u, cells: heat.cells.filter((c) => c.usecase === u.id).map(({ sport, mode, status, reason }) => ({ sport, mode, status, reason })),
+  }));
+}
+
 async function stage(dir) {
   const data = path.join(dir, "data");
   mkdirSync(data, { recursive: true });
-  const heat = await api("/api/heatmap");
-  const usecases = heat.usecases.map((u) => ({
-    ...u, cells: heat.cells.filter((c) => c.usecase === u.id).map(({ sport, mode, status, reason }) => ({ sport, mode, status, reason })),
-  }));
-  const era = await mcpQuery("select * from llm.f1_driver_era_adjusted where eligible order by rank_adjusted");
-  const seasons = await mcpQuery("select * from llm.f1_driver_seasons where starts > 0 order by season, points_current_system desc");
-  const files = { usecases, f1_era_adjusted: era.rows, f1_driver_seasons: seasons.rows };
+  const usecases = await timeEvolutionUseCases();
+  const series = {
+    f1_race_results: await mcpAll("select * from llm.f1_race_results where started", "season, round, entry_order"),
+    f1_driver_seasons: await mcpAll("select * from llm.f1_driver_seasons where starts > 0", "season, player_id"),
+    f1_constructor_seasons: await mcpAll("select * from llm.f1_constructor_seasons where races_started > 0", "season, team_id"),
+    f1_driver_bios: await mcpAll("select * from llm.f1_driver_bios", "player_id"),
+    f1_seasons: await mcpAll("select * from llm.f1_seasons", "season"),
+  };
+  const files = { usecases, ...Object.fromEntries(Object.entries(series).map(([k, v]) => [k, v.rows])) };
   for (const [name, value] of Object.entries(files)) {
-    writeFileSync(path.join(data, `${name}.json`), JSON.stringify(value, null, 1));
+    writeFileSync(path.join(data, `${name}.json`), JSON.stringify(value));
     writeFileSync(path.join(data, `${name}.js`), `window.STATREEL = window.STATREEL || {};\nwindow.STATREEL.${name} = ${JSON.stringify(value)};\n`);
   }
   cpSync(path.join(REPO, "fonts"), path.join(data, "fonts"), { recursive: true });
-  // the brand tokens are split into shared + one file per theme (ADR 006): stage them all, for reference
   const tokensDir = path.join(REPO, "packages", "design-tokens", "src");
   mkdirSync(path.join(data, "statreel-tokens"), { recursive: true });
   for (const f of readdirSync(tokensDir).filter((f) => f.endsWith(".css"))) cpSync(path.join(tokensDir, f), path.join(data, "statreel-tokens", f));
+  const col = (k) => series[k].columns.join(", ");
   writeFileSync(path.join(data, "SCHEMA.md"), [
-    "# data/ - real StatReel material (read-only)", "",
-    "Load with `<script src=\"../data/<name>.js\">` (sets `window.STATREEL.<name>`) or read the `.json`.", "",
-    `- \`usecases\` (${usecases.length}): id, name, stage, requires.kinds, composition, formats, duration_s, and \`cells\` (per sport and mode: status go|data-ready|ask|blocked + reason). Only F1 capabilities are tested today.`,
-    `- \`f1_era_adjusted\` (${era.rows.length} eligible drivers, >= 30 starts): the \`llm.f1_driver_era_adjusted\` view. Columns: ${era.columns.join(", ")}. Every row has a \`fact_key\`; cite a figure as \`<fact_key>#<column>\`.`,
-    `- \`f1_driver_seasons\` (${seasons.rows.length} driver-seasons): the \`llm.f1_driver_seasons\` view. Columns: ${seasons.columns.join(", ")}.`,
-    "- Licence of all figures: F1DB, CC BY 4.0 (`attribution` column). Adjusted = every race re-scored with today's points, per start; an estimate.",
-    "- `fonts/`: the only allowed faces (OFL). `statreel-tokens/`: the app's current brand tokens (shared + the On Air and Photo Finish themes), for reference only - discovering new presentation styles is the point.",
+    "# data/ - real StatReel time series (read-only)", "",
+    "Load with `<script src=\"../data/<name>.js\">` (sets `window.STATREEL.<name>`) or read the `.json`. Every row has a `fact_key`; cite a figure as `<fact_key>#<column>`.", "",
+    `- \`usecases\` (${usecases.length}): the time-evolution formats - id, name, data_time {unit, from, to}, chart_form, arc (what the viz reveals as time passes), duration_s {min, max} (30-90 s), requires.kinds, sports (if sport-specific), and \`cells\` (feasibility per sport and mode).`,
+    `- \`f1_race_results\` (${series.f1_race_results.rows.length} starts, race by race, 1950 onwards; ordered by season, round): ${col("f1_race_results")}. The Indianapolis 500 rounds (1950-1960, \`is_indianapolis\`) had a separate field - usually exclude them.`,
+    `- \`f1_driver_seasons\` (${series.f1_driver_seasons.rows.length}): ${col("f1_driver_seasons")}.`,
+    `- \`f1_constructor_seasons\` (${series.f1_constructor_seasons.rows.length}): ${col("f1_constructor_seasons")}.`,
+    `- \`f1_driver_bios\` (${series.f1_driver_bios.rows.length}): ${col("f1_driver_bios")}.`,
+    `- \`f1_seasons\` (${series.f1_seasons.rows.length}): ${col("f1_seasons")}. The current season is in progress: rounds after today have no results.`,
+    "- Licence of all figures: F1DB, CC BY 4.0 (`attribution` column).",
+    "- `fonts/`: the only allowed faces (OFL). `statreel-tokens/`: the app's brand tokens (two themes), for reference only - discovering new presentation styles is the point.",
   ].join("\n"));
   return data;
 }
@@ -137,7 +163,7 @@ async function loop() {
   const brief = renderBrief({ template: readFileSync(path.join(HERE, "..", "references", "loop-brief.md"), "utf8"), ledger, shots, board });
   writeFileSync(path.join(stageDir, "BRIEF.md"), brief);
   const init = ["init", "--id", contestId, "--title", `StatReel Board - ${id} (${loopPhase(ledger)})`, "--brief", path.join(stageDir, "BRIEF.md"),
-    "--variants", String(shots), "--review", "owner", "--data", data, "--timeout-min", opt("timeout-min", "45"),
+    "--variants", String(shots), "--review", "owner", "--data", data, "--timeout-min", opt("timeout-min", "60"),
     "--vault", VAULT, "--vault-subdir", "Board/Contests"];
   if (opt("participants")) init.push("--participants", opt("participants"));
   const r1 = spawnSync(process.execPath, [CONTEST, ...init], { cwd: REPO, stdio: "inherit" });
@@ -145,7 +171,7 @@ async function loop() {
   patchParticipantBriefs(path.join(ARENA, contestId));
   mkdirSync(path.join(BOARD_VAULT, "Loops"), { recursive: true });
   writeFileSync(path.join(BOARD_VAULT, "Loops", `${id}.md`), `# ${id}\n\n- phase: ${loopPhase(ledger)}\n- shots per seat: ${shots}\n- contest: ${contestId}\n- started: ${new Date().toISOString()}\n\n## Brief\n\n${brief}\n`);
-  console.log(`running seats for ${contestId} (this takes up to ${opt("timeout-min", "45")} min)...`);
+  console.log(`running seats for ${contestId} (this takes up to ${opt("timeout-min", "60")} min)...`);
   const r2 = spawnSync(process.execPath, [CONTEST, "run", "--id", contestId], { cwd: REPO, stdio: "inherit", env: process.env });
   if (r2.status !== 0) die("contest run failed");
   console.log(`done. next: node board.mjs harvest --id ${id}`);
@@ -162,13 +188,14 @@ async function harvest() {
   const outDir = path.join(REPO, "data", "board", "items");
   mkdirSync(outDir, { recursive: true });
   let posted = 0;
+  const useCases = (await timeEvolutionUseCases()).map((u) => u.id);
   const seats = readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md")));
   for (const [si, seat] of seats.entries()) {
     for (const v of readdirSync(path.join(entries, seat)).filter((d) => /^variant-\d+$/.test(d)).sort()) {
       const dir = path.join(entries, seat, v);
       const metaFile = path.join(dir, "shot.json");
       const meta = existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, "utf8")) : null;
-      const errors = validateShot(meta);
+      const errors = validateDesign(meta, { useCases });
       if (errors.length) {
         console.log(`skip ${seat}/${v}: ${errors.join("; ")}`);
         continue;
@@ -180,23 +207,22 @@ async function harvest() {
       url.searchParams.set("capture", "1");
       await page.goto(url.href, { waitUntil: "load" });
       await page.evaluate(() => document.fonts.ready);
-      const isClip = typeof meta.duration_s === "number" && (await page.evaluate(() => typeof window.statreel?.seek === "function"));
-      let clip = null;
-      if (isClip) {
-        const clipErrors = validateShot(meta, { clip: true });
-        if (clipErrors.length) console.log(`  ${seat}/${v}: clip metadata: ${clipErrors.join("; ")}`);
-        clip = await renderClip(page, meta, w, h, path.join(outDir, `${base}.mp4`), path.join(outDir, `${base}.png`));
-        console.log(`  clip ${meta.duration_s}s, ${clip.frames} frames, seek-stable: ${clip.seek_stable}${clip.seek_stable ? "" : ` (${clip.mismatches} probe mismatch(es))`}`);
-      } else {
-        await page.waitForTimeout(2500); // a still: let any arrival motion settle on its final frame
-        await page.screenshot({ path: path.join(outDir, `${base}.png`), clip: { x: 0, y: 0, width: w, height: h } });
+      const apiOk = await page.evaluate(() => typeof window.statreel?.seek === "function" && typeof window.statreel?.dataClock === "function");
+      if (!apiOk) {
+        console.log(`skip ${seat}/${v}: window.statreel.seek(t) and dataClock(t) are required`);
+        await page.close();
+        continue;
       }
+      const cut = await renderCutout(page, meta, w, h, path.join(outDir, `${base}.mp4`), path.join(outDir, `${base}.png`));
+      const longevity = await measureLongevity(page, meta, w, h);
       await page.close();
+      console.log(`  ${meta.duration_s}s run, cut-out ${cut.excerpt.start_s}-${(cut.excerpt.start_s + cut.excerpt.duration_s).toFixed(1)}s, seek-stable: ${cut.seek_stable}, longevity: ${longevity.ok ? "ok" : longevity.problems.join("; ")}`);
       const item = await api("/api/board", {
-        image: `items/${base}.png`, video: clip ? `items/${base}.mp4` : null, duration_s: clip ? meta.duration_s : null, width: w, height: h,
+        image: `items/${base}.png`, video: `items/${base}.mp4`, duration_s: cut.excerpt.duration_s, width: w, height: h,
         title: meta.title, summary: meta.summary ?? null,
         use_case_id: meta.use_case_id ?? null, proposed_case: meta.proposed_case ?? null, style: meta.style,
-        source: { skill: "board", loop: id, contest: contestId, seat, variant: v, facts: meta.facts ?? [], clip },
+        source: { skill: "board", loop: id, contest: contestId, seat, variant: v, facts: meta.facts ?? [], chart_form: meta.chart_form,
+          clip: { ...cut, full_duration_s: meta.duration_s, timeline: meta.timeline, longevity } },
       });
       console.log(`posted ${item.id}  ${meta.style.name} · ${meta.use_case_id ?? `proposed: ${meta.proposed_case.name}`} · ${meta.title}`);
       posted++;
@@ -204,6 +230,29 @@ async function harvest() {
   }
   await browser.close();
   console.log(`${posted} shot(s) on the Board. Review them at /board, then run: node board.mjs sync`);
+}
+
+/** The Board's one cut-out: 8 s from the middle of the full run, frame by frame (+ poster, + seek probe). */
+async function renderCutout(page, meta, w, h, mp4, poster) {
+  const excerpt = excerptWindow(meta.duration_s, 8);
+  const shifted = { ...meta, duration_s: excerpt.duration_s, poster_t: excerpt.duration_s / 2 };
+  const offsetPage = {
+    evaluate: (fn, t) => page.evaluate(fn, typeof t === "number" ? t + excerpt.start_s : t),
+    screenshot: (o) => page.screenshot(o),
+  };
+  const r = await renderClip(offsetPage, shifted, w, h, mp4, poster);
+  return { excerpt, fps: r.fps, frames: r.frames, seek_stable: r.seek_stable, mismatches: r.mismatches };
+}
+
+/** Sample dataClock(t) and the picture across the full run; see lib.assessLongevity. */
+async function measureLongevity(page, meta, w, h) {
+  const samples = [];
+  for (const t of longevitySamples(meta.duration_s)) {
+    const clock = await page.evaluate(async (tt) => { await window.statreel.seek(tt); return Number(window.statreel.dataClock(tt)); }, t);
+    const hash = createHash("sha256").update(await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h }, type: "png" })).digest("hex");
+    samples.push({ t, clock, hash });
+  }
+  return { ...assessLongevity(samples, meta.timeline), samples: samples.map(({ t, clock }) => ({ t, clock })) };
 }
 
 /** Render a seekable artboard to MP4 (+ poster) and probe that each frame is a pure function of t. */

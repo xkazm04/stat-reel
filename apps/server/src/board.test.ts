@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -83,5 +83,25 @@ describe("Board clips (5-10 s motion, not just stills)", () => {
     const db = openDb(file);
     const cols = db.$client.prepare("pragma table_info(board_items)").all().map((c) => (c as { name: string }).name);
     expect(cols).toEqual(expect.arrayContaining(["video", "duration_s"]));
+  });
+});
+
+describe("Board archive (off-brief items are hidden, never deleted)", () => {
+  it("archives items: hidden from the default list, visible with status=archived, files kept", () => {
+    const { board, root } = setup();
+    const a = board.create(item);
+    const b = board.create({ ...item, title: "keep" });
+    expect(board.archive([a.id], "headline format, ADR 007")).toBe(1);
+    expect(board.list().map((i) => i.id)).toEqual([b.id]);
+    expect(board.list({ status: "archived" })[0]).toMatchObject({ id: a.id, status: "archived", note: "headline format, ADR 007" });
+    expect(existsSync(path.join(root, "items", "a.png"))).toBe(true);
+  });
+
+  it("archived items never feed the skill's feedback", () => {
+    const { board } = setup();
+    const a = board.create(item);
+    board.decide(a.id, "accept");
+    board.archive([a.id], "off-brief");
+    expect(board.feedback()).toEqual([]);
   });
 });

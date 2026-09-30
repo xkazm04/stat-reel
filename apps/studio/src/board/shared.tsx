@@ -226,11 +226,31 @@ function ClipVideo({ item, controls, alt, onError }: { item: BoardItem; controls
   );
 }
 
+type ClipInfo = {
+  seek_stable?: boolean;
+  full_duration_s?: number;
+  excerpt?: { start_s: number; duration_s: number };
+  timeline?: { unit: string; from: number; to: number };
+  longevity?: { ok: boolean; problems: string[] };
+};
+export const clipInfo = (i: BoardItem): ClipInfo | undefined => i.source?.clip as ClipInfo | undefined;
+
+/**
+ * A time-evolution design (ADR 007): the Board plays one cut-out from the middle of a 30-90 s run.
+ * The badge puts the cut in context (where in the run, over which data time) and surfaces the
+ * harness's longevity and seek-stability findings.
+ */
 function ClipBadge({ item }: { item: BoardItem }) {
+  const c = clipInfo(item);
   const stable = clipStable(item);
+  const cut = c?.excerpt && c.full_duration_s
+    ? `CUT ${c.excerpt.start_s.toFixed(0)}-${(c.excerpt.start_s + c.excerpt.duration_s).toFixed(0)} s OF ${c.full_duration_s.toFixed(0)} s`
+    : `CLIP ${item.duration_s?.toFixed(1) ?? "?"} s`;
   return (
     <span className="bd-clip">
-      <span className="bd-clip__len mono">CLIP {item.duration_s?.toFixed(1) ?? "?"} s</span>
+      <span className="bd-clip__len mono">{cut}</span>
+      {c?.timeline ? <span className="bd-clip__len mono">{c.timeline.from}→{c.timeline.to} · {c.timeline.unit}</span> : null}
+      {c?.longevity && !c.longevity.ok ? <span className="bd-clip__warn mono">LONGEVITY: {c.longevity.problems.join(" · ")}</span> : null}
       {stable === false ? <span className="bd-clip__warn mono">NOT SEEK-STABLE · won't port to video</span> : null}
     </span>
   );
