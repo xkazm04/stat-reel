@@ -208,8 +208,12 @@ export type BoardItem = {
   id: string;
   /** path under data/board (e.g. items/loop-001-A1.png) */
   image: string;
-  /** same-origin URL of the shot (/files/board/<image>) */
+  /** same-origin URL of the shot (/files/board/<image>); for a clip this is its poster frame */
   image_url: string;
+  /** 5-10 s clip (MP4) rendered frame by frame through the artboard's seek(t); null for stills */
+  video: string | null;
+  video_url: string | null;
+  duration_s: number | null;
   width: number | null;
   height: number | null;
   title: string;

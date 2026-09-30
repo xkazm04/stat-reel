@@ -284,7 +284,8 @@
   overflow: hidden;
   background: var(--color-screen);
 }
-.bd-shot img {
+.bd-shot img,
+.bd-shot video {
   display: block;
   width: 100%;
   height: 100%;
@@ -305,7 +306,8 @@
   min-height: 0;
   background: transparent;
 }
-.bd-shot.is-tiny img {
+.bd-shot.is-tiny img,
+.bd-shot.is-tiny video {
   image-rendering: pixelated;
 }
 .bd-shot__tiny {
@@ -654,7 +656,8 @@
   color: var(--status-go-ink);
   border-color: var(--status-go);
 }
-.bd-tile--rejected .bd-shot img {
+.bd-tile--rejected .bd-shot img,
+.bd-tile--rejected .bd-shot video {
   filter: grayscale(1);
   opacity: 0.5;
 }
@@ -1025,7 +1028,8 @@ html.bd-modal-open {
   height: 168px;
   min-width: 140px;
 }
-.bd-frame--rejected .bd-shot img {
+.bd-frame--rejected .bd-shot img,
+.bd-frame--rejected .bd-shot video {
   filter: grayscale(1);
   opacity: 0.55;
 }
@@ -1285,7 +1289,8 @@ html.bd-modal-open {
   height: auto;
   background: var(--color-screen);
 }
-.bd-mx__shot--rejected .bd-shot img {
+.bd-mx__shot--rejected .bd-shot img,
+.bd-mx__shot--rejected .bd-shot video {
   filter: grayscale(1);
   opacity: 0.5;
 }
@@ -1658,3 +1663,15 @@ html.bd-modal-open {
     transition: none;
   }
 }
+
+/* ---- clips (5-10 s, rendered frame by frame through seek(t)) ---- */
+.bd-shot { position: relative; }
+.bd-clip {
+  position: absolute; left: var(--space-2); bottom: var(--space-2); display: flex; flex-wrap: wrap; gap: var(--space-1);
+  pointer-events: none;
+}
+.bd-clip__len, .bd-clip__warn {
+  font-size: var(--text-xs); letter-spacing: var(--tracking-label); padding: 2px 6px;
+  background: var(--color-scrim); color: var(--color-text); border: var(--border-hair) solid var(--color-line-strong);
+}
+.bd-clip__warn { color: var(--status-blocked); border-color: var(--status-blocked); }

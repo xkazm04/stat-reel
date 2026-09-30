@@ -61,3 +61,27 @@ describe("Board (visual outputs + use-case backlog behind a human gate)", () => 
     expect(board.feedback(fb[1]!.decided_at!).length).toBeLessThanOrEqual(1);
   });
 });
+
+describe("Board clips (5-10 s motion, not just stills)", () => {
+  it("stores a clip beside its poster, validated inside the board directory", () => {
+    const { board, root } = setup();
+    writeFileSync(path.join(root, "items", "a.mp4"), "mp4");
+    const b = board.create({ ...item, video: "items/a.mp4", duration_s: 8 });
+    expect(b).toMatchObject({ video: "items/a.mp4", duration_s: 8 });
+    expect(() => board.create({ ...item, video: "../x.mp4", duration_s: 8 })).toThrow(/board directory/);
+    expect(() => board.create({ ...item, video: "items/none.mp4", duration_s: 8 })).toThrow(/not found/);
+  });
+
+  it("an older database gains the clip columns on open (migration)", async () => {
+    const { openDb } = await import("./db");
+    const Database = (await import("better-sqlite3")).default;
+    const dir = mkdtempSync(path.join(tmpdir(), "boarddb-"));
+    const file = path.join(dir, "old.sqlite");
+    const old = new Database(file);
+    old.exec("create table board_items (id text primary key, image text not null, width integer, height integer, title text not null, summary text, use_case_id text, proposed_case_json text, style_json text, source_json text, status text not null, decision text, note text, decided_at text, created_at text not null)");
+    old.close();
+    const db = openDb(file);
+    const cols = db.$client.prepare("pragma table_info(board_items)").all().map((c) => (c as { name: string }).name);
+    expect(cols).toEqual(expect.arrayContaining(["video", "duration_s"]));
+  });
+});

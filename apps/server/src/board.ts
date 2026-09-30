@@ -14,7 +14,7 @@ export type Decision = (typeof DECISIONS)[number];
 export type BoardStyle = { id: string; name: string; notes?: string };
 export type ProposedCase = { name: string; pitch: string; requires?: string[] };
 export type NewBoardItem = {
-  image: string; width?: number; height?: number; title: string; summary?: string;
+  image: string; video?: string | null; duration_s?: number | null; width?: number; height?: number; title: string; summary?: string;
   use_case_id?: string | null; proposed_case?: ProposedCase | null; style?: BoardStyle | null; source?: Record<string, unknown> | null;
 };
 export type BoardItem = Omit<typeof boardItems.$inferSelect, "proposed_case_json" | "style_json" | "source_json"> & {
@@ -31,13 +31,19 @@ export class BoardService {
   /** `root` is data/board: images live under it and are served at /files/board/<image>. */
   constructor(private readonly db: Db, private readonly root: string) {}
 
+  private inside(rel: string, what: string): string {
+    const abs = path.resolve(this.root, rel);
+    if (!abs.startsWith(path.resolve(this.root) + path.sep)) throw new Error(`${what} must live inside the board directory (${this.root})`);
+    if (!existsSync(abs)) throw new Error(`${what} not found: ${rel}`);
+    return rel.split(path.sep).join("/");
+  }
+
   create(i: NewBoardItem): BoardItem {
-    const abs = path.resolve(this.root, i.image);
-    if (!abs.startsWith(path.resolve(this.root) + path.sep)) throw new Error(`image must live inside the board directory (${this.root})`);
-    if (!existsSync(abs)) throw new Error(`image not found: ${i.image}`);
+    this.inside(i.image, "image");
+    const video = i.video ? this.inside(i.video, "video") : null;
     if (!i.use_case_id && !i.proposed_case) throw new Error("an item needs a use_case_id or a proposed_case");
     const row = {
-      id: `bd-${randomUUID().slice(0, 8)}`, image: i.image.split(path.sep).join("/"), width: i.width ?? null, height: i.height ?? null,
+      id: `bd-${randomUUID().slice(0, 8)}`, image: i.image.split(path.sep).join("/"), video, duration_s: video ? (i.duration_s ?? null) : null, width: i.width ?? null, height: i.height ?? null,
       title: i.title, summary: i.summary ?? null, use_case_id: i.use_case_id ?? null,
       proposed_case_json: i.proposed_case ? JSON.stringify(i.proposed_case) : null, style_json: i.style ? JSON.stringify(i.style) : null,
       source_json: i.source ? JSON.stringify(i.source) : null, status: "pending", decision: null, note: null, decided_at: null, created_at: now(),

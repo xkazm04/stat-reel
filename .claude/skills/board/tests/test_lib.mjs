@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyFeedback, emptyLedger, loopPhase, renderBrief, renderLedgerMarkdown, validateShot } from "../scripts/lib.mjs";
+import { applyFeedback, emptyLedger, frameTimes, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateShot } from "../scripts/lib.mjs";
 
 const item = (id, decision, style, useCase, note = null, proposed = null) => ({
   id, decision, note, decided_at: `2026-09-30T10:0${id.length}:00Z`, style: { id: style, name: style }, use_case_id: useCase, proposed_case: proposed,
@@ -71,4 +71,29 @@ test("the brief lists shots already on the board awaiting the owner, so later lo
   assert.match(b, /Loom.*era-adjusted-rankings/);
   assert.match(b, /Halftone river.*proposed: Dynasty river/);
   assert.doesNotMatch(b, /Old/);
+});
+
+test("a clip declares 5-10 s, a poster moment inside it, and optionally fps (default 30)", () => {
+  const base = { title: "T", format: "vertical", style: { id: "s", name: "S" }, use_case_id: "x" };
+  assert.deepEqual(validateShot({ ...base, duration_s: 8, poster_t: 6.5 }, { clip: true }), []);
+  assert.match(validateShot({ ...base, duration_s: 3, poster_t: 1 }, { clip: true }).join(), /5-10/);
+  assert.match(validateShot({ ...base, duration_s: 8, poster_t: 9 }, { clip: true }).join(), /poster_t/);
+  assert.match(validateShot({ ...base }, { clip: true }).join(), /duration_s/);
+  assert.deepEqual(validateShot({ ...base }), []); // stills stay valid for older loops
+});
+
+test("frame times cover the clip at the declared fps, ending before duration", () => {
+  const t = frameTimes(2, 30);
+  assert.equal(t.length, 60);
+  assert.equal(t[0], 0);
+  assert.ok(Math.abs(t[59] - 59 / 30) < 1e-9);
+});
+
+test("the stability probe revisits moments out of order, as a video renderer does", () => {
+  const p = stabilityProbe(8);
+  assert.ok(p.length >= 4);
+  const firsts = new Map();
+  for (const t of p) firsts.set(t, (firsts.get(t) ?? 0) + 1);
+  assert.ok([...firsts.values()].some((n) => n >= 2), "some moment is rendered twice");
+  assert.ok(p.some((t, i) => i > 0 && t < p[i - 1]), "it seeks backwards at least once");
 });

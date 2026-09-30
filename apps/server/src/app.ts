@@ -104,11 +104,12 @@ export function buildApp(d: AppDeps) {
   });
 
   // ---- board (design outputs + use-case backlog behind the owner's gate; ADR 006)
-  app.get("/api/board", (c) => c.json({ items: d.board.list({ status: c.req.query("status") }).map((i) => ({ ...i, image_url: `/files/board/${i.image}` })), decisions: DECISIONS }));
+  const withUrls = <T extends { image: string; video: string | null }>(i: T) => ({ ...i, image_url: `/files/board/${i.image}`, video_url: i.video ? `/files/board/${i.video}` : null });
+  app.get("/api/board", (c) => c.json({ items: d.board.list({ status: c.req.query("status") }).map(withUrls), decisions: DECISIONS }));
   app.get("/api/board/feedback", (c) => c.json({ items: d.board.feedback(c.req.query("since")) }));
   app.get("/api/board/:id", (c) => {
     const i = d.board.get(c.req.param("id"));
-    return i ? c.json({ ...i, image_url: `/files/board/${i.image}` }) : c.json({ error: "not found" }, 404);
+    return i ? c.json(withUrls(i)) : c.json({ error: "not found" }, 404);
   });
   app.post("/api/board", async (c) => {
     try { return c.json(d.board.create(await c.req.json()), 201); } catch (e) { return bad(c, e); }

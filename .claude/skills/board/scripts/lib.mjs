@@ -60,7 +60,7 @@ export function renderBrief({ template, ledger, shots, board = [], extra = {} })
   return template.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? vars[k] : m));
 }
 
-export function validateShot(meta) {
+export function validateShot(meta, { clip = false } = {}) {
   const errors = [];
   if (!meta || typeof meta !== "object") return ["shot.json is missing or not an object"];
   if (!meta.title) errors.push("title is required");
@@ -68,6 +68,14 @@ export function validateShot(meta) {
   if (!meta.style?.id || !meta.style?.name) errors.push("style {id, name} is required (a stable id: the owner's style feedback is keyed on it)");
   if (!meta.use_case_id && !meta.proposed_case?.name) errors.push("a use_case_id or proposed_case {name, pitch} is required");
   for (const f of meta.facts ?? []) if (!FACT_REF.test(f)) errors.push(`'${f}' is not a fact ref (<fact_key>#<column>)`);
+  if (clip) {
+    const d = meta.duration_s;
+    if (typeof d !== "number") errors.push("duration_s is required for a clip (5-10 s)");
+    else if (d < 5 || d > 10) errors.push(`duration_s ${d} must be 5-10 s`);
+    if (typeof meta.poster_t !== "number" || meta.poster_t < 0 || (typeof d === "number" && meta.poster_t >= d))
+      errors.push("poster_t must be a moment inside the clip (0 <= poster_t < duration_s)");
+    if (meta.fps !== undefined && ![24, 25, 30].includes(meta.fps)) errors.push("fps must be 24, 25 or 30");
+  }
   return errors;
 }
 
@@ -81,4 +89,20 @@ export function renderLedgerMarkdown(ledger) {
     "## Styles", "", "| Style | Accepted | Style-rejected | id | Owner notes |", "|---|---|---|---|---|", ...styleRows, "",
     "## Cases", "", "| Case | Accepted | Case-rejected | id | Owner notes |", "|---|---|---|---|---|", ...caseRows, "",
   ].join("\n");
+}
+
+/** Frame timestamps for a clip: 0, 1/fps, ... (last frame strictly before duration). */
+export function frameTimes(duration_s, fps = 30) {
+  const n = Math.round(duration_s * fps);
+  return Array.from({ length: n }, (_, i) => i / fps);
+}
+
+/**
+ * Seek-stability probe: moments visited out of order and twice, the way a video renderer seeks
+ * (Remotion renders frames in parallel and out of order). A frame that differs between visits is
+ * not a pure function of t and will not survive the port to a real video.
+ */
+export function stabilityProbe(duration_s) {
+  const at = (f) => Math.round(duration_s * f * 30) / 30;
+  return [at(0.7), at(0.2), at(0.95), at(0.7), at(0.45), at(0.2)];
 }

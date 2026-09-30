@@ -165,6 +165,8 @@ export function Shot({
           Image missing
           <span className="mono">{item.image}</span>
         </span>
+      ) : item.video_url ? (
+        <ClipVideo item={item} controls={eager} alt={alt} onError={() => setBroken(true)} />
       ) : (
         <img
           src={item.image_url}
@@ -177,7 +179,59 @@ export function Shot({
           onError={() => setBroken(true)}
         />
       )}
+      {item.video_url && !broken ? <ClipBadge item={item} /> : null}
       {tiny && !broken ? <span className="bd-shot__tiny mono">{sizeLabel(item.width, item.height)} probe</span> : null}
+    </span>
+  );
+}
+
+const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/** Clip seek-stability as measured at harvest (source.clip.seek_stable); undefined for stills/older items. */
+export const clipStable = (i: BoardItem): boolean | undefined =>
+  (i.source?.clip as { seek_stable?: boolean } | undefined)?.seek_stable;
+
+/**
+ * A board clip: poster first; plays muted on loop only while on screen (many clips on a wall), never
+ * under reduced motion unless the owner presses play. `controls` in the detail view.
+ */
+function ClipVideo({ item, controls, alt, onError }: { item: BoardItem; controls: boolean; alt: string; onError: () => void }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || reducedMotion()) return;
+    if (controls) {
+      void v.play().catch(() => {});
+      return;
+    }
+    const io = new IntersectionObserver(([e]) => (e?.isIntersecting ? void v.play().catch(() => {}) : v.pause()), { threshold: 0.35 });
+    io.observe(v);
+    return () => io.disconnect();
+  }, [controls]);
+  return (
+    <video
+      ref={ref}
+      src={item.video_url ?? undefined}
+      poster={item.image_url}
+      aria-label={alt || undefined}
+      muted
+      loop
+      playsInline
+      controls={controls}
+      preload={controls ? "auto" : "none"}
+      width={item.width ?? undefined}
+      height={item.height ?? undefined}
+      onError={onError}
+    />
+  );
+}
+
+function ClipBadge({ item }: { item: BoardItem }) {
+  const stable = clipStable(item);
+  return (
+    <span className="bd-clip">
+      <span className="bd-clip__len mono">CLIP {item.duration_s?.toFixed(1) ?? "?"} s</span>
+      {stable === false ? <span className="bd-clip__warn mono">NOT SEEK-STABLE · won't port to video</span> : null}
     </span>
   );
 }

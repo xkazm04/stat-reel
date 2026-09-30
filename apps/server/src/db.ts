@@ -141,6 +141,8 @@ export const schedule = sqliteTable("schedule", {
 export const boardItems = sqliteTable("board_items", {
   id: text("id").primaryKey(),
   image: text("image").notNull(),
+  video: text("video"),
+  duration_s: real("duration_s"),
   width: integer("width"),
   height: integer("height"),
   title: text("title").notNull(),
@@ -191,7 +193,7 @@ create table if not exists channels (id text primary key, platform text not null
 create table if not exists schedule (id text primary key, project_id text not null, render_id text not null, channel_id text not null,
   publish_at text not null, status text not null, title text, description text, tags_json text, job_id text, publication_id text,
   error text, created_at text not null);
-create table if not exists board_items (id text primary key, image text not null, width integer, height integer, title text not null,
+create table if not exists board_items (id text primary key, image text not null, video text, duration_s real, width integer, height integer, title text not null,
   summary text, use_case_id text, proposed_case_json text, style_json text, source_json text, status text not null, decision text,
   note text, decided_at text, created_at text not null);
 `;
@@ -204,6 +206,13 @@ export function openDb(file: string): Db {
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(DDL);
+  // additive migrations for databases created before a column existed
+  const addColumn = (table: string, column: string, type: string) => {
+    const cols = (sqlite.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes(column)) sqlite.exec(`alter table ${table} add column ${column} ${type}`);
+  };
+  addColumn("board_items", "video", "text");
+  addColumn("board_items", "duration_s", "real");
   return drizzle(sqlite) as Db;
 }
 

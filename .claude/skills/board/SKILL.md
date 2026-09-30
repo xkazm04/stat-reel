@@ -1,7 +1,7 @@
 ---
 name: board
-description: "StatReel design-board loop. Generates static visual shots (one frame of a StatReel data-viz video at its strongest moment) for existing or newly proposed use cases, in candidate presentation styles. Posts them to the app's Board, where the owner accepts or rejects: reject style, reject case, or reject both. Learns from that feedback through an Obsidian ledger, which becomes the floor and the anti-patterns of the next loop. Early loops run like /contest --landing, to discover the best form of presentation and new use cases. Invoke with /board loop <id> [--shots 3], /board harvest <id>, /board sync, /board status."
-version: 0.1.0
+description: "StatReel design-board loop. Generates 5-10 s clips (the strongest moment of a StatReel data-viz video, in motion, rendered frame by frame through a seek(t) artboard and probed for seek-stability so it can port to a real video) for existing or newly proposed use cases, in candidate presentation styles. Posts them to the app's Board, where the owner accepts or rejects: reject style, reject case, or reject both. Learns from that feedback through an Obsidian ledger, which becomes the floor and the anti-patterns of the next loop. Early loops run like /contest --landing, to discover the best form of presentation and new use cases. Invoke with /board loop <id> [--shots 3], /board harvest <id>, /board sync, /board status."
+version: 0.2.0
 memory: vault
 argument-hint: "loop <id> [--shots 3] [--participants specs] | harvest <id> | sync | status | import ..."
 ---
@@ -37,9 +37,18 @@ must be running on 127.0.0.1:8787.
    - patches the contest template's CDN and panel lines, because a board loop is offline and
      owner-reviewed.
 3. **Harvest**: `node scripts/board.mjs harvest --id loop-NNN`. Validates each `shot.json` (title,
-   format, stable style id, a use case or a proposed case, figures as fact refs). It then screenshots
-   the artboard at its exact size into `data/board/items/` and posts it to `/api/board` with its
-   provenance.
+   format, stable style id, a use case or a proposed case, figures as fact refs, and for a clip
+   `duration_s` 5-10 and `poster_t`). It then renders the clip **frame by frame**: it calls
+   `window.statreel.seek(t)` at 30 fps, screenshots each frame and pipes it through ffmpeg to an H.264
+   MP4, and saves the poster frame at `poster_t`. Next comes the **seek-stability probe**: moments are
+   revisited out of order and must produce identical pixels, the way Remotion renders.
+   It posts the clip, the poster and `source.clip {frames, seek_stable, mismatches}` to `/api/board`.
+   An artboard without `seek` (loops 001-003) harvests as a still.
+
+**Why clips from the first moment.** A style that looks great as a poster but can't move, or moves
+illegibly, fails in a running video. The Board judges motion from the start, and a clip that fails
+the probe carries a "not seek-stable, won't port to video" badge. Proven 2026-09-30 on two probe
+artboards: a pure function of t passes; one `Math.random()` per frame fails with 2 mismatches.
 4. **The owner reviews** at `/board`, then sync again. Repeat.
 
 **Phases.** `lib.mjs:loopPhase` decides.

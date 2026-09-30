@@ -13,12 +13,13 @@
  * Needs the StatReel server on 127.0.0.1:8787 (it stages data through the guarded MCP `query` tool and
  * posts to /api/board). Builtins only, except Playwright (resolved from the repo) for harvest.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { applyFeedback, emptyLedger, FORMATS, loopPhase, renderBrief, renderLedgerMarkdown, validateShot } from "./lib.mjs";
+import { applyFeedback, emptyLedger, FORMATS, frameTimes, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateShot } from "./lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../../../..");
@@ -173,17 +174,29 @@ async function harvest() {
         continue;
       }
       const [w, h] = FORMATS[meta.format];
+      const base = `${id}-${String.fromCharCode(65 + si)}${v.split("-")[1]}`;
       const page = await browser.newPage({ viewport: { width: w, height: h } });
-      await page.goto(new URL(`file:///${path.join(dir, "index.html").replace(/\\/g, "/")}`).href, { waitUntil: "load" });
+      const url = new URL(`file:///${path.join(dir, "index.html").split(path.sep).join("/")}`);
+      url.searchParams.set("capture", "1");
+      await page.goto(url.href, { waitUntil: "load" });
       await page.evaluate(() => document.fonts.ready);
-      await page.waitForTimeout(2500); // let any arrival motion settle on its final frame
-      const name = `${id}-${String.fromCharCode(65 + si)}${v.split("-")[1]}.png`;
-      await page.screenshot({ path: path.join(outDir, name), clip: { x: 0, y: 0, width: w, height: h } });
+      const isClip = typeof meta.duration_s === "number" && (await page.evaluate(() => typeof window.statreel?.seek === "function"));
+      let clip = null;
+      if (isClip) {
+        const clipErrors = validateShot(meta, { clip: true });
+        if (clipErrors.length) console.log(`  ${seat}/${v}: clip metadata: ${clipErrors.join("; ")}`);
+        clip = await renderClip(page, meta, w, h, path.join(outDir, `${base}.mp4`), path.join(outDir, `${base}.png`));
+        console.log(`  clip ${meta.duration_s}s, ${clip.frames} frames, seek-stable: ${clip.seek_stable}${clip.seek_stable ? "" : ` (${clip.mismatches} probe mismatch(es))`}`);
+      } else {
+        await page.waitForTimeout(2500); // a still: let any arrival motion settle on its final frame
+        await page.screenshot({ path: path.join(outDir, `${base}.png`), clip: { x: 0, y: 0, width: w, height: h } });
+      }
       await page.close();
       const item = await api("/api/board", {
-        image: `items/${name}`, width: w, height: h, title: meta.title, summary: meta.summary ?? null,
+        image: `items/${base}.png`, video: clip ? `items/${base}.mp4` : null, duration_s: clip ? meta.duration_s : null, width: w, height: h,
+        title: meta.title, summary: meta.summary ?? null,
         use_case_id: meta.use_case_id ?? null, proposed_case: meta.proposed_case ?? null, style: meta.style,
-        source: { skill: "board", loop: id, contest: contestId, seat, variant: v, facts: meta.facts ?? [] },
+        source: { skill: "board", loop: id, contest: contestId, seat, variant: v, facts: meta.facts ?? [], clip },
       });
       console.log(`posted ${item.id}  ${meta.style.name} · ${meta.use_case_id ?? `proposed: ${meta.proposed_case.name}`} · ${meta.title}`);
       posted++;
@@ -191,6 +204,38 @@ async function harvest() {
   }
   await browser.close();
   console.log(`${posted} shot(s) on the Board. Review them at /board, then run: node board.mjs sync`);
+}
+
+/** Render a seekable artboard to MP4 (+ poster) and probe that each frame is a pure function of t. */
+async function renderClip(page, meta, w, h, mp4, poster) {
+  const fps = meta.fps ?? 30;
+  const seek = (t) => page.evaluate(async (tt) => { await window.statreel.seek(tt); }, t);
+  const shot = () => page.screenshot({ clip: { x: 0, y: 0, width: w, height: h }, type: "png" });
+  const ff = spawn("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "image2pipe", "-framerate", String(fps), "-i", "-",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "medium", "-movflags", "+faststart", mp4], { stdio: ["pipe", "ignore", "pipe"] });
+  let ffErr = "";
+  ff.stderr.on("data", (d) => (ffErr += d));
+  const done = new Promise((res, rej) => ff.on("close", (c) => (c === 0 ? res() : rej(new Error(`ffmpeg ${c}: ${ffErr}`)))));
+  const times = frameTimes(meta.duration_s, fps);
+  for (const t of times) {
+    await seek(t);
+    const buf = await shot();
+    if (!ff.stdin.write(buf)) await new Promise((r) => ff.stdin.once("drain", r));
+  }
+  ff.stdin.end();
+  await done;
+  await seek(meta.poster_t);
+  writeFileSync(poster, await shot());
+  // out-of-order revisits: identical pixels are required for a seek-stable frame
+  const seen = new Map();
+  let mismatches = 0;
+  for (const t of stabilityProbe(meta.duration_s)) {
+    await seek(t);
+    const hash = createHash("sha256").update(await shot()).digest("hex");
+    if (seen.has(t) && seen.get(t) !== hash) mismatches++;
+    seen.set(t, hash);
+  }
+  return { duration_s: meta.duration_s, fps, frames: times.length, poster_t: meta.poster_t, seek_stable: mismatches === 0, mismatches };
 }
 
 async function status() {
