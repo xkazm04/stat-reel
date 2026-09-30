@@ -52,6 +52,7 @@
 | D9 | **Burned-in captions everywhere + SRT/VTT sidecar on YouTube** | TikTok/Instagram APIs have no caption-file field | — |
 | D10 | **OFL fonts only, self-hosted, pinned** | Commercial-safe, server-render-safe, deterministic | Adobe Fonts / desktop EULAs (no server rendering) |
 | D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
+| D14 | **"On Air" brand + UI baseline, real data only** ([ADR 005](docs/decisions/005-on-air-brand-baseline.md)) | Owner verdict on the `--landing` contest | Patchbay (temporary) |
 | D13 | **Knowledge-review changes adopted** ([ADR 003](docs/decisions/003-media-generation-knowledge-review.md)) | Fail-closed gate, fact binding, spoken/display tokens, hook/close craft, mix and peak targets | — |
 | D12 | **Capability tests declared in YAML, evaluated in Python** ([ADR 002](docs/decisions/002-capability-tests-in-python.md)) | One row per capability with coverage, rows and a reason; dbt tests keep schema integrity | dbt tests as capability carriers |
 
@@ -209,6 +210,8 @@ Raw snapshots are immutable. A `current` pointer per source selects the snapshot
 ## 6. Lane 2 — Studio app
 
 ### 6.1 Screens (single-page app)
+
+Brand: "On Air" broadcast package (ADR 005). Volt means cleared to air; status is shape + pattern + label; every screen shows real data or a labelled empty state.
 
 1. **Heatmap** (home) — use case × sport grid, mode toggle monetized / non-commercial, drill-down to sources and failing tests (§7).
 2. **Projects** — list/kanban: idea → data ready → scripted → rendered → gated → published; per-project metrics sparkline.
@@ -464,8 +467,8 @@ Each milestone ends with its DoD passing. Estimates assume one agent working wit
   (replay) 5/5. The YouTube upload runs `PUBLISH_MODE=dry` (exact request plan asserted) until the owner
   creates the Google Cloud app (`packages/publish/SETUP.md`); then set `PUBLISH_MODE=live` for the live
   e2e (upload private → verify → `videos.delete`).
-- **UI baseline:** contest variant A/3 "Patchbay", temporary until the landing contest is rerun with the
-  proper `--landing` seats.
+- **UI baseline:** "On Air" (contest `landing-screens` A/1, owner verdict 2026-09-30, [ADR 005](docs/decisions/005-on-air-brand-baseline.md)).
+  All seven §6.1 screens, real data only.
 
 ### M0 — Foundations
 - Monorepo scaffold (§4), Biome, TS strict, Vitest, Playwright, uv project, dbt project, OPA, justfile.
