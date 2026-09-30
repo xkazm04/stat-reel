@@ -19,7 +19,7 @@ import {
   planMusicCues, planTierFromSubscription,
 } from "@statreel/audio";
 import { buildCues, captionSafeZoneViolations, maxCps, toSrt, toVtt, wordsFromAlignment } from "@statreel/captions";
-import { emptyMetricsRow, evaluatePolicy, YouTubeClient } from "@statreel/publish";
+import { emptyMetricsRow, evaluatePolicy, normalizeYouTubeStatistics, YouTubeClient } from "@statreel/publish";
 import {
   type AudioAsset, type EraAdjustedProps, type PlanTier, type ProvenanceManifest, type PublishTarget,
   sceneSpokenText, type Timeline, type WordTiming,
@@ -78,6 +78,7 @@ export class Pipeline implements PipelineApi {
     });
     this.runner.register("render", (p, ctx) => this.renderJob(p as { projectId: string; target: PublishTarget }, ctx));
     this.runner.register("publish", (p, ctx) => this.publishJob(p as { projectId: string; title?: string; description?: string; tags?: string[] }, ctx));
+    this.runner.register("metrics", (_p, ctx) => this.metricsJob(ctx));
   }
 
   // ------------------------------------------------------------------ public API
@@ -347,6 +348,27 @@ export class Pipeline implements PipelineApi {
     if (row) this.db.insert(metricsDaily).values({ ...row, retention_json: null }).onConflictDoNothing().run();
     this.projects.advance(p.projectId, "published");
     return { publication_id: pubId, external_id: up.id, visibility: "private", mode: modes.publish };
+  }
+
+  refreshMetrics(): { job_id: string } {
+    return { job_id: this.runner.enqueue("metrics", {}) };
+  }
+
+  /** Daily stats for live publications; dry-run publications have nothing to pull (DESIGN §6.7). */
+  private async metricsJob(ctx: JobContext) {
+    const live = this.db.select().from(publications).all().filter((p) => p.mode === "live" && p.external_id);
+    if (!live.length) return { pulled: 0, note: "no live publications yet (publishing runs dry until the Google app exists)" };
+    const yt = new YouTubeClient({ mode: "live" });
+    const stats = await yt.fetchStats(live.map((p) => p.external_id!));
+    const today = now().slice(0, 10);
+    for (const s of stats) {
+      const pub = live.find((p) => p.external_id === s.videoId);
+      if (!pub) continue;
+      const row = normalizeYouTubeStatistics(pub.id, today, s);
+      this.db.insert(metricsDaily).values({ ...row, retention_json: null }).onConflictDoUpdate({ target: [metricsDaily.publication_id, metricsDaily.date], set: { ...row } }).run();
+    }
+    ctx.progress(1);
+    return { pulled: stats.length };
   }
 
   // ------------------------------------------------------------------ worker

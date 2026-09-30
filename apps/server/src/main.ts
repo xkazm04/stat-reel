@@ -28,7 +28,7 @@ export async function createServer() {
   const tools = makeTools({ wh, projects, heatmap, pipeline });
   const llm = new LlmService(db, bus, runner, projects, tools);
   runner.resume();
-  const app = buildApp({ bus, runner, projects, heatmap, llm, tools, pipeline });
+  const app = buildApp({ db, bus, runner, projects, heatmap, llm, tools, pipeline });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     app.use("/*", serveStatic({ root: path.relative(process.cwd(), dist) }));

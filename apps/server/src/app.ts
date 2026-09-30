@@ -15,9 +15,11 @@ import { handleMcp } from "./mcp";
 import type { Pipeline } from "./pipeline";
 import type { ProjectService } from "./projects";
 import type { Tools } from "./tools";
+import { metricsOverview } from "./metrics";
+import type { Db } from "./db";
 
 export type AppDeps = {
-  bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
+  db: Db; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
 };
 
 const SERVABLE = [paths.renders, paths.audio, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
@@ -77,6 +79,10 @@ export function buildApp(d: AppDeps) {
     const body = (await c.req.json()) as { frames_s: number[] };
     return c.json(await d.pipeline.renderKeyframes(c.req.param("id"), body.frames_s));
   });
+
+  // ---- metrics (cross-channel)
+  app.get("/api/metrics", (c) => c.json(metricsOverview(d.db)));
+  app.post("/api/metrics/refresh", (c) => c.json(d.pipeline.refreshMetrics()));
 
   // ---- jobs
   app.get("/api/jobs", (c) => c.json({ jobs: d.runner.list().slice(0, 50) }));
