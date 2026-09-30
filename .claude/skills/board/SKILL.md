@@ -20,8 +20,8 @@ A Board item is **one full-run design**. The owner sees **one 8 s cut-out from t
 (never the finale), so a design can't lean on its last frame, together with the harness's
 **longevity** evidence for the whole run.
 
-Everything runs through `scripts/board.mjs` (Node builtins, plus Playwright from the repo for
-screenshots). Its pure half, `scripts/lib.mjs`, is pinned by `node --test tests/test_lib.mjs`. The StatReel server
+Everything runs through `scripts/board.mjs` (Node builtins, plus Playwright and ffmpeg from the
+repo for frame capture and encoding). Its pure half, `scripts/lib.mjs`, is pinned by `node --test tests/test_lib.mjs`. The StatReel server
 must be running on 127.0.0.1:8787.
 
 ## The loop
@@ -62,12 +62,15 @@ must be running on 127.0.0.1:8787.
 - **exploit** comes after that. Seats extend accepted styles onto cases the owner hasn't judged yet,
   and propose new cases in accepted styles.
 
-## Rules the shots must keep
+## Rules every design must keep
 
-- Real figures only, each cited as `<fact_key>#<column>` in `shot.json`. Adjusted values are labelled
-  "era-adjusted" and presented rank-led.
-- The attribution `Data: F1DB (CC BY 4.0)` is on the frame.
-- Vertical shots respect the safe box: top 270, bottom 670, left 65, right 130.
+- Real figures only: frames are computed from the staged rows, and every figure an annotation states
+  is cited as `<fact_key>#<column>` in `shot.json`.
+- The data clock advances monotonically for the whole run, and the picture is viz-led, with no
+  narration and no text-led story.
+- The attribution `Data: F1DB (CC BY 4.0)` is visible for the whole run.
+- Vertical designs keep critical content inside the safe box for the whole run: top 270, bottom 670,
+  left 65, right 130.
 - No league, team, sponsor or broadcaster marks, and no athlete photos. Illustration must read as
   illustration.
 - OFL fonts only. No network.
