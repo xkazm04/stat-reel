@@ -80,6 +80,13 @@ async function sync() {
   return after;
 }
 
+/** The contest runner cannot exec the Windows npm shim; point it at the real claude.exe when present. */
+function claudeBinEnv() {
+  if (process.env.CONTEST_CLAUDE_BIN || process.platform !== "win32" || !process.env.APPDATA) return {};
+  const exe = path.join(process.env.APPDATA, "npm", "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+  return existsSync(exe) ? { CONTEST_CLAUDE_BIN: exe } : {};
+}
+
 /** Page through the guarded query tool (it caps each answer at 5000 rows). */
 async function mcpAll(sql, order) {
   const rows = [];
@@ -172,7 +179,7 @@ async function loop() {
   mkdirSync(path.join(BOARD_VAULT, "Loops"), { recursive: true });
   writeFileSync(path.join(BOARD_VAULT, "Loops", `${id}.md`), `# ${id}\n\n- phase: ${loopPhase(ledger)}\n- shots per seat: ${shots}\n- contest: ${contestId}\n- started: ${new Date().toISOString()}\n\n## Brief\n\n${brief}\n`);
   console.log(`running seats for ${contestId} (this takes up to ${opt("timeout-min", "60")} min)...`);
-  const r2 = spawnSync(process.execPath, [CONTEST, "run", "--id", contestId], { cwd: REPO, stdio: "inherit", env: process.env });
+  const r2 = spawnSync(process.execPath, [CONTEST, "run", "--id", contestId], { cwd: REPO, stdio: "inherit", env: { ...process.env, ...claudeBinEnv() } });
   if (r2.status !== 0) die("contest run failed");
   console.log(`done. next: node board.mjs harvest --id ${id}`);
 }
