@@ -16,13 +16,15 @@ import type { Pipeline } from "./pipeline";
 import type { ProjectService } from "./projects";
 import type { Tools } from "./tools";
 import { metricsOverview } from "./metrics";
+import type { CalendarService } from "./calendar";
+import { type BoardService, DECISIONS, type Decision } from "./board";
 import type { Db } from "./db";
 
 export type AppDeps = {
-  db: Db; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
+  db: Db; calendar: CalendarService; board: BoardService; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
 };
 
-const SERVABLE = [paths.renders, paths.audio, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
+const SERVABLE = [paths.renders, paths.audio, paths.board, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
 const TYPES: Record<string, string> = { ".mp4": "video/mp4", ".png": "image/png", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".srt": "text/plain", ".vtt": "text/vtt", ".json": "application/json" };
 
 export function buildApp(d: AppDeps) {
@@ -78,6 +80,46 @@ export function buildApp(d: AppDeps) {
   app.post("/api/projects/:id/keyframes", async (c) => {
     const body = (await c.req.json()) as { frames_s: number[] };
     return c.json(await d.pipeline.renderKeyframes(c.req.param("id"), body.frames_s));
+  });
+
+  // ---- calendar (channels + scheduling of composed videos; ADR 006)
+  const bad = (c: { json: (b: unknown, s: 400) => Response }, e: unknown) => c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+  app.get("/api/calendar", (c) => {
+    const titles = new Map(d.projects.list().map((p) => [p.id, p]));
+    const slots = d.calendar.list({ from: c.req.query("from"), to: c.req.query("to") }).map((s) => ({ ...s, project: titles.get(s.project_id) ?? null }));
+    return c.json({ channels: d.calendar.channels(), ready: d.calendar.ready(), slots, now: new Date().toISOString() });
+  });
+  app.post("/api/calendar", async (c) => {
+    try {
+      const slot = d.calendar.schedule(await c.req.json());
+      d.calendar.tick(); // "publish now" = scheduled at or before now
+      return c.json(d.calendar.get(slot.id), 201);
+    } catch (e) { return bad(c, e); }
+  });
+  app.patch("/api/calendar/:id", async (c) => {
+    try { return c.json(d.calendar.reschedule(c.req.param("id"), ((await c.req.json()) as { publish_at: string }).publish_at)); } catch (e) { return bad(c, e); }
+  });
+  app.delete("/api/calendar/:id", (c) => {
+    try { return c.json(d.calendar.cancel(c.req.param("id"))); } catch (e) { return bad(c, e); }
+  });
+
+  // ---- board (design outputs + use-case backlog behind the owner's gate; ADR 006)
+  app.get("/api/board", (c) => c.json({ items: d.board.list({ status: c.req.query("status") }).map((i) => ({ ...i, image_url: `/files/board/${i.image}` })), decisions: DECISIONS }));
+  app.get("/api/board/feedback", (c) => c.json({ items: d.board.feedback(c.req.query("since")) }));
+  app.get("/api/board/:id", (c) => {
+    const i = d.board.get(c.req.param("id"));
+    return i ? c.json({ ...i, image_url: `/files/board/${i.image}` }) : c.json({ error: "not found" }, 404);
+  });
+  app.post("/api/board", async (c) => {
+    try { return c.json(d.board.create(await c.req.json()), 201); } catch (e) { return bad(c, e); }
+  });
+  app.post("/api/board/:id/decision", async (c) => {
+    try {
+      const b = (await c.req.json()) as { decision: Decision; note?: string };
+      const item = d.board.decide(c.req.param("id"), b.decision, b.note);
+      d.bus.emit({ type: "board.decided", id: item.id, decision: item.decision });
+      return c.json(item);
+    } catch (e) { return bad(c, e); }
   });
 
   // ---- metrics (cross-channel)

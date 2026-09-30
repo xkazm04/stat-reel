@@ -115,6 +115,46 @@ export const heatmapSnapshots = sqliteTable("heatmap_snapshots", {
   at: text("at").notNull(),
   cells_json: text("cells_json").notNull(),
 });
+export const channels = sqliteTable("channels", {
+  id: text("id").primaryKey(),
+  platform: text("platform").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull(),
+  note: text("note"),
+  created_at: text("created_at").notNull(),
+});
+export const schedule = sqliteTable("schedule", {
+  id: text("id").primaryKey(),
+  project_id: text("project_id").notNull(),
+  render_id: text("render_id").notNull(),
+  channel_id: text("channel_id").notNull(),
+  publish_at: text("publish_at").notNull(),
+  status: text("status").notNull(),
+  title: text("title"),
+  description: text("description"),
+  tags_json: text("tags_json"),
+  job_id: text("job_id"),
+  publication_id: text("publication_id"),
+  error: text("error"),
+  created_at: text("created_at").notNull(),
+});
+export const boardItems = sqliteTable("board_items", {
+  id: text("id").primaryKey(),
+  image: text("image").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  use_case_id: text("use_case_id"),
+  proposed_case_json: text("proposed_case_json"),
+  style_json: text("style_json"),
+  source_json: text("source_json"),
+  status: text("status").notNull(),
+  decision: text("decision"),
+  note: text("note"),
+  decided_at: text("decided_at"),
+  created_at: text("created_at").notNull(),
+});
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value_json: text("value_json").notNull(),
@@ -146,6 +186,14 @@ create table if not exists metrics_daily (publication_id text not null, date tex
   primary key (publication_id, date));
 create table if not exists heatmap_snapshots (run_id text primary key, at text not null, cells_json text not null);
 create table if not exists settings (key text primary key, value_json text not null);
+create table if not exists channels (id text primary key, platform text not null, name text not null, status text not null, note text,
+  created_at text not null);
+create table if not exists schedule (id text primary key, project_id text not null, render_id text not null, channel_id text not null,
+  publish_at text not null, status text not null, title text, description text, tags_json text, job_id text, publication_id text,
+  error text, created_at text not null);
+create table if not exists board_items (id text primary key, image text not null, width integer, height integer, title text not null,
+  summary text, use_case_id text, proposed_case_json text, style_json text, source_json text, status text not null, decision text,
+  note text, decided_at text, created_at text not null);
 `;
 
 export type Db = BetterSQLite3Database<Record<string, never>> & { $client: Database.Database };

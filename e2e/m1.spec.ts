@@ -5,7 +5,7 @@
  * the owner creates the Google Cloud app (packages/publish/SETUP.md).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
@@ -89,13 +89,33 @@ test("negative gate: a non-commercial source is refused on a monetized channel",
   expect(verdict.deny).toContain("source openf1 is non_commercial: not allowed on a monetized channel");
 });
 
-test("publish: private upload (dry until the Google app exists), captions, metrics row", async ({ page }) => {
-  await page.goto(`/studio/${projectId}`);
-  await page.getByTestId("publish").click();
-  await expect(page.getByTestId("publication-status")).toContainText(/private/i, { timeout: 120_000 });
+test("calendar: schedule the composed video now on YouTube -> private upload (dry until the Google app exists)", async ({ page }) => {
+  await page.goto("/calendar");
+  await expect(page.getByTestId(`ready-${projectId}`)).toBeVisible();
+  await page.getByTestId(`publish-now-${projectId}`).click();
+  await expect(page.getByTestId(`slot-${projectId}`)).toContainText(/private/i, { timeout: 120_000 });
   const detail = await (await page.request.get(`${API}/api/projects/${projectId}`)).json();
   const pub = detail.publications[0];
   expect(pub.visibility).toBe("private");
   expect(pub.external_id).toBeTruthy();
   expect(detail.project.status).toBe("published");
+  const cal = await (await page.request.get(`${API}/api/calendar`)).json();
+  expect(cal.slots.find((s: { project_id: string }) => s.project_id === projectId).status).toBe("published");
+});
+
+test("board: the owner's gate records accept / reject style / reject case / reject both", async ({ page, request }) => {
+  // a labelled e2e probe item (1x1 PNG) - the e2e app DB is fresh per run
+  const dir = path.resolve("data", "board", "items");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, "e2e-probe.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64"));
+  const pending = await (await request.post(`${API}/api/board`, { data: {
+    image: "items/e2e-probe.png", width: 1, height: 1, title: "e2e probe (not a design output)", use_case_id: "era-adjusted-rankings",
+    style: { id: "e2e-probe", name: "e2e probe" }, source: { skill: "e2e" },
+  } })).json();
+  await page.goto("/board");
+  await page.getByTestId(`board-item-${pending.id}`).click();
+  await page.getByTestId("reject-style").click();
+  await expect(page.getByTestId(`board-item-${pending.id}`)).toContainText(/rejected/i);
+  const after = await (await request.get(`${API}/api/board/${pending.id}`)).json();
+  expect(after.decision).toBe("reject_style");
 });

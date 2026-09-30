@@ -13,6 +13,8 @@ import { LlmService } from "./llm-service";
 import { IMPLEMENTED_COMPOSITIONS, Pipeline } from "./pipeline";
 import { ProjectService } from "./projects";
 import { makeTools } from "./tools";
+import { CalendarService } from "./calendar";
+import { BoardService } from "./board";
 import { Warehouse } from "./warehouse";
 
 export async function createServer() {
@@ -27,14 +29,19 @@ export async function createServer() {
   const pipeline = new Pipeline({ db, bus, runner, projects, wh });
   const tools = makeTools({ wh, projects, heatmap, pipeline });
   const llm = new LlmService(db, bus, runner, projects, tools);
+  const calendar = new CalendarService(db, bus, (params, projectId) => runner.enqueue("publish", params, projectId), modes.publish);
+  const board = new BoardService(db, paths.board);
+  mkdirSync(path.join(paths.board, "items"), { recursive: true });
   runner.resume();
-  const app = buildApp({ db, bus, runner, projects, heatmap, llm, tools, pipeline });
+  const scheduler = setInterval(() => calendar.tick(), 30_000);
+  scheduler.unref();
+  const app = buildApp({ db, calendar, board, bus, runner, projects, heatmap, llm, tools, pipeline });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     app.use("/*", serveStatic({ root: path.relative(process.cwd(), dist) }));
     app.get("*", serveStatic({ path: path.relative(process.cwd(), path.join(dist, "index.html")) }));
   }
-  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus };
+  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board };
 }
 
 if (process.argv[1] && /main\.(ts|js)$/.test(process.argv[1])) {

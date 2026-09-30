@@ -14,6 +14,7 @@ export const paths = {
   appDb: path.resolve(repoRoot, process.env.STATREEL_APP_DB ?? path.join(data, "app.sqlite")),
   renders: path.join(data, "renders"),
   audio: path.join(data, "audio"),
+  board: path.join(data, "board"),
   fixtures: path.join(repoRoot, "e2e", "fixtures"),
   fonts: path.join(repoRoot, "fonts"),
   policy: path.join(repoRoot, "policy"),
