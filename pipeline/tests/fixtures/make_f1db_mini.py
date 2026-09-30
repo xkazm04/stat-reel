@@ -25,7 +25,9 @@ def main() -> None:
     con.execute(f"create view seasons as select * from read_parquet('{(snap / 'seasons.parquet').as_posix()}') where year in ({seasons})")
     con.execute(f"""create view drivers as select * from read_parquet('{(snap / 'drivers.parquet').as_posix()}')
                     where id in (select driverId from races_race_results)""")
-    for name in ("races", "races_race_results", "seasons_driver_standings", "seasons", "drivers"):
+    con.execute(f"""create view constructors as select * from read_parquet('{(snap / 'constructors.parquet').as_posix()}')
+                    where id in (select constructorId from races_race_results)""")
+    for name in ("races", "races_race_results", "seasons_driver_standings", "seasons", "drivers", "constructors"):
         target = OUT / f"f1db-{name.replace('_', '-')}.csv"
         con.execute(f"copy (select * from {name}) to '{target.as_posix()}' (header, delimiter ',')")
         print(target.name, con.execute(f"select count(*) from {name}").fetchone()[0])

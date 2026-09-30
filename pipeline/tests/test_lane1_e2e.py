@@ -115,7 +115,8 @@ def test_conformed_core_and_mart_exist(replay_run):
     con = replay_run["con"]
     tables = {f"{s}.{t}" for s, t in con.execute("select table_schema, table_name from information_schema.tables").fetchall()}
     for rel in ("core.players", "core.seasons", "core.matches", "core.player_match_results", "core.player_season_stats",
-                "marts.mart_era_adjusted", "llm.f1_driver_era_adjusted", "llm.f1_driver_seasons"):
+                "marts.mart_era_adjusted", "llm.f1_driver_era_adjusted", "llm.f1_driver_seasons",
+                "core.teams", "llm.f1_race_results", "llm.f1_constructor_seasons", "llm.f1_driver_bios", "llm.f1_seasons"):
         assert rel in tables, rel
 
 
@@ -159,8 +160,8 @@ def test_lineage_marks_every_model_legal_from_f1db(replay_run):
 
 def test_llm_views_are_documented_for_the_model(replay_run):
     con = replay_run["con"]
-    undocumented = con.execute("""select column_name from duckdb_columns()
-        where schema_name = 'llm' and table_name = 'f1_driver_era_adjusted' and (comment is null or comment = '')""").fetchall()
+    undocumented = con.execute("""select table_name || '.' || column_name from duckdb_columns()
+        where schema_name = 'llm' and (comment is null or comment = '')""").fetchall()
     assert undocumented == []
     view_comment = con.execute("select comment from duckdb_views() where schema_name = 'llm' and view_name = 'f1_driver_era_adjusted'").fetchone()[0]
     assert view_comment and "F1DB" in view_comment
@@ -205,3 +206,23 @@ def test_live_lane1_end_to_end():
         assert n_seasons >= 76
     finally:
         con.close()
+
+
+def test_race_results_series_matches_the_mart_and_carries_fact_keys(replay_run):
+    """The time-evolution formats replay race by race: the series must add up to the mart."""
+    con = replay_run["con"]
+    diff = con.execute("""
+        with s as (select player_id, sum(points_current_system) filter (where not is_indianapolis) pts
+                   from llm.f1_race_results group by 1)
+        select count(*) from s join marts.mart_era_adjusted m using (player_id)
+        where abs(s.pts - m.points_current_system) > 1e-6""").fetchone()[0]
+    assert diff == 0
+    unique, total = con.execute("select count(distinct fact_key), count(*) from llm.f1_race_results").fetchone()
+    assert unique == total
+    assert con.execute("select count(*) from llm.f1_race_results where team_name is null").fetchone()[0] == 0
+
+
+def test_constructor_seasons_and_bios(replay_run):
+    con = replay_run["con"]
+    assert con.execute("select sum(wins) from llm.f1_constructor_seasons").fetchone()[0] ==         con.execute("select count(distinct race_id) from llm.f1_race_results where position_number = 1 and not is_indianapolis").fetchone()[0]
+    assert con.execute("select count(*) from llm.f1_driver_bios where date_of_birth is not null").fetchone()[0] > 100

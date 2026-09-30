@@ -16,6 +16,8 @@ select
     r.constructor_id        as team_id,
     r.position_number,
     r.position_text,
+    r.grid_position,
+    r.position_display_order,
     r.started,
     r.shared_car,
     coalesce(r.points_awarded, 0) as points_awarded,

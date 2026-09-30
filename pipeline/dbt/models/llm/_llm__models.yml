@@ -51,3 +51,62 @@ models:
       - {name: season_races, description: "Races held that season (Indianapolis excluded)."}
       - {name: championship_position, description: "Final Drivers' Championship position (null if unclassified)."}
       - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_race_results
+    description: >-
+      Every Grand Prix entry, race by race (1950 onwards): the time series for time-evolution videos
+      (wins races, points fights, record handovers). Source F1DB (CC BY 4.0), attribution required.
+    columns:
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: race_id, description: "f1db race id."}
+      - {name: season, description: "Championship year."}
+      - {name: round, description: "Round number within the season."}
+      - {name: race_date, description: "Race date."}
+      - {name: grand_prix_id, description: "Grand Prix slug (e.g. monaco); indianapolis for the Indy 500 rounds 1950-1960."}
+      - {name: race_name, description: "Official race name."}
+      - {name: is_indianapolis, description: "True for Indianapolis 500 rounds (separate field; excluded from per-start metrics)."}
+      - {name: player_id, description: "f1db driver id (slug)."}
+      - {name: display_name, description: "Driver name as commonly used."}
+      - {name: team_id, description: "f1db constructor id."}
+      - {name: team_name, description: "Constructor name."}
+      - {name: entry_order, description: "Order of this entry in the race classification (a driver who took over a team-mate's car has two entries)."}
+      - {name: grid_position, description: "Starting grid position (null when not recorded)."}
+      - {name: position_number, description: "Classified finishing position (null if not classified)."}
+      - {name: position_text, description: "Result text (number, DNF, DNQ, DNS, DSQ, NC, EX, DNP, DNPQ)."}
+      - {name: started, description: "True if the driver took the start."}
+      - {name: shared_car, description: "True when the car was shared (1950s); points split."}
+      - {name: points_awarded, description: "Points awarded under that season's rules."}
+      - {name: points_current_system, description: "Points under the current system (25-18-15-12-10-8-6-4-2-1)."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_constructor_seasons
+    description: >-
+      Constructor (team) per season: starts, wins, podium finishes, points. For team-dynasty timelines.
+      Source F1DB (CC BY 4.0), attribution required.
+    columns:
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: team_id, description: "f1db constructor id."}
+      - {name: team_name, description: "Constructor name."}
+      - {name: season, description: "Championship year."}
+      - {name: races_started, description: "Races in which the team had at least one starter (Indianapolis excluded)."}
+      - {name: wins, description: "Race wins that season (Indianapolis excluded)."}
+      - {name: podium_finishes, description: "Top-3 finishes by the team's cars (one race can count twice)."}
+      - {name: points_awarded, description: "Drivers' points scored in the team's cars, as awarded."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_driver_bios
+    description: Driver biographical facts (date of birth, nationality) for age-based timelines. Source F1DB (CC BY 4.0).
+    columns:
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: player_id, description: "f1db driver id (slug)."}
+      - {name: display_name, description: "Driver name as commonly used."}
+      - {name: full_name, description: "Full legal name."}
+      - {name: date_of_birth, description: "Date of birth (null if unknown)."}
+      - {name: nationality, description: "Nationality country id."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_seasons
+    description: Seasons with the number of races held. Source F1DB (CC BY 4.0).
+    columns:
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: season, description: "Championship year."}
+      - {name: races_held, description: "Races held with results."}
+      - {name: races_held_excl_indianapolis, description: "Races held, Indianapolis 500 excluded."}
+      - {name: races_scheduled, description: "Races on the calendar (future rounds included for the current season)."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}
