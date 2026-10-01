@@ -46,3 +46,31 @@ brief.
 
 **Budget.** Three variants that pass are worth far more than three ambitious ones that fail. Finish
 one variant through `PASS`, then start the next.
+
+## Images: art that supports the data (encouraged)
+
+You can generate images with your `image_gen` tool: textures, illustrated backdrops, scene art and
+motifs. Combine them with the code-drawn chart so the video is well-executed art, not another plain
+x/y chart. The rules:
+
+- **Code draws everything checkable.** Bars, lines, axes, labels, numbers, the data clock and names
+  come from the data in code. Images carry texture, mood and scene only. To texture a bar, use the
+  image as a fill clipped by the bar shape that code draws from the data.
+- **No text in any image.** End every prompt with "no text, letters, numbers, logos or watermarks".
+  Avoid nouns that make the model write: scoreboards, jerseys, signage, tickets, dashboards, labelled
+  maps. Describe shapes doing things instead. Look at each image and discard any that contain
+  letters.
+- **No quantities, trends or arrows in images.** A rising mural behind a chart claims a trend the
+  data may not show.
+- **No real people and no likeness.** Never put a generated figure where a real driver, artist or
+  team is named. Use a monogram, silhouette shape or empty state there. No team, sponsor or league
+  marks.
+- **Illustrated, not photo-real.** Photo-real footage claims that a real event was filmed.
+- **Leave room.** Say in the prompt where the chart, labels and clock will sit, for example "empty
+  calm area in the centre third".
+- **One look across a series.** Put your style first in every prompt (technique, palette with
+  roles, finish) and keep it word for word between images of the same variant.
+- **Files.** Save images inside the variant folder (for example `variant-1/img/`), convert them to
+  JPG or WebP under 2.5 MB each (`ffmpeg -i in.png -q:v 3 out.jpg`) and keep the total under 15 MB.
+  Delete unused files, and list every image in `shot.json` `images[]` with its exact prompt and
+  role (texture, backdrop, scene, motif or fill). `check.mjs` enforces all of this.

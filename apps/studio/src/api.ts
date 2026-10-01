@@ -231,6 +231,69 @@ export type BoardItem = {
 };
 export type BoardResponse = { items: BoardItem[]; decisions: BoardDecision[] };
 
+/** GET /api/styles (apps/server/src/library.ts, ADR 008): every style on the Board, verdict + owner management. */
+export type StyleOverride = "locked" | "retired";
+export type StyleStatus = "accepted" | "rejected" | "open" | StyleOverride;
+export type StyleEntry = {
+  id: string;
+  name: string;
+  notes: string | null;
+  verdict: "accepted" | "rejected" | "open";
+  status: StyleStatus;
+  owner_note: string | null;
+  hero_item_id: string | null;
+  accepts: number;
+  style_rejects: number;
+  pending: number;
+  total: number;
+  item_ids: string[];
+  cases: string[];
+  updated_at: string | null;
+};
+export type StylePatch = { status?: StyleOverride | null; note?: string | null; hero_item_id?: string | null };
+
+/** GET /api/cases (ADR 008): use cases proposed as text by the case loop, behind the owner's gate. */
+export const CASE_DECISIONS = ["accept", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate"] as const;
+export type CaseDecision = (typeof CASE_DECISIONS)[number];
+export type CaseDomain = "f1" | "sports" | "games" | "geoeconomy" | "music" | "culture" | "science" | "other";
+export type CaseSource = {
+  name: string;
+  url: string;
+  license: string;
+  coverage?: string;
+  registry_id?: string | null;
+  class?: string;
+  confidence?: "high" | "medium" | "low";
+};
+export type CaseIdea = {
+  id: string;
+  title: string;
+  pitch: string;
+  domain: CaseDomain;
+  arc: string;
+  insight: string;
+  why_lasts: string;
+  tension: { expectation: string; reality: string; strength: "strong" | "moderate" | "weak" };
+  unknowns: string[];
+  /** dated turns of the story (>= 4) */
+  beats: { at: string; what: string }[];
+  timeline: { unit: string; from: number; to: number; years_from: number; years_to: number };
+  span_years: number;
+  chart_ideas: string[];
+  requires: string[];
+  sources: CaseSource[];
+  evidence: string[];
+  /** staged = data already in the warehouse; registry = source approved, not ingested; new-source = needs the owner's approval */
+  data_status: "staged" | "registry" | "new-source";
+  source: Record<string, unknown> | null;
+  status: "pending" | "accepted" | "rejected" | string;
+  decision: CaseDecision | null;
+  note: string | null;
+  decided_at: string | null;
+  created_at: string;
+};
+export type CasesResponse = { ideas: CaseIdea[]; decisions: CaseDecision[]; min_span_years: number };
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -313,6 +376,14 @@ export const api = {
       decision,
       note: note?.trim() || undefined,
     }),
+  /** The style library: every style on the Board with its verdict and the owner's management. */
+  styles: () => request<{ styles: StyleEntry[] }>("GET", "/api/styles"),
+  /** Lock / retire (null clears), the owner's note, the hero item. */
+  updateStyle: (id: string, patch: StylePatch) => request<StyleEntry>("PATCH", `/api/styles/${enc(id)}`, patch),
+  /** Case ideas from the case loop (text only, no art style). */
+  cases: () => request<CasesResponse>("GET", "/api/cases"),
+  decideCase: (id: string, decision: CaseDecision, note?: string) =>
+    request<CaseIdea>("POST", `/api/cases/${enc(id)}/decision`, { decision, note: note?.trim() || undefined }),
   /** A JSON file the server exposes under /files (e.g. a render's manifest.json). */
   file: <T>(path: string) => request<T>("GET", path),
 };
@@ -328,6 +399,8 @@ export const qk = {
   metrics: ["metrics"] as const,
   calendar: ["calendar"] as const,
   board: ["board"] as const,
+  styles: ["styles"] as const,
+  cases: ["cases"] as const,
   file: (path: string) => ["file", path] as const,
   health: ["health"] as const,
 };

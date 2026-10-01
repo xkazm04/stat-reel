@@ -12,6 +12,9 @@
  *                                            that pass the full check - facts, page errors, longevity, seek)
  *   node board.mjs mass --prefix <p> --participants <specs> [--target 100] [--max-rounds 20] [--shots 3] [--timeout-min 120]
  *                                            round after round of loop + harvest --strict until the target is on the Board
+ *   node board.mjs cases --id <loop> [--count 8] [--participants <specs>] [--round 0] [--timeout-min 90]
+ *                                            the case loop: use cases as text (no art style), one domain per seat
+ *   node board.mjs harvest-cases --id <loop> post every case that passes check-cases to /api/cases
  *   node board.mjs import --image <png> --title <t> --use-case <id> --style-id <id> --style-name <n> [--summary s]
  *
  * Needs the StatReel server on 127.0.0.1:8787 (it stages data through the guarded MCP `query` tool and
@@ -23,8 +26,9 @@ import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSyn
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, rejectedCases, renderBrief, renderLedgerMarkdown, seatLanes, stabilityProbe, validateDesign } from "./lib.mjs";
+import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, rejectedCases, renderBrief, titleKey, renderLedgerMarkdown, seatLanes, stabilityProbe, validateDesign } from "./lib.mjs";
 import { inspect } from "./check-design.mjs";
+import { checkCases } from "./check-cases.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../../../..");
@@ -74,6 +78,10 @@ async function sync() {
   const before = readLedger();
   const { items } = await api(`/api/board/feedback${before.cursor ? `?since=${encodeURIComponent(before.cursor)}` : ""}`);
   const after = applyFeedback(before, items);
+  // the owner's style management (Board · Styles): locked signatures and retired styles reach the brief
+  const { styles } = await api("/api/styles");
+  after.style_status = Object.fromEntries(styles.filter((s) => s.status === "locked" || s.status === "retired" || s.owner_note)
+    .map((s) => [s.id, { status: s.status === "locked" || s.status === "retired" ? s.status : null, note: s.owner_note }]));
   writeLedger(after);
   const fresh = items.filter((i) => !before.seen.includes(i.id));
   if (fresh.length) {
@@ -362,6 +370,135 @@ async function mass() {
   console.log(`mass ${prefix}: ${await fromThisRun()}/${target} on the Board`);
 }
 
+// ---- case loop: use cases as text, without art style (ADR 008) ------------------------------
+
+/** One domain per seat so parallel seats do not converge; rotated by round. */
+const CASE_LANES = [
+  "**Sports beyond F1**: football, basketball, tennis, cycling, athletics, the Olympics, cricket, rugby. Long careers, dynasties, records and nations rising.",
+  "**Games**: chess (ratings, world champions, openings), esports, video game sales and player counts, speedrun records, board games. Decades of play.",
+  "**Geo-economy**: GDP, trade, population, energy, currencies, inflation, debt, cities, migration, commodities. Nations overtaking nations.",
+  "**Music**: charts, genres, artist origins, song length and tempo, album versus single, festivals, instruments. Decades of taste.",
+  "**Culture and science**: film, books, space launches, Nobel prizes, aviation, the internet, climate, inventions, museums. Long human records.",
+  "**Motorsport depth and wildcards**: F1 stories the owner has not judged that truly last decades (the data is staged), plus any domain outside the five above with an excellent long series.",
+];
+
+async function caseContext(count) {
+  const [{ items }, ideas, heat, src] = await Promise.all([api("/api/board?status=all"), api("/api/cases?status=all"), api("/api/heatmap"), api("/api/sources")]);
+  const sources = src.sources ?? src;
+  const tally = new Map();
+  for (const i of items) {
+    if (i.status === "archived") continue;
+    const k = i.use_case_id ?? (i.proposed_case ? `proposed:${i.proposed_case.name}` : null);
+    if (!k) continue;
+    const e = tally.get(k) ?? { name: i.use_case_id ? (heat.usecases.find((u) => u.id === i.use_case_id)?.name ?? k) : i.proposed_case.name, pitch: i.proposed_case?.pitch ?? heat.usecases.find((u) => u.id === i.use_case_id)?.arc ?? "", acc: 0, rej: 0 };
+    if (i.decision === "accept") e.acc++;
+    if (i.decision === "reject_case" || i.decision === "reject_both") e.rej++;
+    tally.set(k, e);
+  }
+  const accepted = [...tally.values()].filter((e) => e.acc > 0 && e.acc >= e.rej).map((e) => `**${e.name}** - ${e.pitch}`);
+  const rejected = [...tally.values()].filter((e) => e.rej > e.acc).map((e) => `${e.name}${e.pitch ? ` - ${e.pitch}` : ""}`);
+  for (const d of ideas.ideas) {
+    if (d.decision === "accept") accepted.push(`**${d.title}** (${d.domain}) - ${d.pitch}`);
+    else if (d.decision) rejected.push(`${d.title} (${d.domain}) - rejected: ${d.decision.replace("reject_", "").replace("_", " ")}${d.note ? `; owner: "${d.note}"` : ""}`);
+  }
+  const existing = [...new Set([...heat.usecases.map((u) => u.name), ...[...tally.values()].map((e) => e.name), ...ideas.ideas.map((d) => d.title)])];
+  const registry = sources.map((s) => `- \`${s.id}\` (${s.sport}) verdict **${s.verdict}**, ${s.license ?? "licence unknown"}, ${s.coverage ? `${s.coverage.from}-${s.coverage.to}` : ""} ${s.url}`);
+  return {
+    accepted, rejected, existing, registry, count,
+    registry_ids: sources.map((s) => s.id), avoid_ids: sources.filter((s) => s.verdict === "avoid").map((s) => s.id),
+  };
+}
+
+async function casesLoop() {
+  const id = opt("id") ?? die("--id <loop> is required (e.g. cs-001)");
+  const count = Number(opt("count", "8"));
+  const round = Number(opt("round", "0"));
+  const contestId = `cases-${id}`;
+  const stageDir = path.join(REPO, ".contest", "staging", contestId);
+  const data = await stage(stageDir);
+  const ctx = await caseContext(count);
+  writeFileSync(path.join(data, "case-context.json"), JSON.stringify({ existing: ctx.existing, registry_ids: ctx.registry_ids, avoid_ids: ctx.avoid_ids, count }));
+  writeFileSync(path.join(data, "check-cases.mjs"), [
+    "// The board harness for case ideas: node data/check-cases.mjs (run from your workspace).",
+    'import path from "node:path";', 'import { fileURLToPath } from "node:url";',
+    `const { main } = await import(${JSON.stringify(pathToFileURL(path.join(HERE, "check-cases.mjs")).href)});`,
+    "await main(process.cwd(), path.dirname(fileURLToPath(import.meta.url)));", "",
+  ].join("\n"));
+  const bullets = (rows) => (rows.length ? rows.map((r) => (r.startsWith("- ") ? r : `- ${r}`)).join("\n") : "- (none yet)");
+  const template = readFileSync(path.join(HERE, "..", "references", "case-brief.md"), "utf8");
+  const brief = template.replace(/\{\{(\w+)\}\}/g, (m, k) => ({
+    accepted_cases: bullets(ctx.accepted), rejected_cases: bullets(ctx.rejected), existing: bullets(ctx.existing),
+    registry_sources: ctx.registry.join("\n"), count: String(count), lane: "{{lane}}",
+  })[k] ?? m);
+  writeFileSync(path.join(stageDir, "BRIEF.md"), brief);
+  const init = ["init", "--id", contestId, "--title", `StatReel use cases - ${id}`, "--brief", path.join(stageDir, "BRIEF.md"),
+    "--variants", "1", "--review", "owner", "--data", data, "--timeout-min", opt("timeout-min", "90"), "--vault", VAULT, "--vault-subdir", "Board/Contests"];
+  if (opt("participants")) init.push("--participants", opt("participants"));
+  if (spawnSync(process.execPath, [CONTEST, ...init], { cwd: REPO, stdio: "inherit" }).status !== 0) die("contest init failed");
+  const entries = path.join(ARENA, contestId, "entries");
+  const seats = readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md"))).sort();
+  for (const [si, seat] of seats.entries()) {
+    const f = path.join(entries, seat, "PARTICIPANT.md");
+    let p = readFileSync(f, "utf8");
+    // the contest template is written for UI prototypes; a case seat researches and writes JSON
+    p = p.replace(/Libraries only from a public CDN[\s\S]*?does not\./, "Use web search to verify every source; the deliverable is variant-1/cases.json, nothing visual.");
+    p = p.replace(/\{\{lane\}\}/g, CASE_LANES[(si + round) % CASE_LANES.length]);
+    p += `\n\n## Your lane\n\n${CASE_LANES[(si + round) % CASE_LANES.length]}\n\nDeliver variant-1/cases.json only (no index.html needed), then run \`node data/check-cases.mjs\` until it prints PASS.\n`;
+    writeFileSync(f, p);
+    const b = path.join(entries, seat, "BRIEF.md");
+    if (existsSync(b)) writeFileSync(b, readFileSync(b, "utf8").replace(/\{\{lane\}\}/g, CASE_LANES[(si + round) % CASE_LANES.length]));
+  }
+  console.log(`running case seats for ${contestId} (up to ${opt("timeout-min", "90")} min)...`);
+  const r = spawnSync(process.execPath, [CONTEST, "run", "--id", contestId], { cwd: REPO, stdio: "inherit", env: { ...process.env, ...claudeBinEnv() } });
+  if (r.status !== 0) die("contest run failed");
+  console.log(`done. next: node board.mjs harvest-cases --id ${id}`);
+}
+
+async function harvestCases() {
+  const id = opt("id") ?? die("--id <loop> is required");
+  const contestId = `cases-${id}`;
+  const entries = path.join(ARENA, contestId, "entries");
+  if (!existsSync(entries)) die(`no arena for ${contestId}`);
+  const stageData = path.join(REPO, ".contest", "staging", contestId, "data");
+  const ctx = JSON.parse(readFileSync(path.join(stageData, "case-context.json"), "utf8"));
+  const tables = {};
+  for (const f of readdirSync(stageData).filter((f) => f.startsWith("f1_") && f.endsWith(".json"))) tables[f.slice(0, -5)] = JSON.parse(readFileSync(path.join(stageData, f), "utf8"));
+  const existing = [...ctx.existing, ...(await api("/api/cases?status=all")).ideas.map((d) => d.title)];
+  const report = [];
+  let posted = 0;
+  for (const seat of readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md"))).sort()) {
+    const file = path.join(entries, seat, "variant-1", "cases.json");
+    let cases = [];
+    try {
+      cases = JSON.parse(readFileSync(file, "utf8"));
+    } catch (e) {
+      report.push({ seat, error: `cases.json missing or invalid: ${e.message}` });
+      console.log(`skip ${seat}: cases.json missing or invalid`);
+      continue;
+    }
+    const r = checkCases(cases, { tables, existing, registryIds: ctx.registry_ids, avoidIds: ctx.avoid_ids });
+    for (const c of r.cases) {
+      if (c.errors.length) {
+        report.push({ seat, title: c.title, ok: false, errors: c.errors });
+        console.log(`skip ${seat} "${c.title}": ${c.errors.join("; ")}`);
+        continue;
+      }
+      try {
+        const idea = await api("/api/cases", { ...cases[c.index], source: { skill: "board", loop: id, contest: contestId, seat } });
+        existing.push(idea.title);
+        report.push({ seat, title: c.title, ok: true, id: idea.id });
+        console.log(`posted ${idea.id}  [${idea.domain}] ${idea.title} (${idea.timeline.years_from}-${idea.timeline.years_to}, ${idea.data_status})`);
+        posted++;
+      } catch (e) {
+        report.push({ seat, title: c.title, ok: false, errors: [e.message] });
+        console.log(`refused ${seat} "${c.title}": ${e.message}`);
+      }
+    }
+  }
+  writeFileSync(path.join(ARENA, contestId, "harvest.json"), JSON.stringify({ id, posted, report }, null, 2));
+  console.log(`${posted} case idea(s) in the Use cases inbox. Review them at /board?tab=cases.`);
+}
+
 async function status() {
   const l = readLedger();
   const { items } = await api("/api/board");
@@ -393,6 +530,6 @@ async function stageOnly() {
   console.log(`staged ${data} and ${path.join(dir, "BRIEF.md")} (no seats run)`);
 }
 
-const cmds = { sync, status, loop, harvest, mass, import: importImage, stage: stageOnly };
+const cmds = { sync, status, loop, harvest, mass, cases: casesLoop, "harvest-cases": harvestCases, import: importImage, stage: stageOnly };
 if (!cmds[cmd]) die(`usage: board.mjs ${Object.keys(cmds).join("|")} ...`);
 await cmds[cmd]();

@@ -47,16 +47,41 @@ export function loopPhase(ledger, { minDecisions = 12 } = {}) {
 const bullets = (rows) => (rows.length ? rows.map((r) => `- ${r}`).join("\n") : "- (none yet)");
 const quoteNotes = (notes) => (notes.length ? ` - owner: ${notes.slice(-3).map((n) => `"${n}"`).join("; ")}` : "");
 
+/**
+ * Chart forms the Board already holds many times over: the brief names them so seats stop
+ * reaching for the same x/y chart. `min` is the count from which a form counts as overused.
+ */
+export function overusedForms(board, min = 5) {
+  const norm = (f) => String(f).toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+  const n = new Map();
+  for (const i of board) {
+    const f = i.source?.chart_form;
+    if (!f || i.status === "archived") continue;
+    const k = norm(f);
+    n.set(k, (n.get(k) ?? 0) + 1);
+  }
+  return [...n].filter(([, c]) => c >= min).sort((a, b) => b[1] - a[1]).map(([form, count]) => ({ form, count }));
+}
+
 export function renderBrief({ template, ledger, shots, board = [], extra = {} }) {
   const styles = Object.entries(ledger.styles);
-  const accepted = styles.filter(([, s]) => s.accepts > 0 && s.accepts >= s.style_rejects)
-    .map(([id, s]) => `**${s.name}** (\`${id}\`) - ${s.accepts} accepted, ${s.style_rejects} style-rejected${quoteNotes(s.notes)}`);
-  const rejected = styles.filter(([, s]) => s.style_rejects > s.accepts)
-    .map(([id, s]) => `**${s.name}** (\`${id}\`) - ${s.style_rejects} style-rejected${quoteNotes(s.notes)}`);
+  const owner = ledger.style_status ?? {};
+  const statusOf = (id) => owner[id]?.status ?? null;
+  const ownerNote = (id) => (owner[id]?.note ? ` - owner on the style: "${owner[id].note}"` : "");
+  const locked = styles.filter(([id]) => statusOf(id) === "locked")
+    .map(([id, s]) => `**${s.name}** (\`${id}\`)${ownerNote(id)}${quoteNotes(s.notes)}`);
+  const accepted = styles.filter(([id, s]) => !statusOf(id) && s.accepts > 0 && s.accepts >= s.style_rejects)
+    .map(([id, s]) => `**${s.name}** (\`${id}\`) - ${s.accepts} accepted, ${s.style_rejects} style-rejected${ownerNote(id)}${quoteNotes(s.notes)}`);
+  const rejected = [
+    ...styles.filter(([id, s]) => statusOf(id) !== "locked" && statusOf(id) !== "retired" && s.style_rejects > s.accepts)
+      .map(([id, s]) => `**${s.name}** (\`${id}\`) - ${s.style_rejects} style-rejected${quoteNotes(s.notes)}`),
+    ...styles.filter(([id]) => statusOf(id) === "retired").map(([id, s]) => `**${s.name}** (\`${id}\`) - retired by the owner${ownerNote(id)}`),
+  ];
+  const overused = overusedForms(board).map((o) => `${o.form} (${o.count} on the Board)`);
   const cases = Object.entries(ledger.cases).map(([id, c]) => `\`${id}\` ${c.name}${c.pitch ? ` - ${c.pitch}` : ""}: ${c.accepts} accepted, ${c.case_rejects} case-rejected${quoteNotes(c.notes)}`);
   const tried = board.filter((i) => i.status === "pending")
     .map((i) => `**${i.style?.name}** (\`${i.style?.id}\`) on ${i.use_case_id ?? `proposed: ${i.proposed_case?.name}`} - "${i.title}"`);
-  const vars = { phase: loopPhase(ledger), shots: String(shots), tried: bullets(tried), styles_accepted: bullets(accepted), styles_rejected: bullets(rejected), cases: bullets(cases), decisions: String(ledger.seen.length), ...extra };
+  const vars = { phase: loopPhase(ledger), shots: String(shots), tried: bullets(tried), styles_locked: bullets(locked), styles_accepted: bullets(accepted), styles_rejected: bullets(rejected), overused: bullets(overused), cases: bullets(cases), decisions: String(ledger.seen.length), ...extra };
   return template.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? vars[k] : m));
 }
 
@@ -196,4 +221,62 @@ export function seatLanes(caseIds, seats, round = 0, per = 2) {
 /** Case ids the owner rejected more often than accepted - lanes skip them. */
 export function rejectedCases(ledger) {
   return Object.entries(ledger.cases).filter(([, c]) => c.case_rejects > c.accepts).map(([id]) => id);
+}
+
+// ---- case ideas (text-only use cases; mirrors apps/server/src/library.ts validateCaseIdea) ----
+
+export const CASE_DOMAINS = ["f1", "sports", "games", "geoeconomy", "music", "culture", "science", "other"];
+export const DATA_STATUSES = ["staged", "registry", "new-source"];
+export const MIN_SPAN_YEARS = 10;
+export const MIN_BEATS = 4;
+
+export function validateCaseIdea(c) {
+  const e = [];
+  if (!c || typeof c !== "object") return ["not an object"];
+  for (const k of ["title", "pitch", "arc", "insight", "why_lasts"]) if (!c[k] || !String(c[k]).trim()) e.push(`${k} is required`);
+  const t = c.tension;
+  if (!t?.expectation?.trim() || !t?.reality?.trim() || !["strong", "moderate", "weak"].includes(t?.strength)) e.push("tension {expectation, reality, strength: strong|moderate|weak} is required");
+  if (!Array.isArray(c.beats) || c.beats.filter((b) => b?.at && b?.what).length < MIN_BEATS) e.push(`beats: at least ${MIN_BEATS} dated turns {at, what}`);
+  if (!CASE_DOMAINS.includes(c.domain)) e.push(`domain must be one of ${CASE_DOMAINS.join(", ")}`);
+  if (!DATA_STATUSES.includes(c.data_status)) e.push(`data_status must be one of ${DATA_STATUSES.join(", ")}`);
+  const tl = c.timeline;
+  if (!tl || typeof tl.years_from !== "number" || typeof tl.years_to !== "number" || !tl.unit || typeof tl.from !== "number" || typeof tl.to !== "number") e.push("timeline {unit, from, to, years_from, years_to} (numbers) is required");
+  else if (tl.years_to - tl.years_from < MIN_SPAN_YEARS) e.push(`timeline covers ${tl.years_to - tl.years_from} years; needs at least ${MIN_SPAN_YEARS}`);
+  if (!Array.isArray(c.sources) || !c.sources.length) e.push("sources: at least one {name, url, license}");
+  else for (const s of c.sources) if (!s?.name || !s?.url || !s?.license) e.push(`source ${s?.name ?? "?"} needs name, url and license`);
+  return e;
+}
+
+/** Normalised title for de-duplication across seats and against ideas already on the Board. */
+export const titleKey = (s) => String(s).toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+// ---- generated images in a design (texture / backdrop / scene / motif; never data) ----------
+
+export const IMAGE_ROLES = ["texture", "backdrop", "scene", "motif", "fill"];
+export const MAX_IMAGE_BYTES = 2.5 * 1024 * 1024;
+export const MAX_IMAGES_BYTES = 15 * 1024 * 1024;
+const NO_TEXT = /no (text|letters|lettering|words)/i;
+
+/**
+ * shot.json `images` against the files in the variant folder. `files` maps a relative path to its
+ * byte size (every image file in the folder). Code draws the data; images carry texture, mood and
+ * scene only, so every prompt carries the text ban and every image file is listed with its prompt.
+ */
+export function checkImages(images, files) {
+  const e = [];
+  const listed = new Set();
+  let total = 0;
+  for (const [i, im] of (images ?? []).entries()) {
+    const f = String(im?.file ?? "").replace(/\\/g, "/").replace(/^\.\//, "");
+    if (!f || f.includes("..") || f.startsWith("/")) { e.push(`images[${i}].file must be a path inside the variant folder`); continue; }
+    listed.add(f);
+    if (!(f in files)) { e.push(`images[${i}] ${f} does not exist`); continue; }
+    total += files[f];
+    if (files[f] > MAX_IMAGE_BYTES) e.push(`${f} is ${(files[f] / 1048576).toFixed(1)} MB; compress it under 2.5 MB (jpg/webp)`);
+    if (!IMAGE_ROLES.includes(im.role)) e.push(`images[${i}].role must be one of ${IMAGE_ROLES.join(", ")}`);
+    if (!im.prompt || !NO_TEXT.test(im.prompt)) e.push(`images[${i}].prompt must be recorded and carry the text ban ("no text, letters, numbers, logos")`);
+  }
+  for (const f of Object.keys(files)) if (!listed.has(f)) e.push(`${f} is not listed in shot.json images[] (record every generated image with its prompt and role)`);
+  if (total > MAX_IMAGES_BYTES) e.push(`images total ${(total / 1048576).toFixed(1)} MB; keep all images under 15 MB`);
+  return e;
 }

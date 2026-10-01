@@ -157,6 +157,38 @@ export const boardItems = sqliteTable("board_items", {
   decided_at: text("decided_at"),
   created_at: text("created_at").notNull(),
 });
+export const boardStyles = sqliteTable("board_styles", {
+  id: text("id").primaryKey(),
+  status: text("status"),
+  note: text("note"),
+  hero_item_id: text("hero_item_id"),
+  updated_at: text("updated_at").notNull(),
+});
+export const caseIdeas = sqliteTable("case_ideas", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  pitch: text("pitch").notNull(),
+  domain: text("domain").notNull(),
+  arc: text("arc").notNull(),
+  insight: text("insight").notNull(),
+  why_lasts: text("why_lasts").notNull(),
+  tension_json: text("tension_json").notNull(),
+  unknowns_json: text("unknowns_json").notNull(),
+  beats_json: text("beats_json").notNull(),
+  timeline_json: text("timeline_json").notNull(),
+  span_years: real("span_years").notNull(),
+  chart_ideas_json: text("chart_ideas_json").notNull(),
+  requires_json: text("requires_json").notNull(),
+  sources_json: text("sources_json").notNull(),
+  evidence_json: text("evidence_json").notNull(),
+  data_status: text("data_status").notNull(),
+  source_json: text("source_json"),
+  status: text("status").notNull(),
+  decision: text("decision"),
+  note: text("note"),
+  decided_at: text("decided_at"),
+  created_at: text("created_at").notNull(),
+});
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value_json: text("value_json").notNull(),
@@ -196,6 +228,12 @@ create table if not exists schedule (id text primary key, project_id text not nu
 create table if not exists board_items (id text primary key, image text not null, video text, duration_s real, width integer, height integer, title text not null,
   summary text, use_case_id text, proposed_case_json text, style_json text, source_json text, status text not null, decision text,
   note text, decided_at text, created_at text not null);
+create table if not exists board_styles (id text primary key, status text, note text, hero_item_id text, updated_at text not null);
+create table if not exists case_ideas (id text primary key, title text not null, pitch text not null, domain text not null, arc text not null,
+  insight text not null, why_lasts text not null, tension_json text not null, unknowns_json text not null, beats_json text not null, timeline_json text not null,
+  span_years real not null, chart_ideas_json text not null, requires_json text not null, sources_json text not null,
+  evidence_json text not null, data_status text not null, source_json text, status text not null, decision text, note text,
+  decided_at text, created_at text not null);
 `;
 
 export type Db = BetterSQLite3Database<Record<string, never>> & { $client: Database.Database };
@@ -213,6 +251,7 @@ export function openDb(file: string): Db {
   };
   addColumn("board_items", "video", "text");
   addColumn("board_items", "duration_s", "real");
+  addColumn("case_ideas", "beats_json", "text not null default '[]'");
   return drizzle(sqlite) as Db;
 }
 

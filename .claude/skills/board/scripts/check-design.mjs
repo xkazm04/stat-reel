@@ -1,11 +1,11 @@
 // One design, checked the way harvest checks it. Seats run it from their workspace through the
 // staged `data/check.mjs` wrapper (`node data/check.mjs variant-1`); harvest --strict calls inspect().
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { assessLongevity, FORMATS, longevitySamples, resolveFacts, stabilityProbe, validateDesign } from "./lib.mjs";
+import { assessLongevity, checkImages, FORMATS, longevitySamples, resolveFacts, stabilityProbe, validateDesign } from "./lib.mjs";
 
 /** Owner rule (2026-10-01): nothing on screen is small. Every readable text is >= 28 px in the artboard. */
 export const MIN_TEXT_PX = 28;
@@ -96,6 +96,17 @@ export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
   const facts = resolveFacts(meta.facts, data.tables);
   if (facts.cited === 0) errors.push("facts is empty: cite every figure an annotation states as <fact_key>#<column>");
   if (facts.unresolved.length) errors.push(`${facts.unresolved.length} fact ref(s) do not exist in data/: ${facts.unresolved.slice(0, 3).join(", ")}`);
+  // generated images: every image file listed with prompt + role, text-banned, small (lib.checkImages)
+  const imageFiles = {};
+  const walk = (dir, rel = "") => {
+    for (const f of readdirSync(dir, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${f.name}` : f.name;
+      if (f.isDirectory()) walk(path.join(dir, f.name), r);
+      else if (/\.(png|jpe?g|webp|avif|gif)$/i.test(f.name)) imageFiles[r] = statSync(path.join(dir, f.name)).size;
+    }
+  };
+  walk(variantDir);
+  errors.push(...checkImages(meta.images, imageFiles));
   const html = path.join(variantDir, "index.html");
   if (!existsSync(html)) return { ok: false, errors: [...errors, "index.html is missing"], meta, facts };
   for (const f of readdirSync(variantDir).filter((f) => /\.(html|js|css)$/.test(f))) {

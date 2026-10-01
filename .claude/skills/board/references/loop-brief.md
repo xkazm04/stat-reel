@@ -36,11 +36,20 @@ Everything is in `data/`. Read `data/SCHEMA.md` first.
 
 ## What the owner has said so far (the Board ledger)
 
+Locked signatures. Rebuild these faithfully on new use cases (same palette roles, type and
+treatment), with text at 28 px or more:
+{{styles_locked}}
+
 Accepted styles, the floor to build on (never copy one):
 {{styles_accepted}}
 
-Rejected styles, never repeat these:
+Rejected or retired styles, never repeat these:
 {{styles_rejected}}
+
+Chart forms the Board already holds many times over. Do not use them again unless you truly
+reinvent them; reach for other forms: maps, small multiples, radial or spiral clocks, unit and
+particle systems, illustrated scenes driven by data, typographic or physical metaphors:
+{{overused}}
 
 Use cases so far:
 {{cases}}
@@ -102,9 +111,17 @@ these style + case pairings:
    "chart_form": "bar-chart race",
    "duration_s": 72,
    "timeline": {"unit": "season", "from": 1950, "to": 2026},
-   "style": {"id": "kebab-case-stable-id", "name": "Style name", "notes": "the style in one sentence"},
+   "style": {"id": "kebab-case-stable-id", "name": "Style name", "notes": "the style in one sentence",
+             "spec": {"technique": "...", "palette": [{"name": "Kiln red", "hex": "#B5402A", "role": "accent: the leader only"}],
+                      "type": "...", "finish": "grain, no gradients", "avoid": "looks this style must not drift into"}},
+   "images": [{"file": "img/backdrop.jpg", "role": "backdrop",
+               "prompt": "the exact prompt you used, ending: no text, letters, numbers, logos or watermarks"}],
    "facts": ["f1db:race:...#points_awarded"]}
   ```
+
+  - `style.spec` is what lets the owner lock your style and have it rebuilt on other cases. Every
+    colour gets one role.
+  - `images` is optional; list every generated image (see "Images" in your instructions).
 
   - `timeline.unit` is one of season, race, matchday, career-start, date, and `from`/`to` are
     numbers in that unit.

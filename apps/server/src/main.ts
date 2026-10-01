@@ -14,6 +14,7 @@ import { ProjectService } from "./projects";
 import { makeTools } from "./tools";
 import { CalendarService } from "./calendar";
 import { BoardService } from "./board";
+import { CaseIdeas, StyleLibrary } from "./library";
 import { Warehouse } from "./warehouse";
 
 export async function createServer() {
@@ -30,15 +31,17 @@ export async function createServer() {
   const llm = new LlmService(db, bus, runner, projects, tools);
   const calendar = new CalendarService(db, bus, (params, projectId) => runner.enqueue("publish", params, projectId), modes.publish);
   const board = new BoardService(db, paths.board);
+  const styles = new StyleLibrary(db);
+  const cases = new CaseIdeas(db);
   mkdirSync(path.join(paths.board, "items"), { recursive: true });
   runner.resume();
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
-  const app = buildApp({ db, calendar, board, bus, runner, projects, heatmap, llm, tools, pipeline });
+  const app = buildApp({ db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     app.use("/*", serveStatic({ root: path.relative(process.cwd(), dist) }));
     app.get("*", serveStatic({ path: path.relative(process.cwd(), path.join(dist, "index.html")) }));
   }
-  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board };
+  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board, styles, cases };
 }

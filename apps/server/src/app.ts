@@ -18,10 +18,11 @@ import type { Tools } from "./tools";
 import { metricsOverview } from "./metrics";
 import type { CalendarService } from "./calendar";
 import { type BoardService, DECISIONS, type Decision } from "./board";
+import { CASE_DECISIONS, type CaseDecision, type CaseIdeas, MIN_SPAN_YEARS, type StyleLibrary, type StyleOverride } from "./library";
 import type { Db } from "./db";
 
 export type AppDeps = {
-  db: Db; calendar: CalendarService; board: BoardService; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
+  db: Db; calendar: CalendarService; board: BoardService; styles: StyleLibrary; cases: CaseIdeas; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
 };
 
 const SERVABLE = [paths.renders, paths.audio, paths.board, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
@@ -127,6 +128,39 @@ export function buildApp(d: AppDeps) {
       const item = d.board.decide(c.req.param("id"), b.decision, b.note);
       d.bus.emit({ type: "board.decided", id: item.id, decision: item.decision });
       return c.json(item);
+    } catch (e) { return bad(c, e); }
+  });
+
+  // ---- style library: verdicts from the gate + the owner's lock / retire / note / hero (ADR 008)
+  app.get("/api/styles", (c) => c.json({ styles: d.styles.list(d.board.list({ status: "all" })) }));
+  app.patch("/api/styles/:id", async (c) => {
+    try {
+      const b = (await c.req.json()) as { status?: StyleOverride | null; note?: string | null; hero_item_id?: string | null };
+      const s = d.styles.update(c.req.param("id"), d.board.list({ status: "all" }), b);
+      d.bus.emit({ type: "styles.updated", id: s.id, status: s.status });
+      return c.json(s);
+    } catch (e) { return bad(c, e); }
+  });
+
+  // ---- case ideas: use cases proposed as text by the case loop, behind the owner's gate (ADR 008)
+  app.get("/api/cases", (c) => c.json({ ideas: d.cases.list({ status: c.req.query("status") }), decisions: CASE_DECISIONS, min_span_years: MIN_SPAN_YEARS }));
+  app.get("/api/cases/feedback", (c) => c.json({ ideas: d.cases.feedback(c.req.query("since")) }));
+  app.post("/api/cases", async (c) => {
+    try { return c.json(d.cases.create(await c.req.json()), 201); } catch (e) { return bad(c, e); }
+  });
+  app.post("/api/cases/archive", async (c) => {
+    try {
+      const b = (await c.req.json()) as { ids: string[]; reason: string };
+      if (!b.reason?.trim()) throw new Error("archiving needs a reason");
+      return c.json({ archived: d.cases.archive(b.ids ?? [], b.reason.trim()) });
+    } catch (e) { return bad(c, e); }
+  });
+  app.post("/api/cases/:id/decision", async (c) => {
+    try {
+      const b = (await c.req.json()) as { decision: CaseDecision; note?: string };
+      const idea = d.cases.decide(c.req.param("id"), b.decision, b.note);
+      d.bus.emit({ type: "cases.decided", id: idea.id, decision: idea.decision });
+      return c.json(idea);
     } catch (e) { return bad(c, e); }
   });
 

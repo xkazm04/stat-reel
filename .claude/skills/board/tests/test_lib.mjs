@@ -163,3 +163,57 @@ test("rejectedCases lists only cases rejected more than accepted", async () => {
   const l = { cases: { x: { accepts: 0, case_rejects: 1 }, y: { accepts: 1, case_rejects: 1 }, z: { accepts: 2, case_rejects: 0 } } };
   assert.deepEqual(rejectedCases(l), ["x"]);
 });
+
+test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources)", async () => {
+  const { validateCaseIdea, titleKey } = await import("../scripts/lib.mjs");
+  const ok = {
+    title: "t", pitch: "p", arc: "a", insight: "i", why_lasts: "w", domain: "music", data_status: "new-source",
+    tension: { expectation: "e", reality: "r", strength: "moderate" },
+    beats: [{ at: "1960", what: "a" }, { at: "1970", what: "b" }, { at: "1985", what: "c" }, { at: "2005", what: "d" }],
+    timeline: { unit: "year", from: 1960, to: 2020, years_from: 1960, years_to: 2020 },
+    sources: [{ name: "MusicBrainz", url: "https://musicbrainz.org/doc/MusicBrainz_Database", license: "CC0" }],
+  };
+  assert.deepEqual(validateCaseIdea(ok), []);
+  assert.match(validateCaseIdea({ ...ok, timeline: { ...ok.timeline, years_from: 2015 } }).join(), /at least 10/);
+  assert.match(validateCaseIdea({ ...ok, beats: ok.beats.slice(1) }).join(), /beats/);
+  assert.match(validateCaseIdea({ ...ok, tension: { expectation: "e", reality: "", strength: "x" } }).join(), /tension/);
+  assert.match(validateCaseIdea({ ...ok, sources: [{ name: "x" }] }).join(), /needs name, url and license/);
+  assert.equal(titleKey("The Wins Record, hand to hand"), titleKey("wins record hand-to-hand"));
+});
+
+test("overusedForms counts chart forms across the Board, ignoring parentheses and archived items", async () => {
+  const { overusedForms } = await import("../scripts/lib.mjs");
+  const it = (f, status = "pending") => ({ status, source: { chart_form: f } });
+  const board = [...Array(5)].map(() => it("bar-chart race (top 10)")).concat([it("Bar-chart race"), it("streamgraph"), it("bar-chart race", "archived")]);
+  assert.deepEqual(overusedForms(board), [{ form: "bar chart race", count: 6 }]);
+});
+
+test("renderBrief lists locked styles apart, drops retired ones from the floor, names overused forms", async () => {
+  const { renderBrief, emptyLedger } = await import("../scripts/lib.mjs");
+  const l = emptyLedger();
+  l.styles = {
+    ink: { name: "Ink", accepts: 2, style_rejects: 0, notes: [] },
+    oars: { name: "Oars", accepts: 1, style_rejects: 0, notes: [] },
+    tape: { name: "Tape", accepts: 1, style_rejects: 0, notes: [] },
+  };
+  l.style_status = { ink: { status: "locked", note: "the signature" }, tape: { status: "retired", note: null } };
+  const board = [...Array(5)].map(() => ({ status: "pending", source: { chart_form: "line race" } }));
+  const out = renderBrief({ template: "L:{{styles_locked}}\nA:{{styles_accepted}}\nR:{{styles_rejected}}\nO:{{overused}}", ledger: l, shots: 3, board });
+  assert.match(out, /L:- \*\*Ink\*\* \(`ink`\) - owner on the style: "the signature"/);
+  assert.match(out, /A:- \*\*Oars\*\*/);
+  assert.doesNotMatch(out.split("\n")[1], /Tape|Ink/);
+  assert.match(out, /R:- \*\*Tape\*\* \(`tape`\) - retired by the owner/);
+  assert.match(out, /O:- line race \(5 on the Board\)/);
+});
+
+test("checkImages: listed, inside the folder, small, text-banned prompts, no unlisted files", async () => {
+  const { checkImages } = await import("../scripts/lib.mjs");
+  const ok = [{ file: "img/asphalt.jpg", role: "texture", prompt: "warm asphalt grain, no text, letters, numbers or logos" }];
+  assert.deepEqual(checkImages(ok, { "img/asphalt.jpg": 400000 }), []);
+  assert.deepEqual(checkImages([], {}), []);
+  assert.match(checkImages(ok, { "img/asphalt.jpg": 4e6 }).join(), /under 2.5 MB/);
+  assert.match(checkImages([{ ...ok[0], prompt: "asphalt" }], { "img/asphalt.jpg": 1 }).join(), /text ban/);
+  assert.match(checkImages([{ ...ok[0], role: "chart" }], { "img/asphalt.jpg": 1 }).join(), /role/);
+  assert.match(checkImages([], { "img/x.png": 1 }).join(), /not listed/);
+  assert.match(checkImages([{ ...ok[0], file: "../x.jpg" }], {}).join(), /inside the variant folder/);
+});

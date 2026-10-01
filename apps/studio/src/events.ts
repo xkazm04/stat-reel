@@ -4,7 +4,8 @@
  * co-pilot tool results invalidate the caches they can change. Named listeners are registered for
  * job.queued/started/progress/succeeded/failed/cancelled/refused, llm.event and render.done.
  * Calendar slots follow their publish job, so job.* also invalidates the calendar.
- * board.decided (the owner's gate on a Board item) invalidates the board.
+ * board.decided (the owner's gate on a Board item) invalidates the board and the style library;
+ * styles.updated (lock / retire / note) the style library; cases.decided the case ideas.
  */
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { createContext, createElement, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -49,6 +50,8 @@ const NAMED = [
   "heatmap.updated",
   "project.updated",
   "board.decided",
+  "styles.updated",
+  "cases.decided",
   "ping",
 ];
 
@@ -76,6 +79,12 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
     void qc.invalidateQueries({ queryKey: qk.calendar });
   } else if (e.type === "board.decided") {
     void qc.invalidateQueries({ queryKey: qk.board });
+    // a decision moves a style's verdict
+    void qc.invalidateQueries({ queryKey: qk.styles });
+  } else if (e.type === "styles.updated") {
+    void qc.invalidateQueries({ queryKey: qk.styles });
+  } else if (e.type === "cases.decided") {
+    void qc.invalidateQueries({ queryKey: qk.cases });
   } else if (e.type === "heatmap.updated") {
     void qc.invalidateQueries({ queryKey: qk.heatmap });
   } else if (e.type === "llm.event" && e.event?.type === "tool_result" && pid) {

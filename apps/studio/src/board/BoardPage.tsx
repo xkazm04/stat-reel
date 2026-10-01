@@ -10,6 +10,10 @@
  *   2 Light table one shot at a time on the loupe, the contact sheet as a filmstrip, fast triage
  *   3 Matrix      rows = styles, columns = use cases; feedback on an axis shows as a pattern
  * TODO(prototype, 2026-10-14): owner picks a variant; consolidate and delete the switcher + losers.
+ *
+ * Tabs (ADR 008, `?tab=designs|styles|cases`): Designs is the gate above; Styles the gallery of
+ * accepted looks (lock / retire); Use cases the stories judged without art style, with the
+ * case-loop inbox.
  */
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -28,9 +32,12 @@ import {
   VARIANTS,
   type Variant,
 } from "./board";
+import { CasesView } from "./CasesView";
 import { LightTableVariant } from "./LightTableVariant";
+import { parseTab, type Tab, TABS } from "./library";
 import { MatrixVariant } from "./MatrixVariant";
 import { useBoard, useCaseNames } from "./shared";
+import { StylesView } from "./StylesView";
 import { WallVariant } from "./WallVariant";
 import "./board.css";
 
@@ -50,18 +57,27 @@ const STATUS_WORD: Record<StatusFilter, string> = {
 };
 
 function useVariant(): [Variant, (v: Variant) => void] {
-  const raw = useRouterState({ select: (s) => (s.location.search as Record<string, unknown>).v });
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const navigate = useNavigate();
-  const v = parseVariant(raw);
+  const v = parseVariant(search.v);
   const set = (next: Variant) =>
-    void navigate({ to: "/board", search: { v: next } as never, replace: true, resetScroll: false });
+    void navigate({ to: "/board", search: { ...search, v: next } as never, replace: true, resetScroll: false });
   return [v, set];
+}
+
+function useTab(): [Tab, (t: Tab) => void] {
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const navigate = useNavigate();
+  const set = (next: Tab) =>
+    void navigate({ to: "/board", search: { ...search, tab: next === "designs" ? undefined : next } as never, replace: true, resetScroll: false });
+  return [parseTab(search.tab), set];
 }
 
 export function BoardPage() {
   const board = useBoard();
   const names = useCaseNames();
   const [variant, setVariant] = useVariant();
+  const [tab, setTab] = useTab();
   const [filter, setFilter] = useState<BoardFilter>(NO_FILTER);
   const all = board.data?.items ?? [];
   const counts = useMemo(() => countItems(all), [all]);
@@ -81,11 +97,11 @@ export function BoardPage() {
           </p>
           <h1 className="page__title display">What should StatReel look like</h1>
           <p className="page__sub">
-            Static shots of a StatReel video at its strongest moment, each judged on two axes: the <b>style</b> (form of
-            presentation) and the <b>case</b> (existing or proposed use case). Say which axis failed so the next loop
-            learns precisely.
+            Cut-outs from 30-90 s data videos, each judged on two axes: the <b>style</b> (form of presentation) and the{" "}
+            <b>case</b> (the story over time). Styles and Use cases keep what you accepted, so the next loops build on it.
           </p>
         </div>
+        {tab === "designs" ? (
         <nav className="bd-switch" aria-label="Board prototype variant">
           <span className="label">Prototype · pick a page</span>
           <div className="bd-switch__opts">
@@ -105,9 +121,29 @@ export function BoardPage() {
             ))}
           </div>
         </nav>
+        ) : null}
       </header>
 
-      {board.isError ? (
+      <nav className="bd-tabs" aria-label="Board sections">
+        {TABS.map((o) => (
+          <button
+            key={o.tab}
+            type="button"
+            aria-pressed={tab === o.tab}
+            data-testid={`board-tab-${o.tab}`}
+            onClick={() => setTab(o.tab)}
+          >
+            <b>{o.name}</b>
+            <span>{o.sub}</span>
+          </button>
+        ))}
+      </nav>
+
+      {tab === "styles" ? (
+        <StylesView names={names} />
+      ) : tab === "cases" ? (
+        <CasesView />
+      ) : board.isError ? (
         <Failure error={board.error} what="The board" />
       ) : board.isLoading ? (
         <Loading what="the board" />
