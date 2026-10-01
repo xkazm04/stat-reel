@@ -111,13 +111,22 @@ export class StyleLibrary {
 
 export const CASE_DOMAINS = ["f1", "sports", "games", "geoeconomy", "music", "culture", "science", "other"] as const;
 export type CaseDomain = (typeof CASE_DOMAINS)[number];
-export const CASE_DECISIONS = ["accept", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate"] as const;
+export const CASE_DECISIONS = ["accept", "reject_not_interesting", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate"] as const;
 export type CaseDecision = (typeof CASE_DECISIONS)[number];
-export const DATA_STATUSES = ["staged", "registry", "new-source"] as const;
+/** guess = brainstormed without verification (owner, 2026-10-01): where the data might come from, not proof. */
+export const DATA_STATUSES = ["staged", "registry", "new-source", "guess"] as const;
 export type DataStatus = (typeof DATA_STATUSES)[number];
 /** The owner's rule: an approved case runs over at least a decade of data time. */
 export const MIN_SPAN_YEARS = 10;
 export const MIN_BEATS = 4;
+/**
+ * observed: the data as it happened. what-if: a computed scenario (cross-era comparison, an injury
+ * that did not happen) - always labelled a simulation, method stated. influence: key persons
+ * (leaders, owners, managers) against the success or value of what they led, over time.
+ */
+export const CASE_KINDS = ["observed", "what-if", "influence"] as const;
+export type CaseKind = (typeof CASE_KINDS)[number];
+export const FEASIBILITY = ["likely", "possible", "hard"] as const;
 
 export type CaseTimeline = { unit: string; from: number; to: number; years_from: number; years_to: number };
 export type CaseSource = {
@@ -133,6 +142,12 @@ export type NewCaseIdea = {
   title: string; pitch: string; domain: CaseDomain; arc: string; insight: string; why_lasts: string;
   tension: CaseTension; beats: CaseBeat[]; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
   evidence?: string[]; data_status: DataStatus; source?: Record<string, unknown> | null;
+  kind?: CaseKind;
+  /** what-if / influence: how the scenario or the influence is computed, in one or two sentences */
+  method?: string | null;
+  /** guess: where the data might come from */
+  data_guess?: string | null;
+  feasibility?: (typeof FEASIBILITY)[number] | null;
 };
 export type CaseIdea = Omit<NewCaseIdea, "source"> & {
   id: string; span_years: number; source: Record<string, unknown> | null;
@@ -147,6 +162,8 @@ const hydrate = (r: typeof caseIdeas.$inferSelect): CaseIdea => ({
   timeline: parse(r.timeline_json, {} as CaseTimeline), span_years: r.span_years, chart_ideas: parse(r.chart_ideas_json, []),
   requires: parse(r.requires_json, []), sources: parse(r.sources_json, []), evidence: parse(r.evidence_json, []),
   data_status: r.data_status as DataStatus, source: parse(r.source_json, null), status: r.status,
+  kind: (r.kind as CaseKind | null) ?? "observed", method: r.method, data_guess: r.data_guess,
+  feasibility: (r.feasibility as NewCaseIdea["feasibility"]) ?? null,
   decision: r.decision as CaseDecision | null, note: r.note, decided_at: r.decided_at, created_at: r.created_at,
 });
 
@@ -167,7 +184,16 @@ export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
   } else if (t.years_to - t.years_from < MIN_SPAN_YEARS) {
     e.push(`timeline covers ${t.years_to - t.years_from} years; an approved case needs at least ${MIN_SPAN_YEARS} (a decade or all time)`);
   }
-  if (!Array.isArray(c.sources) || !c.sources.length) e.push("sources: name at least one source {name, url, license}");
+  if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
+  if ((c.kind === "what-if" || c.kind === "influence") && !c.method?.trim()) {
+    e.push(`a ${c.kind} case needs method: how the ${c.kind === "what-if" ? "scenario is computed" : "influence is measured"}`);
+  }
+  if (c.data_status === "guess") {
+    // brainstorming: a guess at where the data lives and how feasible it is, no proof needed
+    if (!c.data_guess?.trim()) e.push("data_guess: say where the data might come from");
+    if (!c.feasibility || !FEASIBILITY.includes(c.feasibility)) e.push(`feasibility must be one of ${FEASIBILITY.join(", ")}`);
+    for (const s of c.sources ?? []) if (!s?.name) e.push("a source hint needs at least a name");
+  } else if (!Array.isArray(c.sources) || !c.sources.length) e.push("sources: name at least one source {name, url, license}");
   else for (const s of c.sources) if (!s?.name || !s?.url || !s?.license) e.push(`source ${s?.name ?? "?"} needs name, url and license`);
   return e;
 }
@@ -183,7 +209,8 @@ export class CaseIdeas {
       insight: c.insight.trim(), why_lasts: c.why_lasts.trim(), tension_json: JSON.stringify(c.tension),
       unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), timeline_json: JSON.stringify(c.timeline),
       span_years: c.timeline.years_to - c.timeline.years_from, chart_ideas_json: JSON.stringify(c.chart_ideas ?? []),
-      requires_json: JSON.stringify(c.requires ?? []), sources_json: JSON.stringify(c.sources), evidence_json: JSON.stringify(c.evidence ?? []),
+      requires_json: JSON.stringify(c.requires ?? []), sources_json: JSON.stringify(c.sources ?? []), evidence_json: JSON.stringify(c.evidence ?? []),
+      kind: c.kind ?? "observed", method: c.method?.trim() || null, data_guess: c.data_guess?.trim() || null, feasibility: c.feasibility ?? null,
       data_status: c.data_status, source_json: c.source ? JSON.stringify(c.source) : null, status: "pending", decision: null, note: null,
       decided_at: null, created_at: now(),
     };

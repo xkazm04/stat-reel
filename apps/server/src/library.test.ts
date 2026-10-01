@@ -99,7 +99,22 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(validateCaseIdea(idea)).toEqual([]);
   });
 
-  it.each(["accept", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate"] as const)("records %s with a note", (decision) => {
+  it("accepts a data-less brainstorm (guess) with a feasibility instead of verified sources", () => {
+    const { cases } = setup();
+    const g = cases.create({ ...idea, data_status: "guess", sources: [], data_guess: "UN population tables, probably", feasibility: "likely" });
+    expect(g).toMatchObject({ data_status: "guess", feasibility: "likely", kind: "observed" });
+    expect(validateCaseIdea({ ...idea, data_status: "guess", sources: [] }).join()).toMatch(/data_guess.*feasibility/s);
+  });
+
+  it("needs a method for what-if and influence cases", () => {
+    const { cases } = setup();
+    expect(validateCaseIdea({ ...idea, kind: "what-if" }).join()).toMatch(/method/);
+    expect(validateCaseIdea({ ...idea, kind: "influence", method: " " }).join()).toMatch(/influence is measured/);
+    const w = cases.create({ ...idea, kind: "what-if", method: "re-score every season under the 2010 points system" });
+    expect(w).toMatchObject({ kind: "what-if", method: "re-score every season under the 2010 points system" });
+  });
+
+  it.each(["accept", "reject_not_interesting", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate"] as const)("records %s with a note", (decision) => {
     const { cases } = setup();
     const c = cases.decide(cases.create(idea).id, decision, "why");
     expect(c).toMatchObject({ status: decision === "accept" ? "accepted" : "rejected", decision, note: "why" });

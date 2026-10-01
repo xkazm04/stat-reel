@@ -121,11 +121,31 @@ export function caseRows(usecases: readonly UseCase[], items: readonly BoardItem
 
 export const CASE_DECISION_META: Record<CaseDecision, { label: string; key: string; hint: string }> = {
   accept: { label: "Accept", key: "a", hint: "worth a 30-90 s video over a decade or more" },
+  reject_not_interesting: { label: "Not interesting", key: "n", hint: "it may hold up, but it is not worth working with" },
   reject_short: { label: "Too short", key: "s", hint: "cannot last: too little time or too few beats" },
   reject_no_insight: { label: "No insight", key: "i", hint: "the data moves, but nothing interesting happens" },
   reject_no_data: { label: "No data", key: "d", hint: "no source we could legally and reliably use" },
   reject_duplicate: { label: "Duplicate", key: "u", hint: "already covered by another case" },
 };
+
+/** A / N / S / I / D / U -> decision (the triage keys of the case dialog). */
+export function caseDecisionForKey(key: string): CaseDecision | null {
+  const k = key.toLowerCase();
+  const hit = (Object.entries(CASE_DECISION_META) as [CaseDecision, { key: string }][]).find(([, m]) => m.key === k);
+  return hit ? hit[0] : null;
+}
+
+/** The next undecided idea after `fromId` in `order` (wrapping), or null when all are decided. */
+export function nextUndecided(order: readonly CaseIdea[], fromId: string | null): string | null {
+  const i = order.findIndex((x) => x.id === fromId);
+  for (let k = 1; k <= order.length; k++) {
+    const c = order[(i + k + order.length) % order.length];
+    if (c && !c.decision && c.id !== fromId) return c.id;
+  }
+  return null;
+}
+
+export const KIND_LABEL: Record<CaseIdea["kind"], string> = { observed: "Observed", "what-if": "What-if", influence: "Influence" };
 
 export const DOMAIN_LABEL: Record<CaseIdea["domain"], string> = {
   f1: "F1", sports: "Sports", games: "Games", geoeconomy: "Geo-economy", music: "Music", culture: "Culture", science: "Science", other: "Other",
@@ -135,6 +155,7 @@ export const DATA_STATUS_LABEL: Record<CaseIdea["data_status"], string> = {
   staged: "Data staged",
   registry: "Source approved, not ingested",
   "new-source": "New source - needs your approval",
+  guess: "Data guessed, not verified",
 };
 
 /** Pending ideas first, then by span (longer timelines first). */

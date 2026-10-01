@@ -1,7 +1,7 @@
 import type { UseCase } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import type { BoardItem, CaseIdea, StyleEntry } from "../api";
-import { caseRows, groupStyles, inbox, parseTab, styleItems } from "./library";
+import { caseDecisionForKey, caseRows, groupStyles, inbox, nextUndecided, parseTab, styleItems } from "./library";
 
 const item = (id: string, over: Partial<BoardItem> = {}): BoardItem => ({
   id, image: `items/${id}.png`, image_url: `/files/board/items/${id}.png`, video: null, video_url: null, duration_s: null,
@@ -19,8 +19,24 @@ const idea = (id: string, over: Partial<CaseIdea> = {}): CaseIdea => ({
   id, title: id, pitch: "p", domain: "music", arc: "a", insight: "i", why_lasts: "w",
   tension: { expectation: "e", reality: "r", strength: "strong" }, unknowns: [], beats: [],
   timeline: { unit: "year", from: 1960, to: 2020, years_from: 1960, years_to: 2020 }, span_years: 60, chart_ideas: ["streamgraph"],
+  kind: "observed", method: null, data_guess: null, feasibility: null,
   requires: [], sources: [{ name: "MusicBrainz", url: "https://musicbrainz.org", license: "CC0" }], evidence: [], data_status: "new-source",
   source: null, status: "pending", decision: null, note: null, decided_at: null, created_at: "2026-10-01T00:00:00Z", ...over,
+});
+
+describe("Case triage keys", () => {
+  it("maps A / N / S / I / D / U to decisions, case-insensitive", () => {
+    expect(["a", "N", "s", "i", "d", "u", "x"].map(caseDecisionForKey)).toEqual([
+      "accept", "reject_not_interesting", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate", null,
+    ]);
+  });
+
+  it("advances to the next undecided idea, wrapping, skipping decided ones", () => {
+    const order = [idea("a"), idea("b", { decision: "accept" }), idea("c"), idea("d")];
+    expect(nextUndecided(order, "a")).toBe("c");
+    expect(nextUndecided(order, "d")).toBe("a");
+    expect(nextUndecided([idea("a"), idea("b", { decision: "accept" })], "a")).toBeNull();
+  });
 });
 
 describe("Board tabs", () => {

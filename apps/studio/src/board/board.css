@@ -2115,3 +2115,131 @@ html.bd-modal-open {
 .bd-idea__more[open] summary {
   margin-bottom: 8px;
 }
+
+/* use cases, layer 1: titles only */
+.bd-cs__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.bd-titles {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-line);
+}
+.bd-titles li {
+  border-bottom: 1px solid var(--color-line);
+}
+.bd-titles button {
+  display: grid;
+  grid-template-columns: 2.4em auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "n tag title kind span"
+    ". . pitch pitch pitch";
+  align-items: baseline;
+  gap: 2px 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+.bd-titles button:hover {
+  background: var(--color-surface);
+}
+.bd-titles button:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: -2px;
+  background: var(--color-bg-raised);
+}
+.bd-titles__n {
+  grid-area: n;
+  color: var(--color-text-dim);
+  font-size: 12px;
+}
+.bd-titles button > .bd-tag:first-of-type {
+  grid-area: tag;
+}
+.bd-titles__t {
+  grid-area: title;
+  font-size: 16px;
+}
+.bd-titles button > .bd-tag--what-if,
+.bd-titles button > .bd-tag--influence {
+  grid-area: kind;
+}
+.bd-titles__span {
+  grid-area: span;
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
+.bd-titles__pitch {
+  grid-area: pitch;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bd-tag--what-if {
+  border-color: var(--status-ask);
+  color: var(--color-text);
+}
+.bd-tag--influence {
+  border-color: var(--color-signal);
+  color: var(--color-text);
+}
+
+/* use cases, layer 2: the idea dialog */
+.bd-idlg__body {
+  min-height: 0;
+  overflow: auto;
+  padding: 22px var(--page-gutter) 28px;
+}
+.bd-idlg__body .bd-idea {
+  max-width: 980px;
+  margin: 0 auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  gap: 14px;
+}
+.bd-idlg__body .bd-idea__dl div {
+  grid-template-columns: 170px 1fr;
+}
+.bd-idlg__body .bd-idea__dl dd,
+.bd-idlg__body .bd-idea__pitch {
+  font-size: 15px;
+}
+.bd-idlg__body .bd-idea__pitch {
+  font-size: 18px;
+}
+.bd-idea__tags {
+  display: flex;
+  gap: 6px;
+}
+.bd-idea__guess {
+  margin: 0;
+}
+.bd-idlg__bar {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto auto;
+  align-items: center;
+}
+@media (max-width: 900px) {
+  .bd-idlg__bar {
+    grid-template-columns: 1fr;
+  }
+  .bd-titles button {
+    grid-template-columns: 2em minmax(0, 1fr) auto;
+    grid-template-areas:
+      "n title span"
+      ". tag kind"
+      ". pitch pitch";
+  }
+}

@@ -253,7 +253,7 @@ export type StyleEntry = {
 export type StylePatch = { status?: StyleOverride | null; note?: string | null; hero_item_id?: string | null };
 
 /** GET /api/cases (ADR 008): use cases proposed as text by the case loop, behind the owner's gate. */
-export const CASE_DECISIONS = ["accept", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate"] as const;
+export const CASE_DECISIONS = ["accept", "reject_not_interesting", "reject_short", "reject_no_insight", "reject_no_data", "reject_duplicate"] as const;
 export type CaseDecision = (typeof CASE_DECISIONS)[number];
 export type CaseDomain = "f1" | "sports" | "games" | "geoeconomy" | "music" | "culture" | "science" | "other";
 export type CaseSource = {
@@ -283,8 +283,13 @@ export type CaseIdea = {
   requires: string[];
   sources: CaseSource[];
   evidence: string[];
-  /** staged = data already in the warehouse; registry = source approved, not ingested; new-source = needs the owner's approval */
-  data_status: "staged" | "registry" | "new-source";
+  /** staged = data in the warehouse; registry = source approved, not ingested; new-source = needs approval; guess = brainstormed, unverified */
+  data_status: "staged" | "registry" | "new-source" | "guess";
+  /** observed | what-if (a computed scenario, labelled a simulation) | influence (key persons vs success over time) */
+  kind: "observed" | "what-if" | "influence";
+  method: string | null;
+  data_guess: string | null;
+  feasibility: "likely" | "possible" | "hard" | null;
   source: Record<string, unknown> | null;
   status: "pending" | "accepted" | "rejected" | string;
   decision: CaseDecision | null;

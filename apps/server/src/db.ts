@@ -182,6 +182,10 @@ export const caseIdeas = sqliteTable("case_ideas", {
   sources_json: text("sources_json").notNull(),
   evidence_json: text("evidence_json").notNull(),
   data_status: text("data_status").notNull(),
+  kind: text("kind"),
+  method: text("method"),
+  data_guess: text("data_guess"),
+  feasibility: text("feasibility"),
   source_json: text("source_json"),
   status: text("status").notNull(),
   decision: text("decision"),
@@ -232,7 +236,7 @@ create table if not exists board_styles (id text primary key, status text, note 
 create table if not exists case_ideas (id text primary key, title text not null, pitch text not null, domain text not null, arc text not null,
   insight text not null, why_lasts text not null, tension_json text not null, unknowns_json text not null, beats_json text not null, timeline_json text not null,
   span_years real not null, chart_ideas_json text not null, requires_json text not null, sources_json text not null,
-  evidence_json text not null, data_status text not null, source_json text, status text not null, decision text, note text,
+  evidence_json text not null, data_status text not null, kind text, method text, data_guess text, feasibility text, source_json text, status text not null, decision text, note text,
   decided_at text, created_at text not null);
 `;
 
@@ -252,6 +256,7 @@ export function openDb(file: string): Db {
   addColumn("board_items", "video", "text");
   addColumn("board_items", "duration_s", "real");
   addColumn("case_ideas", "beats_json", "text not null default '[]'");
+  for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
   return drizzle(sqlite) as Db;
 }
 
