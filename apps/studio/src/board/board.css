@@ -1981,6 +1981,8 @@ html.bd-modal-open {
 .bd-idea {
   display: grid;
   gap: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 14px 16px;
   border: 1px solid var(--color-line);
   background: var(--color-surface);
@@ -2104,4 +2106,12 @@ html.bd-modal-open {
 .bd-idea__beats b {
   margin-right: 6px;
   color: var(--color-text);
+}
+.bd-idea__more summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.bd-idea__more[open] summary {
+  margin-bottom: 8px;
 }

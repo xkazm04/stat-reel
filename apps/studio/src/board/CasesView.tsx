@@ -145,6 +145,12 @@ function CaseList({ id, title, hint, rows }: { id: string; title: string; hint: 
   );
 }
 
+/** "Whoever leads" -> "whoever leads" mid-sentence; acronyms ("US", "GDP") stay as they are. */
+const lowerFirst = (s: string): string => {
+  const x = s.trim().replace(/[.;]+$/, "");
+  return /^([A-Z][a-z]|A )/.test(x) ? x[0]!.toLowerCase() + x.slice(1) : x;
+};
+
 function IdeaCard({ idea }: { idea: CaseIdea }) {
   const decide = useDecideCase();
   const [note, setNote] = useState(idea.note ?? "");
@@ -161,36 +167,14 @@ function IdeaCard({ idea }: { idea: CaseIdea }) {
       <p className="bd-idea__pitch">{idea.pitch}</p>
       <dl className="bd-idea__dl">
         <div>
-          <dt>Over time</dt>
-          <dd>{idea.arc}</dd>
-        </div>
-        <div>
           <dt>Insight</dt>
           <dd>{idea.insight}</dd>
         </div>
         <div>
           <dt>Tension · {idea.tension.strength}</dt>
           <dd>
-            You'd expect {idea.tension.expectation}; the data shows {idea.tension.reality}.
+            You'd expect {lowerFirst(idea.tension.expectation)}; the data shows {lowerFirst(idea.tension.reality)}.
           </dd>
-        </div>
-        {idea.beats.length ? (
-          <div>
-            <dt>Beats</dt>
-            <dd>
-              <ol className="bd-idea__beats">
-                {idea.beats.map((b) => (
-                  <li key={`${b.at}-${b.what}`}>
-                    <b className="mono">{b.at}</b> {b.what}
-                  </li>
-                ))}
-              </ol>
-            </dd>
-          </div>
-        ) : null}
-        <div>
-          <dt>Why it lasts</dt>
-          <dd>{idea.why_lasts}</dd>
         </div>
         {idea.chart_ideas.length ? (
           <div>
@@ -198,13 +182,42 @@ function IdeaCard({ idea }: { idea: CaseIdea }) {
             <dd>{idea.chart_ideas.join(" · ")}</dd>
           </div>
         ) : null}
-        {idea.unknowns.length ? (
-          <div>
-            <dt>Cannot claim</dt>
-            <dd>{idea.unknowns.join(" · ")}</dd>
-          </div>
-        ) : null}
       </dl>
+      <details className="bd-idea__more">
+        <summary>
+          Details: the arc, {idea.beats.length} beats, why it lasts{idea.unknowns.length ? ", what it cannot claim" : ""}
+        </summary>
+        <dl className="bd-idea__dl">
+          <div>
+            <dt>Over time</dt>
+            <dd>{idea.arc}</dd>
+          </div>
+          {idea.beats.length ? (
+            <div>
+              <dt>Beats</dt>
+              <dd>
+                <ol className="bd-idea__beats">
+                  {idea.beats.map((b) => (
+                    <li key={`${b.at}-${b.what}`}>
+                      <b className="mono">{b.at}</b> {b.what}
+                    </li>
+                  ))}
+                </ol>
+              </dd>
+            </div>
+          ) : null}
+          <div>
+            <dt>Why it lasts</dt>
+            <dd>{idea.why_lasts}</dd>
+          </div>
+          {idea.unknowns.length ? (
+            <div>
+              <dt>Cannot claim</dt>
+              <dd>{idea.unknowns.join(" · ")}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </details>
       <div className={`bd-idea__data bd-idea__data--${idea.data_status}`}>
         <b>{DATA_STATUS_LABEL[idea.data_status]}</b>
         <ul>
