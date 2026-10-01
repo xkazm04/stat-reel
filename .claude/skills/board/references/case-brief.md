@@ -44,7 +44,16 @@ The data moved, but nothing worth watching happened. The accepted cases share fo
 4. **A tension.** What a viewer expects versus what the data shows. Its strength is how checkable
    the claim is, not how big it sounds. "No tension" is an honest answer; do not inflate one.
 5. **Universal.** A viewer outside the domain gets it in five seconds.
-6. **Real data, legally usable.** See below.
+6. **Plausibly makeable.** Guess where the data lives; no proof needed yet (see below).
+
+Three kinds of case are welcome (`kind`):
+
+- `observed`: the data as it happened.
+- `what-if`: real data plus one stated manipulation. Examples: a cross-era comparison under one rule
+  set, a career without the injury, a season without the ban. Always labelled a simulation, with
+  `method`.
+- `influence`: key persons (owners, coaches, CEOs, leaders) against the success or value of what
+  they led, compared over time. Use `method`, and frame it as correlation, never causation.
 
 ## Your lane
 
@@ -53,22 +62,19 @@ The data moved, but nothing worth watching happened. The accepted cases share fo
 Propose **{{count}} use cases** in your lane. They must be genuinely different stories, not one
 dataset sliced {{count}} ways.
 
-## Data: real, public, and legal
+## Data: guess, do not prove
 
-- Use web search to confirm that each dataset **exists**, what it **covers** (years), how it is
-  **accessed** (bulk download or API, not a page you would have to scrape), and its **licence or
-  terms**.
-- Prefer open licences: CC0, CC BY, ODbL, public domain and open government data. Name the licence
-  exactly. If the terms forbid automated access or reuse, do not propose the source.
-- Give the URL of the dataset or API documentation, not only the homepage. Grade each source:
-  `class` (primary, secondary, aggregator, vendor or self-published) and `confidence` (high, medium,
-  low), with the reason in `coverage`.
-- `data_status`:
-  - `staged` means it is already in `data/` (F1 only, today), and you must cite real fact refs from
-    `data/*.json` in `evidence`;
-  - `registry` means the source is in the StatReel registry below (give its `registry_id`);
-  - `new-source` means the owner must approve it before anything is ingested.
-- Sources the registry marks `avoid` must never be proposed. The registry so far:
+This is **brainstorming**. Do not spend your time verifying datasets, licences or URLs. The owner
+decides on the story first; data is gathered later for the stories they accept.
+
+- Set `data_status: "guess"`. Write in `data_guess` where the data probably lives: a statistics
+  office, a federation's records, an archive, a public dataset, an API or a reference work. Write
+  in `feasibility` how likely it is to be gatherable: `likely`, `possible` or `hard`.
+- `sources` is optional. You may name hints by name. Include a `url` only if you are sure of it;
+  never invent one.
+- F1 data is already staged in `data/` (`data_status: "staged"`). Use it if your case is F1. Any
+  `evidence` you cite must be a real fact ref.
+- Never base a case on a source the registry marks `avoid`. The registry so far:
 
 {{registry_sources}}
 
@@ -87,14 +93,17 @@ Write `variant-1/cases.json`, a JSON array of {{count}} objects:
   "arc": "What the viz reveals as time runs, start to end.",
   "insight": "The thing the viewer did not know before.",
   "why_lasts": "Why 60-90 s of this stays interesting all the way through.",
+  "kind": "observed",
+  "method": null,
   "tension": {"expectation": "the US always dominated", "reality": "the UK, Sweden and Korea take turns", "strength": "moderate"},
   "beats": [{"at": "1964", "what": "British invasion"}, {"at": "1977", "what": "..."}, {"at": "1999", "what": "..."}, {"at": "2012", "what": "..."}],
   "timeline": {"unit": "year", "from": 1960, "to": 2025, "years_from": 1960, "years_to": 2025},
   "chart_ideas": ["country share streamgraph", "map filling by decade"],
   "requires": ["chart positions by artist origin"],
-  "sources": [{"name": "MusicBrainz", "url": "https://musicbrainz.org/doc/MusicBrainz_Database", "license": "CC0 (core data)", "coverage": "1950-today, artist country", "class": "secondary", "confidence": "medium"}],
-  "evidence": [],
-  "data_status": "new-source",
+  "sources": [{"name": "MusicBrainz"}, {"name": "national chart archives"}],
+  "data_status": "guess",
+  "data_guess": "chart archives per country plus artist origin from MusicBrainz",
+  "feasibility": "possible",
   "unknowns": ["chart positions before 1958", "why a country rises"]
 }]
 ```
@@ -106,7 +115,8 @@ Write `variant-1/cases.json`, a JSON array of {{count}} objects:
 
 ## Hard rules
 
-- No invented data, sources, URLs or licences. If you are not sure a source exists, search. If you
-  still are not sure, leave it out.
+- No invented URLs. A data guess is labelled as a guess, and it never pretends to be verified.
+- What-if cases change one thing and keep the rest real. A video of one is always labelled a
+  simulation.
 - No living person's private life, no gambling odds, nothing that targets a private individual.
 - Stories over time only. A ranking at one moment is not a use case.

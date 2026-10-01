@@ -14,10 +14,10 @@ export function checkCases(cases, { tables = {}, existing = [], registryIds = []
   const seen = new Set(existing.map(titleKey));
   for (const [i, c] of cases.entries()) {
     const errors = validateCaseIdea(c);
-    if (c?.data_status === "staged") {
-      const r = resolveFacts(c.evidence ?? [], tables);
-      if (!r.cited) errors.push("data_status staged needs evidence: real <fact_key>#<column> refs from data/*.json");
-      if (r.unresolved.length) errors.push(`${r.unresolved.length} evidence ref(s) not in data/: ${r.unresolved.slice(0, 2).join(", ")}`);
+    if (c?.evidence?.length) {
+      // brainstorming needs no proof, but a cited fact ref must be real
+      const r = resolveFacts(c.evidence, tables);
+      if (r.unresolved.length) errors.push(`${r.unresolved.length} evidence ref(s) not in data/: ${r.unresolved.slice(0, 2).join(", ")} (drop them or copy real keys)`);
     }
     for (const s of c?.sources ?? []) {
       if (s?.registry_id && !registryIds.includes(s.registry_id)) errors.push(`registry_id ${s.registry_id} is not in the registry`);

@@ -380,6 +380,8 @@ const CASE_LANES = [
   "**Music**: charts, genres, artist origins, song length and tempo, album versus single, festivals, instruments. Decades of taste.",
   "**Culture and science**: film, books, space launches, Nobel prizes, aviation, the internet, climate, inventions, museums. Long human records.",
   "**Motorsport depth and wildcards**: F1 stories the owner has not judged that truly last decades (the data is staged), plus any domain outside the five above with an excellent long series.",
+  "**What-if and simulations** (`kind: \"what-if\"`): computed scenarios over a long timeline, in any domain. Cross-era comparison (re-score history under one rule set, adjust for era, inflation or population), counterfactual careers (the player who was not injured, the team that was not banned, the season a war did not interrupt), \"what if they had stayed\". Real data plus one stated manipulation. `method` says exactly what is computed and what is held fixed, and the video always labels it a simulation.",
+  "**People and influence** (`kind: \"influence\"`): leaders, owners, managers, coaches, CEOs, presidents, governors and label heads. Track the success or value of what they led across their tenure, and compare the key persons of one area over time: club owners against trophies and club value, coaches against win rate, central bank governors against inflation, studio heads against box office. `method` says how influence is measured during a tenure. It is correlation, never causation, and `unknowns` says so. Public roles only, no private lives.",
 ];
 
 async function caseContext(count) {
@@ -441,7 +443,7 @@ async function casesLoop() {
     const f = path.join(entries, seat, "PARTICIPANT.md");
     let p = readFileSync(f, "utf8");
     // the contest template is written for UI prototypes; a case seat researches and writes JSON
-    p = p.replace(/Libraries only from a public CDN[\s\S]*?does not\./, "Use web search to verify every source; the deliverable is variant-1/cases.json, nothing visual.");
+    p = p.replace(/Libraries only from a public CDN[\s\S]*?does not\./, "This is brainstorming: no data verification needed; the deliverable is variant-1/cases.json, nothing visual.");
     p = p.replace(/\{\{lane\}\}/g, CASE_LANES[(si + round) % CASE_LANES.length]);
     p += `\n\n## Your lane\n\n${CASE_LANES[(si + round) % CASE_LANES.length]}\n\nDeliver variant-1/cases.json only (no index.html needed), then run \`node data/check-cases.mjs\` until it prints PASS.\n`;
     writeFileSync(f, p);

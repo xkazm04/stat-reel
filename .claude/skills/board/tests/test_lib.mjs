@@ -179,6 +179,11 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.match(validateCaseIdea({ ...ok, tension: { expectation: "e", reality: "", strength: "x" } }).join(), /tension/);
   assert.match(validateCaseIdea({ ...ok, sources: [{ name: "x" }] }).join(), /needs name, url and license/);
   assert.equal(titleKey("The Wins Record, hand to hand"), titleKey("wins record hand-to-hand"));
+  // data-less brainstorm: a guess and a feasibility instead of verified sources
+  assert.deepEqual(validateCaseIdea({ ...ok, data_status: "guess", sources: [], data_guess: "UN tables", feasibility: "likely" }), []);
+  assert.match(validateCaseIdea({ ...ok, data_status: "guess", sources: [] }).join(), /data_guess.*feasibility/s);
+  assert.match(validateCaseIdea({ ...ok, kind: "what-if" }).join(), /method/);
+  assert.deepEqual(validateCaseIdea({ ...ok, kind: "influence", method: "trophies per season of tenure vs club value" }), []);
 });
 
 test("overusedForms counts chart forms across the Board, ignoring parentheses and archived items", async () => {

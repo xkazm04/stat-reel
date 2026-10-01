@@ -226,7 +226,9 @@ export function rejectedCases(ledger) {
 // ---- case ideas (text-only use cases; mirrors apps/server/src/library.ts validateCaseIdea) ----
 
 export const CASE_DOMAINS = ["f1", "sports", "games", "geoeconomy", "music", "culture", "science", "other"];
-export const DATA_STATUSES = ["staged", "registry", "new-source"];
+export const DATA_STATUSES = ["staged", "registry", "new-source", "guess"];
+export const CASE_KINDS = ["observed", "what-if", "influence"];
+export const FEASIBILITY = ["likely", "possible", "hard"];
 export const MIN_SPAN_YEARS = 10;
 export const MIN_BEATS = 4;
 
@@ -242,7 +244,13 @@ export function validateCaseIdea(c) {
   const tl = c.timeline;
   if (!tl || typeof tl.years_from !== "number" || typeof tl.years_to !== "number" || !tl.unit || typeof tl.from !== "number" || typeof tl.to !== "number") e.push("timeline {unit, from, to, years_from, years_to} (numbers) is required");
   else if (tl.years_to - tl.years_from < MIN_SPAN_YEARS) e.push(`timeline covers ${tl.years_to - tl.years_from} years; needs at least ${MIN_SPAN_YEARS}`);
-  if (!Array.isArray(c.sources) || !c.sources.length) e.push("sources: at least one {name, url, license}");
+  if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
+  if ((c.kind === "what-if" || c.kind === "influence") && !String(c.method ?? "").trim()) e.push(`a ${c.kind} case needs method: how it is computed or measured`);
+  if (c.data_status === "guess") {
+    if (!String(c.data_guess ?? "").trim()) e.push("data_guess: say where the data might come from");
+    if (!FEASIBILITY.includes(c.feasibility)) e.push(`feasibility must be one of ${FEASIBILITY.join(", ")}`);
+    for (const s of c.sources ?? []) if (!s?.name) e.push("a source hint needs at least a name");
+  } else if (!Array.isArray(c.sources) || !c.sources.length) e.push("sources: at least one {name, url, license}");
   else for (const s of c.sources) if (!s?.name || !s?.url || !s?.license) e.push(`source ${s?.name ?? "?"} needs name, url and license`);
   return e;
 }
