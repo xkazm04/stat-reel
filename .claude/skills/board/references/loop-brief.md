@@ -60,7 +60,8 @@ these style + case pairings:
   passed (after their hold), so they never contradict the current values.
 - **Readability in motion.** The running clock is always visible and large. Entities that move keep
   their identity (colour or label follows them); rank swaps animate so the eye can track them. Labels
-  never flicker. Counters use tabular figures. Everything is legible at phone size.
+  never flicker. Counters use tabular figures. **Every readable text is at least 28 px** in the
+  artboard (ticks, legends and the attribution included). Text size is not part of any style.
 - **Continuity.** The chart's frame (axes, scale, layout) stays stable. Rescale smoothly when values
   outgrow it, never jump. Nothing appears or disappears without a transition.
 - **Annotations** are sparse, timed to the data (the moment a lead changes, a record falls, an era

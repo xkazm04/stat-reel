@@ -7,6 +7,54 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assessLongevity, FORMATS, longevitySamples, resolveFacts, stabilityProbe, validateDesign } from "./lib.mjs";
 
+/** Owner rule (2026-10-01): nothing on screen is small. Every readable text is >= 28 px in the artboard. */
+export const MIN_TEXT_PX = 28;
+const LINE_TO_EM = 1.21; // rendered line box / font-size for the staged faces (measured: Barlow, Inter 1.21; JetBrains 1.32)
+
+// Canvas text has no DOM: record each fillText/strokeText with its effective size in artboard px.
+const CANVAS_PROBE = `(() => {
+  window.__textLog = [];
+  const P = CanvasRenderingContext2D.prototype;
+  for (const fn of ["fillText", "strokeText"]) {
+    const orig = P[fn];
+    P[fn] = function (text, ...rest) {
+      try {
+        const px = parseFloat((this.font.match(/([\\d.]+)px/) || [])[1] || "10");
+        const m = this.getTransform();
+        const c = this.canvas;
+        const css = c.getBoundingClientRect ? c.getBoundingClientRect().height / (c.height || 1) : 1;
+        if (this.globalAlpha > 0.15) window.__textLog.push({ text: String(text).slice(0, 24), px: px * Math.hypot(m.c, m.d) * css });
+      } catch {}
+      return orig.call(this, text, ...rest);
+    };
+  }
+})();`;
+
+/** Readable text drawn at the current frame, with its effective size in artboard px. */
+const MEASURE_TEXT = (lineToEm) => {
+  const out = (window.__textLog || []).filter((x) => /[A-Za-z0-9]/.test(x.text));
+  window.__textLog = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const W = innerWidth, H = innerHeight;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const text = n.textContent.trim();
+    if (!/[A-Za-z0-9]/.test(text)) continue;
+    const el = n.parentElement;
+    if (!el || (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))) continue;
+    let o = 1;
+    for (let a = el; a; a = a.parentElement) o *= parseFloat(getComputedStyle(a).opacity || "1");
+    if (o < 0.15) continue;
+    const r = document.createRange();
+    r.selectNodeContents(n);
+    for (const rc of r.getClientRects()) {
+      if (rc.width < 1 || rc.height < 1 || rc.right < 0 || rc.bottom < 0 || rc.left > W || rc.top > H) continue;
+      out.push({ text: text.slice(0, 24), px: rc.height / lineToEm });
+      break;
+    }
+  }
+  return out;
+};
+
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const tableCache = new Map();
 
@@ -64,6 +112,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
   page.on("console", (m) => m.type() === "error" && pageErrors.push(m.text()));
   page.on("request", (r) => /^https?:/.test(r.url()) && pageErrors.push(`network request: ${r.url()}`));
   let longevity = null;
+  await page.addInitScript(CANVAS_PROBE);
   try {
     const url = pathToFileURL(html);
     url.searchParams.set("capture", "1");
@@ -92,6 +141,12 @@ export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
         seen.set(t, hsh);
       }
       if (mismatches) errors.push(`not seek-stable: ${mismatches} frame(s) differ when revisited (the frame must be a pure function of t)`);
+      const small = new Map();
+      for (const f of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+        await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); }, Math.round(meta.duration_s * f * 30) / 30);
+        for (const x of await page.evaluate(MEASURE_TEXT, LINE_TO_EM)) if (x.px < MIN_TEXT_PX - 1 && !small.has(x.text)) small.set(x.text, x.px);
+      }
+      if (small.size) errors.push(`text too small: ${small.size} text item(s) under ${MIN_TEXT_PX} px, e.g. ${[...small].slice(0, 4).map(([s, px]) => `"${s}" ${px.toFixed(0)}px`).join(", ")} - every readable text must be >= ${MIN_TEXT_PX} px; drop it or enlarge it`);
     }
   } catch (e) {
     errors.push(`page failed: ${e.message.split("\n")[0]}`);

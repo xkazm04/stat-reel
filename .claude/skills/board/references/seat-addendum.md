@@ -30,8 +30,11 @@ brief.
 - **Use the safe box fully; keep the bands outside it non-critical.** In 1080×1920, critical content
   (clock, chart, labels, annotations) fills the safe box: top 270, bottom 670, left 65, right 130. The
   bands outside it may carry atmosphere such as texture or colour, but nothing the viewer must read.
-- **Text too small for a phone.** In a 1080-wide artboard, anything the viewer must read is at least
-  28 px, and the data clock is the largest element on screen.
+- **Text too small: a hard failure.** Every readable text, including axis ticks, legends, labels, the
+  attribution and canvas text, is at least 28 px in the artboard. `check.mjs` measures it at five
+  moments and fails the variant otherwise. If a label cannot be 28 px, drop it: fewer, larger labels
+  beat many small ones. Text size is not part of any style. When you build on an accepted style, raise
+  all its text to 28 px or more. The data clock is the largest element on screen.
 - **Labels colliding during rank swaps.** Interpolate positions and keep labels attached to their
   bars, without overlap.
 - **Non-pure frames.** CSS transitions, `setTimeout`, `Date.now()` or state carried between
