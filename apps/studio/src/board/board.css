@@ -1672,7 +1672,7 @@ html.bd-modal-open {
 }
 .bd-clip__len, .bd-clip__warn {
   font-size: var(--text-xs); letter-spacing: var(--tracking-label); padding: 2px 6px;
-  background: var(--color-scrim); color: var(--color-text); border: var(--border-hair) solid var(--color-line-strong);
+  background: var(--color-screen); color: var(--color-screen-ink); border: var(--border-hair) solid var(--color-screen-ink-2, var(--color-line-strong)); opacity: 0.9;
 }
 .bd-clip__warn { color: var(--status-blocked); border-color: var(--status-blocked); }
 
@@ -1769,8 +1769,8 @@ html.bd-modal-open {
 /* a style card: hero design + management */
 .bd-style {
   display: grid;
-  grid-template-columns: minmax(120px, 42%) 1fr;
-  gap: 14px;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
   padding: 12px;
   border: 1px solid var(--color-line);
   background: var(--color-surface);
@@ -1784,10 +1784,13 @@ html.bd-modal-open {
   opacity: 0.72;
 }
 .bd-style__hero {
+  height: 340px;
   min-width: 0;
+  background: var(--color-screen);
 }
-.bd-style__hero .bd-shot {
-  width: 100%;
+/* the gallery shows the look, not the cut: clip badges stay on the Designs tab */
+.bd-style__hero .bd-clip {
+  display: none;
 }
 .bd-style__body {
   display: grid;
@@ -2079,8 +2082,8 @@ html.bd-modal-open {
   outline-offset: 1px;
 }
 @media (max-width: 640px) {
-  .bd-style {
-    grid-template-columns: 1fr;
+  .bd-style__hero {
+    height: 300px;
   }
   .bd-idea__dl div {
     grid-template-columns: 1fr;

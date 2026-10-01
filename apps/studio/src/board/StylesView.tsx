@@ -110,7 +110,7 @@ function StyleCard({
 
   return (
     <article className={`bd-style bd-style--${style.status}`} data-testid={`style-${style.id}`}>
-      <div className="bd-style__hero">{hero ? <Shot item={hero} alt={shotAlt(hero)} /> : null}</div>
+      <div className="bd-style__hero">{hero ? <Shot item={hero} fit="box" alt={shotAlt(hero)} /> : null}</div>
       <div className="bd-style__body">
         <header className="bd-style__head">
           <h3>{style.name}</h3>
