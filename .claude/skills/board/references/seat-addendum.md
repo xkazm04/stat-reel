@@ -27,8 +27,11 @@ brief.
   type them from memory.
 - **Clock coverage.** `dataClock` has to sweep at least 85% of `timeline.from`→`timeline.to` over the
   run and must not stand still for long stretches. Hold the end for 2 s at most.
-- **Empty frame.** In a 1080×1920 artboard, a design that leaves the lower third empty wastes the
-  format. Use the whole safe box (top 270, bottom 670, left 65, right 130).
+- **Use the safe box fully; keep the bands outside it non-critical.** In 1080×1920, critical content
+  (clock, chart, labels, annotations) fills the safe box: top 270, bottom 670, left 65, right 130. The
+  bands outside it may carry atmosphere such as texture or colour, but nothing the viewer must read.
+- **Text too small for a phone.** In a 1080-wide artboard, anything the viewer must read is at least
+  28 px, and the data clock is the largest element on screen.
 - **Labels colliding during rank swaps.** Interpolate positions and keep labels attached to their
   bars, without overlap.
 - **Non-pure frames.** CSS transitions, `setTimeout`, `Date.now()` or state carried between
