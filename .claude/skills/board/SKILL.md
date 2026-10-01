@@ -1,9 +1,9 @@
 ---
 name: board
 description: "StatReel design-board loop for the product format: 30-90 s viz-led videos of stats evolving over time (matplotlib-style animated charts - bar-chart races, line races, streamgraphs; data time maps to video time; no narration). Each Board item is a full-run design (seek(t) + dataClock(t) artboard); the harness renders one 8 s cut-out from the middle of the run and measures longevity across it (monotonic data clock, coverage, no static stretches, seek-stability). The owner accepts or rejects (reject style / reject case / reject both); an Obsidian ledger carries the feedback into the next loop. Invoke with /board loop <id> [--shots 3], /board harvest <id>, /board sync, /board status."
-version: 0.3.0
+version: 0.4.0
 memory: vault
-argument-hint: "loop <id> [--shots 3] [--participants specs] | harvest <id> | sync | status | import ..."
+argument-hint: "loop <id> | harvest <id> [--strict] | mass --prefix <p> | cases <id> | harvest-cases <id> | sync | status | import ..."
 ---
 
 # Board - long-running data videos, judged by a cut-out
@@ -73,7 +73,30 @@ must be running on 127.0.0.1:8787.
   left 65, right 130.
 - No league, team, sponsor or broadcaster marks, and no athlete photos. Illustration must read as
   illustration.
-- OFL fonts only. No network.
+- Every readable text is at least 28 px (owner rule; `check.mjs` measures DOM, SVG and canvas text).
+- Generated images (grok `image_gen`) carry texture, mood or scene only, never data. Each is listed in
+  `shot.json` `images[]` with its exact prompt (ending in the text ban) and role, is illustrated rather
+  than photo-real, is never a figure in a slot naming a real person, and stays under 2.5 MB (15 MB per
+  design). See `references/seat-addendum.md` and ADR 008.
+- OFL fonts only. No network at render time.
+
+## Libraries and the case loop (ADR 008)
+
+- **Styles** (`/board?tab=styles`, `GET/PATCH /api/styles`): every style with its verdict. The owner
+  locks signatures and retires styles. `sync` writes this into `ledger.style_status`, and the brief
+  lists locked styles to rebuild faithfully and retired ones never to reuse. Chart forms with 5 or
+  more designs on the Board are named as overused.
+- **Case loop**: `node scripts/board.mjs cases --id cs-NNN [--count 8] [--participants ...] [--round N]`
+  runs text-only seats, one domain per seat (sports beyond F1, games, geo-economy, music, culture and
+  science, motorsport depth and wildcards, rotated by `--round`), with web search on. Each seat writes
+  `variant-1/cases.json` and must pass `node data/check-cases.mjs`. That check requires at least 10
+  years, at least 4 beats, a tension, unknowns, and sources with licence, plus real fact refs when
+  `staged`. Then run `harvest-cases --id cs-NNN`, which de-duplicates and posts to `/api/cases`. The
+  owner decides on the Use cases tab: accept, too short, no insight, no data, duplicate.
+- A `new-source` idea never triggers ingestion. The owner approves a source, it is added to
+  `data/registry/sources.yaml`, and only then is it ingested through `statreel_ingest`.
+- **Mass design runs**: `mass --prefix <p> --participants <grok seats> --target N` repeats sync →
+  loop → `harvest --strict` until N designs pass every check.
 
 ## Memory (Obsidian, `<vault>/Board/`)
 
@@ -85,7 +108,8 @@ must be running on 127.0.0.1:8787.
 | `Loops/<id>.md` | each loop's phase and the exact brief the seats read |
 | `Contests/` | the contest instrument's own vault pages for board rounds |
 
-Cost: one loop is one contest round, reported at roughly $30–60 for two seats at 45 min. Report the
+Cost: a claude seat runs about $20 for 50 min; a grok-4.7 seat runs about $1.8 for 40 min (gk-001..006: 36 seat runs,
+about $63, 108/108 designs passing). One loop is one contest round. Report the
 seats' wall time and cost after each loop, from `.contest/arena/board-<id>/runs/*/record.json`.
 
 ## Skill improvement log
