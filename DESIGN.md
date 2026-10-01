@@ -53,6 +53,7 @@
 | D10 | **OFL fonts only, self-hosted, pinned** | Commercial-safe, server-render-safe, deterministic | Adobe Fonts / desktop EULAs (no server rendering) |
 | D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
 | D16 | **Format: 30–90 s viz-led time-evolution videos, no narration** ([ADR 007](docs/decisions/007-format-time-evolution-videos.md)) | Owner: the data visualization tells the story over time; shorts are cut-outs of long runs | Narrated headline shorts (hook → reveal → payoff) |
+| D17 | **Board libraries + text-only case loop + generated images as art supplement** ([ADR 008](docs/decisions/008-board-libraries-case-loop-images.md)) | Owner: cases were locked in our own data and styles in the same x/y charts; judge stories apart from looks, expand domains via approved sources | Judging style and case only together on designs |
 | D15 | **Two themes (A/1 dark, A/3 light), Calendar, Board** ([ADR 006](docs/decisions/006-two-themes-studio-modules.md)) | Owner: keep both winners until one dominates; studio composes, Calendar publishes; Board gates visual direction | Single baseline |
 | D14 | **"On Air" brand + UI baseline, real data only** ([ADR 005](docs/decisions/005-on-air-brand-baseline.md)) | Owner verdict on the `--landing` contest | Patchbay (temporary) |
 | D13 | **Knowledge-review changes adopted** ([ADR 003](docs/decisions/003-media-generation-knowledge-review.md)) | Fail-closed gate, fact binding, spoken/display tokens, hook/close craft, mix and peak targets | — |
@@ -237,9 +238,18 @@ screen shows real data or a labelled empty state (ADR 005).
 5. **Calendar**: channel management (YouTube; TikTok and Instagram from M5) and timing on top of
    composed videos. Schedule a gated render on a channel at a time; a scheduler publishes due items
    (private or draft only).
-6. **Board**: a grid of visual-only design outputs and use-case ideas behind the owner's gate:
-   accept, reject style, reject case, reject both. It is fed by the `board` skill, whose Obsidian
-   ledger loops on the feedback (ADR 006).
+6. **Board**: three tabs (ADR 006, ADR 008).
+   - **Designs**: cut-outs of 30–90 s design runs behind the owner's gate (accept, reject style,
+     reject case, reject both).
+   - **Styles**: a gallery of every style with its verdict. The owner locks a signature, retires a
+     style, adds a note or picks a hero.
+   - **Use cases**: registry formats, cases accepted through designs, and the inbox of text-only
+     **case ideas**. Each idea covers a decade or more, with at least 4 beats, a tension and
+     web-verified sources. The owner accepts it or rejects it as too short, no insight, no data or
+     duplicate.
+
+   All three are fed by the `board` skill (`loop`, `mass`, `cases`), whose Obsidian ledger loops on
+   the feedback. Design seats may add generated imagery (texture, scene, never data).
 7. **Metrics**: cross-channel table and charts (views, average view duration, retention where
    available, likes, comments, shares), per use case and per sport.
 8. **Sources**: registry view, verdicts, tested capabilities, terms-hash status.
