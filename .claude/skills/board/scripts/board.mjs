@@ -214,7 +214,7 @@ async function harvest() {
   const outDir = path.join(REPO, "data", "board", "items");
   mkdirSync(outDir, { recursive: true });
   let posted = 0;
-  const useCases = (await timeEvolutionUseCases()).map((u) => u.id);
+  const useCases = (await timeEvolutionUseCases()).filter((u) => u.cells.some((c) => c.sport === "F1" && c.status === "data-ready")).map((u) => u.id);
   const strict = argv.includes("--strict");
   const report = [];
   const seats = readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md"))).sort();
@@ -336,7 +336,7 @@ async function mass() {
   const target = Number(opt("target", "100"));
   const maxRounds = Number(opt("max-rounds", "20"));
   const participants = opt("participants") ?? die("--participants <specs> is required");
-  const fromThisRun = async () => (await api("/api/board?status=all")).items.filter((i) => String(i.source?.loop ?? "").startsWith(`${prefix}-`)).length;
+  const fromThisRun = async () => (await api("/api/board?status=all")).items.filter((i) => i.status !== "archived" && String(i.source?.loop ?? "").startsWith(`${prefix}-`)).length;
   const logFile = path.join(BOARD_VAULT, "Loops", `mass-${prefix}.md`);
   mkdirSync(path.dirname(logFile), { recursive: true });
   if (!existsSync(logFile)) writeFileSync(logFile, `# mass run ${prefix}\n\n- target: ${target}\n- participants: ${participants}\n\n| round | finished | posted | skipped | on Board (run) |\n|---|---|---|---|---|\n`);

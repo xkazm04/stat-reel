@@ -14,7 +14,8 @@ function loadData(dataDir) {
   if (!tableCache.has(dataDir)) {
     const tables = {};
     for (const f of readdirSync(dataDir).filter((f) => f.startsWith("f1_") && f.endsWith(".json"))) tables[f.slice(0, -5)] = JSON.parse(readFileSync(path.join(dataDir, f), "utf8"));
-    const useCases = JSON.parse(readFileSync(path.join(dataDir, "usecases.json"), "utf8")).map((u) => u.id);
+    // only cases the staged (F1) data can make; a Soccer-only format is not a valid target
+    const useCases = JSON.parse(readFileSync(path.join(dataDir, "usecases.json"), "utf8")).filter((u) => u.cells.some((c) => c.sport === "F1" && c.status === "data-ready")).map((u) => u.id);
     tableCache.set(dataDir, { tables, useCases });
   }
   return tableCache.get(dataDir);
