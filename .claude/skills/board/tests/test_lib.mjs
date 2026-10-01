@@ -140,3 +140,26 @@ test("longevity samples span the whole run", () => {
   assert.ok(s.at(-1) > 70 && s.at(-1) < 72);
   assert.ok(s.length >= 10);
 });
+
+test("resolveFacts flags keys and columns that are not staged", async () => {
+  const { resolveFacts } = await import("../scripts/lib.mjs");
+  const tables = { a: [{ fact_key: "f1db:race:1:driver:x:entry:1", points_awarded: 9 }], b: [{ fact_key: "f1db:season:1950", races_held: 7 }] };
+  const r = resolveFacts(["f1db:race:1:driver:x:entry:1#points_awarded", "f1db:season:1950#races_held", "f1db:season:1950#nope", "f1db:race:2#wins"], tables);
+  assert.equal(r.cited, 4);
+  assert.deepEqual(r.unresolved, ["f1db:season:1950#nope", "f1db:race:2#wins"]);
+});
+
+test("seatLanes spreads seats over distinct cases and rotates by round", async () => {
+  const { seatLanes } = await import("../scripts/lib.mjs");
+  const ids = ["a", "b", "c", "d", "e", "f", "g"];
+  const r0 = seatLanes(ids, 3, 0);
+  assert.deepEqual(r0, [["a", "b"], ["c", "d"], ["e", "f"]]);
+  assert.deepEqual(seatLanes(ids, 3, 1)[0], ["g", "a"]);
+  assert.deepEqual(seatLanes([], 2, 0), [[], []]);
+});
+
+test("rejectedCases lists only cases rejected more than accepted", async () => {
+  const { rejectedCases } = await import("../scripts/lib.mjs");
+  const l = { cases: { x: { accepts: 0, case_rejects: 1 }, y: { accepts: 1, case_rejects: 1 }, z: { accepts: 2, case_rejects: 0 } } };
+  assert.deepEqual(rejectedCases(l), ["x"]);
+});

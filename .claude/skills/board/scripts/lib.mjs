@@ -164,3 +164,36 @@ export function assessLongevity(samples, timeline) {
     static_fraction: Math.round(same * 100) / 100,
   };
 }
+
+// ---- mass loops (cheap seats, many rounds) -------------------------------------------------
+
+/**
+ * Every cited `<fact_key>#<column>` must name a staged row and one of its columns. A weak seat can
+ * cite plausible keys that do not exist; those designs show figures nobody can trace.
+ */
+export function resolveFacts(facts, tables) {
+  const rows = new Map();
+  for (const list of Object.values(tables)) for (const r of list) if (r && r.fact_key) rows.set(r.fact_key, r);
+  const unresolved = [];
+  for (const f of facts ?? []) {
+    const i = f.lastIndexOf("#");
+    const row = i > 0 ? rows.get(f.slice(0, i)) : undefined;
+    if (!row || !(f.slice(i + 1) in row)) unresolved.push(f);
+  }
+  return { cited: (facts ?? []).length, unresolved };
+}
+
+/**
+ * Lanes keep parallel seats from converging: seat i gets two use cases, rotated by round, skipping
+ * case-rejected ones. Seats still may propose a new case; the lane is where they start.
+ */
+export function seatLanes(caseIds, seats, round = 0, per = 2) {
+  if (!caseIds.length) return Array.from({ length: seats }, () => []);
+  return Array.from({ length: seats }, (_, s) =>
+    Array.from({ length: Math.min(per, caseIds.length) }, (_, k) => caseIds[(round * seats * per + s * per + k) % caseIds.length]));
+}
+
+/** Case ids the owner rejected more often than accepted - lanes skip them. */
+export function rejectedCases(ledger) {
+  return Object.entries(ledger.cases).filter(([, c]) => c.case_rejects > c.accepts).map(([id]) => id);
+}

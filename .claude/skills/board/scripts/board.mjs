@@ -7,7 +7,11 @@
  *   node board.mjs loop --id <loop> [--shots 3] [--participants <specs>] [--timeout-min 45]
  *                                            stage real data, write the brief, init + run a contest round
  *   node board.mjs stage --id <loop>         stage data + brief only (no seats) - for inspection
- *   node board.mjs harvest --id <loop>       screenshot every variant, post it to the Board
+ *   node board.mjs harvest --id <loop> [--strict]
+ *                                            render each design's cut-out, post it to the Board (--strict: only designs
+ *                                            that pass the full check - facts, page errors, longevity, seek)
+ *   node board.mjs mass --prefix <p> --participants <specs> [--target 100] [--max-rounds 20] [--shots 3] [--timeout-min 120]
+ *                                            round after round of loop + harvest --strict until the target is on the Board
  *   node board.mjs import --image <png> --title <t> --use-case <id> --style-id <id> --style-name <n> [--summary s]
  *
  * Needs the StatReel server on 127.0.0.1:8787 (it stages data through the guarded MCP `query` tool and
@@ -15,11 +19,12 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateDesign } from "./lib.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, rejectedCases, renderBrief, renderLedgerMarkdown, seatLanes, stabilityProbe, validateDesign } from "./lib.mjs";
+import { inspect } from "./check-design.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../../../..");
@@ -125,6 +130,13 @@ async function stage(dir) {
     writeFileSync(path.join(data, `${name}.js`), `window.STATREEL = window.STATREEL || {};\nwindow.STATREEL.${name} = ${JSON.stringify(value)};\n`);
   }
   cpSync(path.join(REPO, "fonts"), path.join(data, "fonts"), { recursive: true });
+  cpSync(path.join(HERE, "..", "references", "seat-skeleton.html"), path.join(data, "skeleton.html"));
+  writeFileSync(path.join(data, "check.mjs"), [
+    "// The board harness for one variant: node data/check.mjs variant-N (run from your workspace).",
+    'import path from "node:path";', 'import { fileURLToPath } from "node:url";',
+    `const { main } = await import(${JSON.stringify(pathToFileURL(path.join(HERE, "check-design.mjs")).href)});`,
+    "await main(process.argv[2], path.dirname(fileURLToPath(import.meta.url)));", "",
+  ].join("\n"));
   const tokensDir = path.join(REPO, "packages", "design-tokens", "src");
   mkdirSync(path.join(data, "statreel-tokens"), { recursive: true });
   for (const f of readdirSync(tokensDir).filter((f) => f.endsWith(".css"))) cpSync(path.join(tokensDir, f), path.join(data, "statreel-tokens", f));
@@ -144,17 +156,21 @@ async function stage(dir) {
   return data;
 }
 
-function patchParticipantBriefs(loopDir) {
+function patchParticipantBriefs(loopDir, { caseIds = [], round = 0 } = {}) {
   // The contest template promises CDN libraries and a judge panel; a board loop is offline and owner-reviewed.
   const entries = path.join(loopDir, "entries");
-  for (const seat of readdirSync(entries)) {
+  const seats = readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md"))).sort();
+  const lanes = seatLanes(caseIds, seats.length, round);
+  const addendum = readFileSync(path.join(HERE, "..", "references", "seat-addendum.md"), "utf8");
+  for (const [si, seat] of seats.entries()) {
     const f = path.join(entries, seat, "PARTICIPANT.md");
-    if (!existsSync(f)) continue;
     let t = readFileSync(f, "utf8");
     t = t.replace(/Libraries only from a public CDN\s+\(jsdelivr, cdnjs, unpkg\) and only when they earn their weight; a variant that also works\s+offline is worth more than one that does not\./,
       "No network at all: no CDN libraries, no\n  remote fonts or images - the variant must work fully offline.");
     t = t.replace("The panel is blind\n  and a leak is redacted before judging.", "The review is blind\n  and a leak is redacted before judging.");
     t = t.replace("Write for a judge who has not seen the other variants.", "Write for a reviewer who has not seen the other variants.");
+    const lane = lanes[si].length ? `This round your variants start from the use cases ${lanes[si].map((c) => `\`${c}\``).join(" and ")}.` : "Pick the use cases yourself.";
+    if (!t.includes("## How to work this round")) t += addendum.replace("{{lane}}", lane);
     writeFileSync(f, t);
   }
 }
@@ -175,7 +191,9 @@ async function loop() {
   if (opt("participants")) init.push("--participants", opt("participants"));
   const r1 = spawnSync(process.execPath, [CONTEST, ...init], { cwd: REPO, stdio: "inherit" });
   if (r1.status !== 0) die("contest init failed");
-  patchParticipantBriefs(path.join(ARENA, contestId));
+  const rejected = new Set(rejectedCases(ledger));
+  const caseIds = (await timeEvolutionUseCases()).map((u) => u.id).filter((c) => !rejected.has(c));
+  patchParticipantBriefs(path.join(ARENA, contestId), { caseIds, round: Number(opt("round", "0")) });
   mkdirSync(path.join(BOARD_VAULT, "Loops"), { recursive: true });
   writeFileSync(path.join(BOARD_VAULT, "Loops", `${id}.md`), `# ${id}\n\n- phase: ${loopPhase(ledger)}\n- shots per seat: ${shots}\n- contest: ${contestId}\n- started: ${new Date().toISOString()}\n\n## Brief\n\n${brief}\n`);
   console.log(`running seats for ${contestId} (this takes up to ${opt("timeout-min", "60")} min)...`);
@@ -196,13 +214,25 @@ async function harvest() {
   mkdirSync(outDir, { recursive: true });
   let posted = 0;
   const useCases = (await timeEvolutionUseCases()).map((u) => u.id);
-  const seats = readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md")));
+  const strict = argv.includes("--strict");
+  const report = [];
+  const seats = readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md"))).sort();
   for (const [si, seat] of seats.entries()) {
     for (const v of readdirSync(path.join(entries, seat)).filter((d) => /^variant-\d+$/.test(d)).sort()) {
       const dir = path.join(entries, seat, v);
       const metaFile = path.join(dir, "shot.json");
-      const meta = existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, "utf8")) : null;
+      let meta = null;
+      try {
+        meta = existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, "utf8")) : null;
+      } catch {
+        meta = null;
+      }
       const errors = validateDesign(meta, { useCases });
+      if (!errors.length && strict) {
+        const r = await inspect(dir, path.join(entries, seat, "data"), { browser, useCases });
+        errors.push(...r.errors);
+      }
+      report.push({ seat, variant: v, ok: !errors.length, errors, style: meta?.style?.id ?? null, case: meta?.use_case_id ?? meta?.proposed_case?.name ?? null });
       if (errors.length) {
         console.log(`skip ${seat}/${v}: ${errors.join("; ")}`);
         continue;
@@ -236,6 +266,7 @@ async function harvest() {
     }
   }
   await browser.close();
+  writeFileSync(path.join(ARENA, contestId, "harvest.json"), JSON.stringify({ id, strict, posted, report }, null, 2));
   console.log(`${posted} shot(s) on the Board. Review them at /board, then run: node board.mjs sync`);
 }
 
@@ -294,6 +325,42 @@ async function renderClip(page, meta, w, h, mp4, poster) {
   return { duration_s: meta.duration_s, fps, frames: times.length, poster_t: meta.poster_t, seek_stable: mismatches === 0, mismatches };
 }
 
+/**
+ * Many cheap rounds: sync -> loop (lanes rotate per round) -> harvest --strict, until `--target`
+ * designs from this run are on the Board. Stops after `--max-rounds`, or after 3 rounds in a row
+ * that posted nothing. The owner's decisions made meanwhile reach the next round's brief at sync.
+ */
+async function mass() {
+  const prefix = opt("prefix") ?? die("--prefix <name> is required (e.g. gm)");
+  const target = Number(opt("target", "100"));
+  const maxRounds = Number(opt("max-rounds", "20"));
+  const participants = opt("participants") ?? die("--participants <specs> is required");
+  const fromThisRun = async () => (await api("/api/board?status=all")).items.filter((i) => String(i.source?.loop ?? "").startsWith(`${prefix}-`)).length;
+  const logFile = path.join(BOARD_VAULT, "Loops", `mass-${prefix}.md`);
+  mkdirSync(path.dirname(logFile), { recursive: true });
+  if (!existsSync(logFile)) writeFileSync(logFile, `# mass run ${prefix}\n\n- target: ${target}\n- participants: ${participants}\n\n| round | finished | posted | skipped | on Board (run) |\n|---|---|---|---|---|\n`);
+  const done = existsSync(ARENA) ? readdirSync(ARENA).filter((d) => d.startsWith(`board-${prefix}-`)).length : 0;
+  let dry = 0;
+  for (let r = done; r < done + maxRounds; r++) {
+    const have = await fromThisRun();
+    if (have >= target) break;
+    const id = `${prefix}-${String(r + 1).padStart(3, "0")}`;
+    console.log(`\n=== ${id}: ${have}/${target} on the Board ===`);
+    const node = (args) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: REPO, stdio: "inherit", env: process.env });
+    node(["loop", "--id", id, "--participants", participants, "--shots", opt("shots", "3"), "--timeout-min", opt("timeout-min", "120"), "--round", String(r)]);
+    if (existsSync(path.join(ARENA, `board-${id}`))) node(["harvest", "--id", id, "--strict"]);
+    const h = existsSync(path.join(ARENA, `board-${id}`, "harvest.json")) ? JSON.parse(readFileSync(path.join(ARENA, `board-${id}`, "harvest.json"), "utf8")) : { posted: 0, report: [] };
+    const now = await fromThisRun();
+    appendFileSync(logFile, `| ${id} | ${new Date().toISOString()} | ${h.posted} | ${h.report.filter((x) => !x.ok).length} | ${now} |\n`);
+    dry = h.posted ? 0 : dry + 1;
+    if (dry >= 3) {
+      console.log("3 rounds in a row posted nothing - stopping; read harvest.json in the last arenas");
+      break;
+    }
+  }
+  console.log(`mass ${prefix}: ${await fromThisRun()}/${target} on the Board`);
+}
+
 async function status() {
   const l = readLedger();
   const { items } = await api("/api/board");
@@ -325,6 +392,6 @@ async function stageOnly() {
   console.log(`staged ${data} and ${path.join(dir, "BRIEF.md")} (no seats run)`);
 }
 
-const cmds = { sync, status, loop, harvest, import: importImage, stage: stageOnly };
+const cmds = { sync, status, loop, harvest, mass, import: importImage, stage: stageOnly };
 if (!cmds[cmd]) die(`usage: board.mjs ${Object.keys(cmds).join("|")} ...`);
 await cmds[cmd]();

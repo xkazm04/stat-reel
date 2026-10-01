@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>skeleton - plumbing only, not a style</title>
+<!--
+  PLUMBING ONLY. Copy the <script> structure, throw the look away. It shows:
+  1. loading staged data with <script src="../data/...js"> (no fetch, no network);
+  2. precomputing one state per data step BEFORE playback (cumulative sums, ranks);
+  3. a pacing curve: video time t -> fractional data index (eased, never stalls);
+  4. seek(t) that draws ONLY from t (pure: no timers, no accumulated state);
+  5. dataClock(t) that returns the SAME moment the picture shows;
+  6. self-play with requestAnimationFrame unless ?capture=1.
+-->
+<style>
+  @font-face { font-family: "Barlow Condensed"; src: url("../data/fonts/barlow-condensed/BarlowCondensed-700.woff2") format("woff2"); font-weight: 700; }
+  @font-face { font-family: "Inter"; src: url("../data/fonts/inter/Inter-Variable.woff2") format("woff2"); font-weight: 100 900; }
+  body { margin: 0; background: #000; }
+  #art { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: #111; color: #eee; font-family: Inter, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  #clock { position: absolute; left: 80px; top: 300px; font: 700 160px "Barlow Condensed"; }
+  #rows { position: absolute; left: 80px; top: 520px; width: 860px; }
+  .row { position: absolute; left: 0; height: 64px; font-size: 36px; display: flex; align-items: center; gap: 16px; }
+  .bar { height: 40px; background: #4a7; }
+  #attr { position: absolute; left: 80px; bottom: 700px; font-size: 24px; opacity: .7; }
+</style>
+<script src="../data/f1_race_results.js"></script>
+</head>
+<body>
+<div id="art">
+  <div id="clock" class="num"></div>
+  <div id="rows"></div>
+  <div id="attr">Data: F1DB (CC BY 4.0)</div>
+</div>
+<script>
+(() => {
+  const DURATION = 40;            // the full run in seconds, equal to shot.json duration_s
+  const HOLD_END = 2;             // short hold on the latest data
+  const rows = window.STATREEL.f1_race_results.filter((r) => !r.is_indianapolis && r.season >= 1990 && r.season <= 1999);
+
+  // 1) the data steps (one per race), in order
+  const races = [...new Map(rows.map((r) => [r.race_id, { id: r.race_id, season: r.season, round: r.round }])).values()]
+    .sort((a, b) => a.season - b.season || a.round - b.round);
+
+  // 2) precompute the state AFTER each race: cumulative wins per driver
+  const wins = new Map();
+  const states = races.map((race) => {
+    for (const r of rows) if (r.race_id === race.id && r.position_number === 1) wins.set(r.display_name, (wins.get(r.display_name) || 0) + 1);
+    return { race, top: [...wins.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8) };
+  });
+
+  // 3) pacing: video time -> fractional race index (linear here; ease it, slow down at turns)
+  const index = (t) => Math.max(0, Math.min(races.length - 1, (t / (DURATION - HOLD_END)) * (races.length - 1)));
+
+  // 5) the clock: the moment the picture shows (season + fraction of that season's rounds)
+  function dataClock(t) {
+    const s = states[Math.floor(index(t))].race;
+    const inSeason = races.filter((r) => r.season === s.season).length;
+    return s.season + (s.round - 1) / inSeason;
+  }
+
+  // 4) draw from t only
+  const clockEl = document.getElementById("clock");
+  const rowsEl = document.getElementById("rows");
+  function seek(t) {
+    const st = states[Math.floor(index(t))];
+    clockEl.textContent = `${st.race.season} · R${st.race.round}`;   // printed label == dataClock(t) moment
+    const max = Math.max(1, ...st.top.map((d) => d[1]));
+    rowsEl.innerHTML = st.top.map(([name, n], i) =>
+      `<div class="row" style="top:${i * 80}px"><span style="width:260px">${name}</span><div class="bar" style="width:${(n / max) * 480}px"></div><span class="num">${n}</span></div>`).join("");
+  }
+
+  window.statreel = { duration: DURATION, seek, dataClock };
+  seek(0);
+
+  // 6) self-play when opened normally; the harness drives it with ?capture=1
+  if (!new URLSearchParams(location.search).has("capture")) {
+    let start = null;
+    const tick = (now) => { start ??= now; seek(((now - start) / 1000) % DURATION); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+})();
+</script>
+</body>
+</html>
