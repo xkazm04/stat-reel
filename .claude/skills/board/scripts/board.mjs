@@ -192,7 +192,8 @@ async function loop() {
   const r1 = spawnSync(process.execPath, [CONTEST, ...init], { cwd: REPO, stdio: "inherit" });
   if (r1.status !== 0) die("contest init failed");
   const rejected = new Set(rejectedCases(ledger));
-  const caseIds = (await timeEvolutionUseCases()).map((u) => u.id).filter((c) => !rejected.has(c));
+  // lanes only offer cases the staged data can make (F1 cells data-ready)
+  const caseIds = (await timeEvolutionUseCases()).filter((u) => u.cells.some((c) => c.sport === "F1" && c.status === "data-ready")).map((u) => u.id).filter((c) => !rejected.has(c));
   patchParticipantBriefs(path.join(ARENA, contestId), { caseIds, round: Number(opt("round", "0")) });
   mkdirSync(path.join(BOARD_VAULT, "Loops"), { recursive: true });
   writeFileSync(path.join(BOARD_VAULT, "Loops", `${id}.md`), `# ${id}\n\n- phase: ${loopPhase(ledger)}\n- shots per seat: ${shots}\n- contest: ${contestId}\n- started: ${new Date().toISOString()}\n\n## Brief\n\n${brief}\n`);
