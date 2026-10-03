@@ -20,3 +20,4 @@ Read `DESIGN.md` first; it is the source of truth. Update it (and add an ADR in 
 
 ## Key commands
 `just setup` · `pnpm dev` · `pnpm test` · `pnpm e2e` · `pnpm e2e:live` · `just ingest <source>` · `just transform` · `just heatmap` · `opa test policy`
+`just check` (or `pnpm check`, `--only typecheck,opa` narrows) = every offline gate (tsc, vitest, scripts, pytest, opa, dbt parse, Biome ratchet) with a PASS/FAIL table · `pnpm lint:ratchet` (`--update` after a Biome cleanup) · next to a running `pnpm dev`, run e2e as `E2E_API_PORT=8797 E2E_STUDIO_PORT=5183 pnpm e2e`
