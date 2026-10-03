@@ -14,7 +14,7 @@
   --color-surface: #ffffff;          /* the cleared side of the line, inputs */
   --color-surface-2: #e3e8ec;        /* alternate lane band, selected rows */
   --color-line: #c6ced5;             /* hairline rules */
-  --color-line-strong: #8f9aa5;      /* ticks, axis rules, control outlines */
+  --color-line-strong: #7a848e;      /* ticks, axis rules, control outlines */
   --color-line-faint: #dae0e5;       /* lane separators */
   --color-text: #12161a;             /* graphite */
   --color-text-muted: #38414a;       /* body text */
@@ -43,12 +43,12 @@
   /* ── Colour · status (always paired with a glyph + label) ─────────── */
   --status-go: #08704b;
   --status-data-ready: #1a5fc8;
-  --status-ask: #9a5b00;
+  --status-ask: #935700;
   --status-blocked: #38414a;
   --status-go-ink: #ffffff;
   --status-go-wash: rgba(8, 112, 75, 0.1);
   --status-data-ready-wash: rgba(26, 95, 200, 0.09);
-  --status-ask-wash: rgba(154, 91, 0, 0.1);
+  --status-ask-wash: rgba(147, 87, 0, 0.1);
   --status-blocked-wash: rgba(56, 65, 74, 0.1);
   /* status glyphs: positions relative to the line */
   --status-go-glyph: "bar-through-line-with-flag";
@@ -62,7 +62,7 @@
 
   /* ── Colour · licence class (markers carry the shape) ─────────────── */
   --licence-legal: #08704b;
-  --licence-non-commercial: #9a5b00;
+  --licence-non-commercial: #935700;
   --licence-paid: #5646c8;
   --licence-avoid: #38414a;
 
@@ -77,6 +77,10 @@
   --lane-8: #6e8f10;   /* metric explainer shorts */
   --lane-9: #1899cf;   /* reactive weekend */
   --lane-10: #566a90;  /* interactive companion */
+  /* Where a lane colour is TEXT, the studio mixes the hue toward graphite by this share of hue:
+     color-mix(in srgb, var(--lane-color) var(--lane-ink-mix), var(--color-text)). The hues stay
+     as marks and fills; theme-contrast.test.ts holds every lane's ink at 4.5:1. */
+  --lane-ink-mix: 60%;
   --ident-counterfactual-timelines: #6a5be2;
   --ident-era-adjusted-rankings: #0a93a3;
   --ident-spatial-career-maps: #2c9a55;

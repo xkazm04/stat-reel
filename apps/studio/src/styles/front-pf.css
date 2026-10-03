@@ -24,7 +24,7 @@
   background: none;
   font-style: normal;
   font-weight: 700;
-  color: var(--lane-color, var(--color-brand));
+  color: color-mix(in srgb, var(--lane-color, var(--color-brand)) var(--lane-ink-mix), var(--color-text));
 }
 .pf-landing [data-status="go"] {
   color: var(--status-go);
@@ -589,7 +589,7 @@ a.pf-way:focus-visible .pf-way__detail > svg {
   font-family: var(--font-mono);
   font-size: max(12px, calc(var(--r) * 0.78));
   font-weight: 600;
-  color: var(--lane-color);
+  color: color-mix(in srgb, var(--lane-color) var(--lane-ink-mix), var(--color-text));
 }
 .pf-ln__name {
   font-size: clamp(14px, calc(var(--r) * 0.98), 24px);
@@ -675,7 +675,7 @@ a.pf-way:focus-visible .pf-way__detail > svg {
   pointer-events: none;
   container-type: size;
   overflow: hidden;
-  color: var(--lane-color);
+  color: color-mix(in srgb, var(--lane-color) var(--lane-ink-mix), var(--color-text));
   /* decoration: faint photo-finish scan lines behind the stage art */
   background-image: repeating-linear-gradient(90deg, transparent 0 5px, color-mix(in srgb, var(--color-deco) 45%, transparent) 5px 6px);
 }
@@ -938,7 +938,7 @@ a.pf-way:focus-visible .pf-way__detail > svg {
   justify-content: center;
   min-width: 0;
   margin: 0;
-  color: var(--lane-color);
+  color: color-mix(in srgb, var(--lane-color) var(--lane-ink-mix), var(--color-text));
   --art-ground: var(--color-bg);
 }
 .pf-scene__no {
