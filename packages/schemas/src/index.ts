@@ -294,3 +294,4 @@ export const JobStatus = z.enum(["queued", "running", "succeeded", "failed", "ca
 export type JobStatus = z.infer<typeof JobStatus>;
 
 export * from "./fixtures";
+export * from "./topics";
