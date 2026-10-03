@@ -15,7 +15,7 @@ export const GenerationJobType = z.enum(["visual_options", "generate_video"]);
 export type GenerationJobType = z.infer<typeof GenerationJobType>;
 export const GenerationJobStatus = z.enum(["queued", "running", "done", "failed", "cancelled"]);
 export type GenerationJobStatus = z.infer<typeof GenerationJobStatus>;
-export const GenerationErrorKind = z.enum(["timeout", "cli_exit", "validation", "data_gate", "interrupted", "cancelled", "budget"]);
+export const GenerationErrorKind = z.enum(["timeout", "cli_exit", "validation", "render", "data_gate", "interrupted", "cancelled", "budget"]);
 export type GenerationErrorKind = z.infer<typeof GenerationErrorKind>;
 
 export const GenerationJobSchema = z.object({

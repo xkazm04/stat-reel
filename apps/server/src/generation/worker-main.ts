@@ -12,6 +12,8 @@ import { generationDataRoot, loadGenerationConfig } from "./config";
 import type { GenerationEngine } from "./engine";
 import { fakeEngine } from "./fake";
 import { GenerationQueue } from "./queue";
+import { makeRenderStep } from "./render-steps";
+import { dataRaceValidator } from "./validate-data-race";
 import { GenerationWorker } from "./worker";
 import { createLiveEngine } from "./claude";
 
@@ -44,9 +46,12 @@ async function main() {
   const engine: GenerationEngine = config.mode === "fake" ? fakeEngine() : createLiveEngine({ config, dataRoot, apiBase: base });
   // a stale row's recorded pid is killed only when it is still the CLI we spawned (pids are reused)
   const expectedImage = path.parse(config.cli.bin ?? process.env.CLAUDE_BIN ?? "claude").name;
+  const callbacks = httpCallbacks(base);
   const worker = new GenerationWorker({
     db, queue, config, engine, dataRoot,
-    callbacks: httpCallbacks(base),
+    callbacks,
+    validator: dataRaceValidator,
+    renderStep: makeRenderStep(callbacks),
     health: () => serverHealthy(base),
     kill: (job) => (job.pid ? killTreeIfNamed(job.pid, expectedImage) : Promise.resolve(false)),
     stage: engine.stage?.bind(engine),

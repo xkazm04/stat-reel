@@ -383,7 +383,17 @@ export class Pipeline implements PipelineApi {
   }
 
   private worker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1): Promise<Record<string, unknown>> {
-    const full = { ...job, entry: ENTRY, bundleDir: path.join(paths.data, "cache", "bundle", sourceHash()) };
+    return runRenderWorker(job, ctx, scale);
+  }
+}
+
+/**
+ * Runs one render job in the x64 render worker child process (ADR 004) and resolves with its `done`
+ * message. Shared by the produce pipeline and the generation `gen_render` handler.
+ */
+export function runRenderWorker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1): Promise<Record<string, unknown>> {
+  {
+    const full ={ ...job, entry: ENTRY, bundleDir: path.join(paths.data, "cache", "bundle", sourceHash()) };
     // props with word timings exceed the Windows command-line limit (32K): pass the job as a file
     const jobFile = path.join(paths.data, "cache", "jobs", `${randomUUID()}.json`);
     mkdirSync(path.dirname(jobFile), { recursive: true });

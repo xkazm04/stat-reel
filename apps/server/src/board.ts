@@ -6,8 +6,8 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { asc, desc, eq } from "drizzle-orm";
-import { boardItems, type Db, now } from "./db";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { boardItems, caseIdeas, type Db, now } from "./db";
 
 export const DECISIONS = ["accept", "reject_style", "reject_case", "reject_both"] as const;
 export type Decision = (typeof DECISIONS)[number];
@@ -16,6 +16,8 @@ export type ProposedCase = { name: string; pitch: string; requires?: string[] };
 export type NewBoardItem = {
   image: string; video?: string | null; duration_s?: number | null; width?: number; height?: number; title: string; summary?: string;
   use_case_id?: string | null; proposed_case?: ProposedCase | null; style?: BoardStyle | null; source?: Record<string, unknown> | null;
+  /** the case idea this design belongs to (generation output, ADR 010); must exist */
+  case_idea_id?: string | null;
 };
 export type BoardItem = Omit<typeof boardItems.$inferSelect, "proposed_case_json" | "style_json" | "source_json"> & {
   proposed_case: ProposedCase | null; style: BoardStyle | null; source: Record<string, unknown> | null;
@@ -42,11 +44,12 @@ export class BoardService {
     this.inside(i.image, "image");
     const video = i.video ? this.inside(i.video, "video") : null;
     if (!i.use_case_id && !i.proposed_case) throw new Error("an item needs a use_case_id or a proposed_case");
+    if (i.case_idea_id && !this.db.select({ id: caseIdeas.id }).from(caseIdeas).where(eq(caseIdeas.id, i.case_idea_id)).get()) throw new Error(`unknown case idea ${i.case_idea_id}`);
     const row = {
       id: `bd-${randomUUID().slice(0, 8)}`, image: i.image.split(path.sep).join("/"), video, duration_s: video ? (i.duration_s ?? null) : null, width: i.width ?? null, height: i.height ?? null,
       title: i.title, summary: i.summary ?? null, use_case_id: i.use_case_id ?? null,
       proposed_case_json: i.proposed_case ? JSON.stringify(i.proposed_case) : null, style_json: i.style ? JSON.stringify(i.style) : null,
-      source_json: i.source ? JSON.stringify(i.source) : null, status: "pending", decision: null, note: null, decided_at: null, created_at: now(), case_idea_id: null,
+      source_json: i.source ? JSON.stringify(i.source) : null, status: "pending", decision: null, note: null, decided_at: null, created_at: now(), case_idea_id: i.case_idea_id ?? null,
     };
     this.db.insert(boardItems).values(row).run();
     return hydrate(row);
@@ -85,11 +88,42 @@ export class BoardService {
 
   /** Undo a decision (D.1): back to pending, decision, note and decided_at cleared. Archived items cannot be undone. */
   undo(id: string): BoardItem {
+    return this.undoDecision(id).item;
+  }
+
+  /** `undo`, plus the siblings that accepting this item archived (D.2 transition 5), which come back to pending. */
+  undoDecision(id: string): { item: BoardItem; restored_ids: string[] } {
     const cur = this.get(id);
     if (!cur) throw new Error(`unknown board item ${id}`);
     if (cur.status === "archived") throw new Error(`board item ${id} is archived`);
     this.db.update(boardItems).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(boardItems.id, id)).run();
-    return this.get(id)!;
+    return { item: this.get(id)!, restored_ids: this.restoreSiblings(id) };
+  }
+
+  /**
+   * Accepting one generated variant archives its pending siblings (same case, same generation job) as
+   * `superseded by <id>` (owner decision Q4). Returns the archived ids.
+   */
+  supersedeSiblings(acceptedId: string): string[] {
+    const acc = this.get(acceptedId);
+    const jobId = acc?.source?.job_id;
+    if (!acc?.case_idea_id || typeof jobId !== "string") return [];
+    const ids: string[] = [];
+    for (const r of this.db.select().from(boardItems).where(eq(boardItems.case_idea_id, acc.case_idea_id)).all()) {
+      if (r.id === acceptedId || r.status !== "pending") continue;
+      if (hydrate(r).source?.job_id !== jobId) continue;
+      this.db.update(boardItems).set({ status: "archived", decision: "superseded", note: `superseded by ${acceptedId}` }).where(eq(boardItems.id, r.id)).run();
+      ids.push(r.id);
+    }
+    return ids;
+  }
+
+  /** The inverse of `supersedeSiblings`, matched by the note: back to pending with decision and note cleared. */
+  restoreSiblings(acceptedId: string): string[] {
+    const note = `superseded by ${acceptedId}`;
+    const rows = this.db.select({ id: boardItems.id }).from(boardItems).where(and(eq(boardItems.status, "archived"), eq(boardItems.decision, "superseded"), eq(boardItems.note, note))).all();
+    for (const r of rows) this.db.update(boardItems).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(boardItems.id, r.id)).run();
+    return rows.map((r) => r.id);
   }
 
   /** Decided items since an ISO time (exclusive), oldest first: the design skill's feedback feed. */

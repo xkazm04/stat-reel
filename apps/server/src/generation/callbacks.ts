@@ -7,6 +7,8 @@ export interface ServerCallbacks {
   finalize(jobId: string, body: { outputs: string[]; result?: Record<string, unknown> }): Promise<Record<string, unknown>>;
   render(jobId: string, body: RenderRequest): Promise<{ render_job_id: string }>;
   renderStatus(renderJobId: string): Promise<{ status: string; error?: string | null; result?: unknown }>;
+  /** abort a render the worker no longer wants (cancel / lost lease) */
+  cancelRender?(renderJobId: string): Promise<void>;
 }
 
 export function httpCallbacks(base: string, fetchFn: typeof fetch = fetch): ServerCallbacks {
@@ -23,6 +25,9 @@ export function httpCallbacks(base: string, fetchFn: typeof fetch = fetch): Serv
   return {
     finalize: (id, body) => call("POST", `/api/generation/jobs/${id}/finalize`, body),
     render: (id, body) => call("POST", `/api/generation/jobs/${id}/render`, body),
+    cancelRender: async (id) => {
+      await call("POST", `/api/jobs/${id}/cancel`);
+    },
     renderStatus: async (id) => {
       const r = await call<{ jobs: { id: string; status: string; error?: string | null; result_json?: string | null }[] }>("GET", "/api/jobs");
       const j = r.jobs.find((x) => x.id === id);
