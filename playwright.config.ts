@@ -23,6 +23,14 @@ export default defineConfig({
       timeout: 120_000,
       env: { STATREEL_PORT: apiPort, STATREEL_APP_DB: runDb, LLM_MODE: process.env.LLM_MODE ?? "replay", AUDIO_MODE: process.env.AUDIO_MODE ?? "replay", PUBLISH_MODE: process.env.PUBLISH_MODE ?? "dry", LLM_RECORD: process.env.LLM_RECORD ?? "", AUDIO_RECORD: process.env.AUDIO_RECORD ?? "" },
     },
+    {
+      // generation worker (ADR 010): a separate process, no port; ready when it logs so. Fake mode in `pnpm e2e`.
+      command: "pnpm --filter @statreel/server worker",
+      wait: { stdout: /generation worker ready/ },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: { STATREEL_PORT: apiPort, STATREEL_APP_DB: runDb, GEN_MODE: process.env.GEN_MODE ?? "live", STATREEL_GEN_WORKER: "on", GEN_FAKE_DELAY_MS: "800" },
+    },
     { command: `pnpm --filter @statreel/studio exec vite --host 127.0.0.1 --port ${studioPort} --strictPort`, url: `http://127.0.0.1:${studioPort}`, reuseExistingServer: false, timeout: 120_000, env: { STATREEL_API: `http://127.0.0.1:${apiPort}` } },
   ],
 });

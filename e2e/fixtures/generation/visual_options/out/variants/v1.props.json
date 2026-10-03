@@ -1,0 +1,83 @@
+{
+  "schema": "data-race/props@placeholder",
+  "note": "e2e fixture; replaced by DataRaceProps once T9 lands",
+  "variant": 1,
+  "data_provenance": "sample",
+  "title": "Who leads the long run?",
+  "hook": "Who stays on top?",
+  "style": {
+    "name": "Slate night"
+  },
+  "entities": [
+    {
+      "id": "e1",
+      "label": "Entity 1",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e2",
+      "label": "Entity 2",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e3",
+      "label": "Entity 3",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e4",
+      "label": "Entity 4",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e5",
+      "label": "Entity 5",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e6",
+      "label": "Entity 6",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e7",
+      "label": "Entity 7",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e8",
+      "label": "Entity 8",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e9",
+      "label": "Entity 9",
+      "logo": {
+        "kind": "wordmark"
+      }
+    },
+    {
+      "id": "e10",
+      "label": "Entity 10",
+      "logo": {
+        "kind": "wordmark"
+      }
+    }
+  ]
+}
