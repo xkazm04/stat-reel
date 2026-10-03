@@ -1,12 +1,11 @@
-/* StatReel design tokens (ADR 006): one semantic vocabulary, two themes selected by `data-theme` on <html>.
-     shared.css             type scale, spacing, fonts, layout (theme-independent)
-     theme-onair.css        A/1 "On Air": night stadium, volt = cleared to air (dark; the default)
+/* StatReel design tokens (ADR 009): one semantic vocabulary, one theme.
+     shared.css             type scale, spacing, fonts, layout
      theme-photofinish.css  A/3 "Photo Finish": timing sheet, one clay-red finish line (light)
-   Components use only the semantic names below; a theme file only changes values.
+   Components use only the semantic names below. The Photo Finish values resolve on :root (and on
+   <html data-theme="photofinish">, which index.html sets so scoped selectors keep applying).
    Fonts: OFL, self-hosted from the repo fonts/ directory; no external CDN.
    (@import must precede every other rule, so the @font-face block follows it.) */
 @import "./shared.css";
-@import "./theme-onair.css";
 @import "./theme-photofinish.css";
 
 @font-face { font-family: "Barlow Condensed"; font-weight: 500; font-style: normal; font-display: swap;

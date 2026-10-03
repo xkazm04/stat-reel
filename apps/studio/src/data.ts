@@ -10,6 +10,8 @@ import { fileUrl } from "./logic";
 
 /** Query options live apart from the hooks so route loaders can prefetch the same cache entries. */
 export const heatmapQuery = { queryKey: qk.heatmap, queryFn: api.heatmap, staleTime: 30_000 } as const;
+export const heatmapTopicsQuery = (all: boolean) =>
+  ({ queryKey: qk.heatmapTopics(all), queryFn: () => api.heatmapTopics(all), staleTime: 5_000 }) as const;
 export const sourcesQuery = { queryKey: qk.sources, queryFn: api.sources, staleTime: 60_000 } as const;
 export const projectsQuery = { queryKey: qk.projects, queryFn: api.projects } as const;
 export const metricsQuery = { queryKey: qk.metrics, queryFn: api.metrics } as const;
@@ -17,6 +19,12 @@ export const calendarQuery = { queryKey: qk.calendar, queryFn: api.calendar } as
 export const projectQuery = (id: string) => ({ queryKey: qk.project(id), queryFn: () => api.project(id) }) as const;
 
 export const useHeatmap = () => useQuery(heatmapQuery);
+/** The topic heatmap; polled while a generation job is queued or running (SSE gen.* also invalidates it). */
+export const useHeatmapTopics = (all: boolean) =>
+  useQuery({
+    ...heatmapTopicsQuery(all),
+    refetchInterval: (q) => (q.state.data?.topics.some((t) => t.pending.running || t.pending.queued > 0) ? 10_000 : false),
+  });
 export const useSources = () => useQuery(sourcesQuery);
 export const useProjects = () => useQuery(projectsQuery);
 export const useMetrics = () => useQuery(metricsQuery);

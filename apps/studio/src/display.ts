@@ -1,9 +1,9 @@
 /**
- * Pure "On Air" helpers for the front, the rights desk, the rundown and publishing. Every figure
- * they return is counted from API data; no React, no DOM (unit-tested in onair.test.ts).
+ * Pure display helpers for the front, the heatmap, the rundown and the sources desk. Every figure
+ * they return is counted from API data; no React, no DOM (unit-tested in display.test.ts).
  */
-import type { CellStatus, HeatmapCell, LicenseClass, Mode, Sport } from "@statreel/schemas";
-import { cellOf, countStatuses, type JobLike, needsYou, SPORTS, stageIndex } from "./logic";
+import type { CellStatus, HeatmapCell, LicenseClass, Mode } from "@statreel/schemas";
+import { type JobLike, needsYou, SPORTS, stageIndex } from "./logic";
 
 /** The status words the UI writes as text (never colour-only; e2e reads them). */
 export const STATUS_WORD: Record<CellStatus, string> = {
@@ -12,17 +12,17 @@ export const STATUS_WORD: Record<CellStatus, string> = {
   ask: "ASK",
   blocked: "BLOCKED",
 };
-/** One line under a status: what it means on air. */
+/** One line under a status: what it means for the video. */
 export const STATUS_AIR: Record<CellStatus, string> = {
   go: "Cleared to air",
   "data-ready": "Data cleared · composition not built",
   ask: "Rights needed",
   blocked: "Blackout",
 };
-export const STATUS_RANK: Record<CellStatus, number> = { go: 3, "data-ready": 2, ask: 1, blocked: 0 };
+const STATUS_RANK: Record<CellStatus, number> = { go: 3, "data-ready": 2, ask: 1, blocked: 0 };
 export const STATUS_ORDER: CellStatus[] = ["go", "data-ready", "ask", "blocked"];
 
-export const KIND_LONG: Record<string, string> = {
+const KIND_LONG: Record<string, string> = {
   hist: "Historical results",
   bio: "Biographical",
   events: "Event data",
@@ -79,14 +79,6 @@ export function biggestMovers<T extends RankRow>(rows: T[], n = 6): T[] {
     .slice(0, n);
 }
 
-/** Integer steps from one rank to another (inclusive), for the rolling numerals. */
-export function rankSteps(from: number, to: number): number[] {
-  const out: number[] = [];
-  const step = to >= from ? 1 : -1;
-  for (let n = from; step > 0 ? n <= to : n >= to; n += step) out.push(n);
-  return out;
-}
-
 type RegistrySource = {
   id: string;
   verdict: string;
@@ -102,38 +94,6 @@ export function verdictCounts(sources: { verdict: string }[]): Record<LicenseCla
   return c;
 }
 
-/**
- * The rights-desk ticker: every item is counted from the registry, the tested capabilities, the
- * heatmap and the project list. Nothing here is a claim the data does not carry.
- */
-export function tickerFacts(input: {
-  sources: { verdict: string }[];
-  capabilities: { status: string }[];
-  cells: HeatmapCell[];
-  usecases: number;
-  projects: number | null;
-}): string[] {
-  const v = verdictCounts(input.sources);
-  const pass = input.capabilities.filter((c) => c.status === "pass").length;
-  const m = countStatuses(input.cells, "monetized");
-  const nc = countStatuses(input.cells, "non_commercial");
-  const perMode = input.usecases * SPORTS.length;
-  const facts = [
-    `${input.sources.length} sources on the registry`,
-    `${v.legal} cleared for monetized video`,
-    `${v.non_commercial} non-commercial only`,
-    `${v.paid} need a paid licence`,
-    `${v.avoid} never fetched`,
-    `${pass} of ${input.capabilities.length} capability tests pass`,
-    `${m.go} of ${perMode} cells go · monetized`,
-    `${nc.go} go · ${nc["data-ready"]} data ready · non-commercial`,
-    `${input.usecases} formats × ${SPORTS.length} sports × 2 modes`,
-  ];
-  if (input.projects !== null) facts.push(`${input.projects} project${input.projects === 1 ? "" : "s"} in the rundown`);
-  facts.push("Private or draft until the owner says otherwise");
-  return facts;
-}
-
 /** Registry sources marked avoid that would otherwise touch a cell (its sport and a required kind). */
 export function neverFetchedFor<T extends RegistrySource>(sources: T[], sport: string, kinds: string[]): T[] {
   return sources.filter(
@@ -144,17 +104,6 @@ export function neverFetchedFor<T extends RegistrySource>(sources: T[], sport: s
         s.kinds.some((k) => kinds.includes(k)) ||
         (s.partial_kinds ?? []).some((k) => kinds.includes(k))),
   );
-}
-
-/** Use case -> sports whose status differs between the two modes. */
-export function modeDiff(cells: HeatmapCell[]): Map<string, Sport[]> {
-  const out = new Map<string, Sport[]>();
-  for (const c of cells) {
-    if (c.mode !== "monetized") continue;
-    const other = cellOf(cells, c.usecase, c.sport, "non_commercial");
-    if (other && other.status !== c.status) out.set(c.usecase, [...(out.get(c.usecase) ?? []), c.sport]);
-  }
-  return out;
 }
 
 /** Best cells to make in a mode: best status first, then the simplest format (use-case stage). */
@@ -228,33 +177,6 @@ export function activeJob<T extends { status: string; created_at: string }>(jobs
       .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null
   );
 }
-
-/**
- * What the server sends as the YouTube description (pipeline.publishJob): the owner's text (or
- * the title), the props method note, every distinct source attribution, the AI disclosure line.
- */
-export function composeDescription(o: {
-  description: string;
-  fallbackTitle: string;
-  methodNote?: string | null;
-  attributions: (string | null | undefined)[];
-}): string {
-  const attribution = [...new Set(o.attributions.filter((a): a is string => !!a))].join(" · ");
-  return [
-    o.description.trim() || o.fallbackTitle,
-    o.methodNote,
-    attribution,
-    "Narration and music are AI-generated (ElevenLabs).",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-export const parseTags = (s: string): string[] =>
-  s
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
 
 /** Percent string for a 0..1 job progress. */
 export const pct = (p: number | null | undefined): string => `${Math.round(Math.max(0, Math.min(1, p ?? 0)) * 100)} %`;

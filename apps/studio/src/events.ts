@@ -74,6 +74,8 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
     if (e.kind === "llm" && e.type !== "job.queued" && e.type !== "job.started")
       void qc.invalidateQueries({ queryKey: ["llm-events"] });
   } else if (e.type === "render.done" || e.type === "project.updated") {
+    // a finished render adds a video to the topic heatmap
+    void qc.invalidateQueries({ queryKey: ["heatmap-topics"] });
     if (pid) void qc.invalidateQueries({ queryKey: qk.project(pid) });
     void qc.invalidateQueries({ queryKey: qk.projects });
     void qc.invalidateQueries({ queryKey: qk.calendar });

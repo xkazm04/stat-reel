@@ -1,6 +1,6 @@
 # 006 - Two winning themes (A/1 dark, A/3 light), shared modules, Calendar and Board
 
-- Status: accepted
+- Status: accepted; superseded in part by [009](009-photo-finish-single-theme.md): the modules (Calendar, Board) remain, the second theme is removed
 - Date: 2026-09-30
 - Supersedes part of: ADR 005 (one baseline, A/1). Affects DESIGN.md §6.1.
 

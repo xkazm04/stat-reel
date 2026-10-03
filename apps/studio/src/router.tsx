@@ -1,7 +1,6 @@
 /**
  * Code-based TanStack Router (DESIGN §6.1 revised by ADR 006): Front, Heatmap (grid layer +
  * cell layer), Rundown, Studio (compose + Render & Gate), Calendar, Board, Metrics, Sources.
- * The front has one component per theme; every other screen is one module in both themes.
  */
 import type { Mode, Sport } from "@statreel/schemas";
 import {
@@ -13,14 +12,12 @@ import {
   Navigate,
   Outlet,
 } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
 import { api, qk } from "./api";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
 import { WipeProvider } from "./components/ui";
-import { calendarQuery, heatmapQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
+import { calendarQuery, heatmapQuery, heatmapTopicsQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
 import { queryClient } from "./queryClient";
-import { useTheme } from "./theme";
 
 /**
  * Page loading: every screen is its own chunk (`lazyRouteComponent`; intent preload fetches it on
@@ -42,8 +39,7 @@ const StudioIndex = lazyRouteComponent(() => import("./routes/StudioIndex"), "St
 const ControlRoom = lazyRouteComponent(() => import("./studio/ControlRoom"), "ControlRoom");
 const RenderGatePage = lazyRouteComponent(() => import("./studio/RenderGatePage"), "RenderGatePage");
 const StudioLayout = lazyRouteComponent(() => import("./studio/StudioLayout"), "StudioLayout");
-const FrontPage = lazy(() => import("./routes/Front").then((m) => ({ default: m.FrontPage })));
-const FrontPhotoFinish = lazy(() => import("./routes/FrontPhotoFinish").then((m) => ({ default: m.FrontPhotoFinish })));
+const FrontPhotoFinish = lazyRouteComponent(() => import("./routes/FrontPhotoFinish"), "FrontPhotoFinish");
 
 function RootLayout() {
   return (
@@ -85,14 +81,6 @@ export const asSport = (v: unknown): Sport | undefined =>
 
 const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: NotFound, errorComponent: RouteError });
 
-/** The front: A/1's floodlit front in On Air, A/3's finish frame in Photo Finish. */
-function FrontRoute() {
-  const { theme } = useTheme();
-  return (
-    <Suspense fallback={<PagePending />}>{theme === "photofinish" ? <FrontPhotoFinish /> : <FrontPage />}</Suspense>
-  );
-}
-
 export type FrontSearch = { format?: string; sport?: Sport; mode?: Mode };
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -102,14 +90,8 @@ const indexRoute = createRoute({
     sport: asSport(s.sport),
     mode: asMode(s.mode),
   }),
-  component: FrontRoute,
-  // the theme is on <html> before first paint (index.html), so the right front chunk is known now
-  loader: async () => {
-    warm(projectsQuery, metricsQuery, heatmapQuery);
-    await (document.documentElement.dataset.theme === "photofinish"
-      ? import("./routes/FrontPhotoFinish")
-      : import("./routes/Front"));
-  },
+  component: FrontPhotoFinish,
+  loader: () => warm(projectsQuery, metricsQuery, heatmapQuery),
 });
 
 /**
@@ -117,16 +99,20 @@ const indexRoute = createRoute({
  * over the grid, so the grid keeps its place and focus when the layer closes.
  * `focus` = "<usecase>|<sport>" names the cell to focus on the grid (`cell` is its legacy name).
  */
-export type HeatmapSearch = { mode?: Mode; focus?: string };
+export type HeatmapSearch = { mode?: Mode; focus?: string; view?: "topics" | "feasibility" };
 export const heatmapRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/heatmap",
   validateSearch: (s: Record<string, unknown>): HeatmapSearch => ({
     mode: asMode(s.mode),
     focus: typeof s.focus === "string" ? s.focus : typeof s.cell === "string" ? s.cell : undefined,
+    view: s.view === "feasibility" ? "feasibility" : s.view === "topics" ? "topics" : undefined,
   }),
   component: HeatmapPage,
-  loader: () => warm(heatmapQuery, sourcesQuery),
+  loader: ({ location }) =>
+    location.pathname === "/heatmap" && (location.search as { view?: string }).view !== "feasibility"
+      ? warm(heatmapTopicsQuery(false))
+      : warm(heatmapQuery, sourcesQuery),
 });
 const heatmapIndexRoute = createRoute({ getParentRoute: () => heatmapRoute, path: "/", component: () => null });
 export const heatmapCellRoute = createRoute({

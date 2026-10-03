@@ -1,5 +1,5 @@
 /* Shared, theme-independent tokens: font families, the type scale floor, spacing, layout.
-   Theme files (theme-onair.css, theme-photofinish.css) set every colour, shape and motion value. */
+   Theme file (theme-photofinish.css) sets every colour, shape and motion value. */
 
 :root {
   /* ── Type ─────────────────────────────────────────────────────────── */

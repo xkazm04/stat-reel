@@ -2,9 +2,9 @@
    one clay-red hairline (--color-signal) splits data from video, marks the licence line and is the
    playhead. Status is a position relative to that line. Instruments have almost no radius and use
    rules, not shadows. Contest landing-screens A/3, owner decision 2026-09-30 (ADR 006).
-   Same semantic names as theme-onair.css; only values change. */
+   Single theme since ADR 009; the values resolve on :root and on [data-theme="photofinish"]. */
 
-:root[data-theme="photofinish"],
+:root,
 [data-theme="photofinish"] {
   color-scheme: light;
 
@@ -131,7 +131,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root[data-theme="photofinish"],
+  :root,
   [data-theme="photofinish"] {
     --motion-instant: 1ms;
     --motion-fast: 1ms;

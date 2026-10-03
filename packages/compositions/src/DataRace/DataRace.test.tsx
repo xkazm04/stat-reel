@@ -262,11 +262,11 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
-        "hook0": "198df93ba0c9c34d",
-        "like": "35906983bfa44899",
-        "mid45": "c6d3db2ec2065452",
-        "poweredEnd": "cac5499d945f2b65",
-        "spotlight": "1f38df18ea78d8e7",
+        "hook0": "6ef86efbc1436572",
+        "like": "a3864ee6bfbc7a30",
+        "mid45": "72930ea446a56658",
+        "poweredEnd": "5cbbd46a858efedd",
+        "spotlight": "6e3a2fe3c0105310",
       }
     `);
   });

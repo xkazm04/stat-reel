@@ -17,8 +17,18 @@ test.describe.configure({ mode: "serial" });
 
 let projectId = "";
 
+test("theme: Photo Finish is the only theme and a stale stored pick is dropped (ADR 009)", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.localStorage.setItem("statreel.theme", "onair"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "photofinish");
+  expect(await page.evaluate(() => window.localStorage.getItem("statreel.theme"))).toBeNull();
+  await expect(page.getByTestId("theme-photofinish")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "StatReel, front page" })).toBeVisible();
+});
+
 test("heatmap: F1 x era-adjusted is Go in monetized mode", async ({ page }) => {
-  await page.goto("/heatmap");
+  await page.goto("/heatmap?view=feasibility");
   await page.getByTestId("mode-monetized").click();
   const cell = page.getByTestId("cell-era-adjusted-rankings-F1");
   await expect(cell).toContainText(/GO/);
@@ -27,7 +37,7 @@ test("heatmap: F1 x era-adjusted is Go in monetized mode", async ({ page }) => {
 });
 
 test("create a project from the Go cell and draft it with the co-pilot", async ({ page }) => {
-  await page.goto("/heatmap");
+  await page.goto("/heatmap?view=feasibility");
   await page.getByTestId("mode-monetized").click();
   await page.getByTestId("cell-era-adjusted-rankings-F1").click();
   await page.getByTestId("create-project").click();
@@ -80,12 +90,23 @@ test("produce: audio -> render -> checks -> manifest -> gate allows monetized", 
   expect(JSON.parse(render.policy_json).allow).toBe(true);
 });
 
-test("topics: the finished render is on the ledger under Formula 1 (API; the view is T6)", async ({ request }) => {
+test("topics: the finished render is on the ledger under Formula 1 (API) and shown in the topics view", async ({ page, request }) => {
   const h = await (await request.get(`${API}/api/heatmap/topics`)).json();
   const f1 = h.topics.find((t: { key: string }) => t.key === "formula-1");
   expect(f1.videos).toHaveLength(1);
   expect(f1.videos[0]).toMatchObject({ n: 1, bucket: "fresh", age_days: 0, project_id: projectId });
   expect(f1.videos[0].url).toMatch(/^\/files\/renders\//);
+
+  await page.goto("/heatmap"); // Topics is the default view
+  await expect(page.getByTestId("heatmap-view-topics")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("topic-row-formula-1")).toBeVisible();
+  const cell = page.getByTestId("topic-cell-formula-1-1");
+  await expect(cell).toContainText("today");
+  await expect(cell).toHaveAttribute("aria-label", /Formula 1, video 1 of 1, created .*today/);
+  await expect(cell).toHaveAttribute("href", /^\/files\/renders\//);
+  // the Feasibility view is one click away and still holds the rights grid
+  await page.getByTestId("heatmap-view-feasibility").click();
+  await expect(page.getByTestId("cell-era-adjusted-rankings-F1")).toBeVisible();
 });
 
 test("negative gate: a non-commercial source is refused on a monetized channel", async ({ request }) => {

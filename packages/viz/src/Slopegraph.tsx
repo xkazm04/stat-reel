@@ -77,8 +77,8 @@ export function Slopegraph(props: SlopegraphProps): ReactElement {
       hi,
       line: hi ? theme.accent : foc ? theme.inkDim : theme.inkFaint,
       lineWidth: hi ? Math.max(6, fs * 0.2) : foc ? 4 : 3,
-      label: hi ? theme.accent : foc || !hasFocus ? theme.ink : theme.inkDim,
-      rank: hi ? theme.accent : foc ? theme.inkDim : theme.inkFaint,
+      label: hi ? theme.accentInk : foc || !hasFocus ? theme.ink : theme.inkDim,
+      rank: hi ? theme.accentInk : foc ? theme.inkDim : theme.inkFaint,
       weight: hi || foc ? 700 : 500,
       opacity: hi ? 1 : 1 - 0.82 * clamp(dim),
     };

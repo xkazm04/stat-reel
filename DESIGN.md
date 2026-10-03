@@ -52,13 +52,14 @@
 | D9 | **Burned-in captions everywhere + SRT/VTT sidecar on YouTube** | TikTok/Instagram APIs have no caption-file field | — |
 | D10 | **OFL fonts only, self-hosted, pinned** | Commercial-safe, server-render-safe, deterministic | Adobe Fonts / desktop EULAs (no server rendering) |
 | D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
+| D18 | **Photo Finish is the single theme; Frame Stat icon; video palette follows** ([ADR 009](docs/decisions/009-photo-finish-single-theme.md)) | Owner: build on Photo Finish only. One language, half the CSS/TSX branching; `data-theme="photofinish"` stays static; stored theme picks are dropped; `videoTheme` moves to the Photo Finish palette | Keeping On Air as an option |
 | D16 | **Format: 30–90 s viz-led time-evolution videos, no narration** ([ADR 007](docs/decisions/007-format-time-evolution-videos.md)) | Owner: the data visualization tells the story over time; shorts are cut-outs of long runs | Narrated headline shorts (hook → reveal → payoff) |
 | D21 | **Page loading discipline: lazy routes, staggered arrival, transitions, revalidating reads** ([ADR 012](docs/decisions/012-page-loading-discipline.md)) | Every screen is a chunk with loader-prefetched data; sections mount top to bottom behind reserved placeholders; `/api` is gzip + ETag; hashed assets immutable | Heatmap grid left atomic (ARIA grid + focus registry) |
 | D20 | **Topic activity heatmap: controlled topic list + `videos` ledger** ([ADR 011](docs/decisions/011-topic-activity-heatmap.md)) | Owner: a topic is a broad domain (a type of sport, a geo-economic discipline) from a fixed list; one row per topic, column n = n-th finished video, filled by recency | Free-text topic labels; scanning the file system for videos |
 | D17 | **Board libraries + text-only case loop + generated images as art supplement** ([ADR 008](docs/decisions/008-board-libraries-case-loop-images.md)) | Owner: cases were locked in our own data and styles in the same x/y charts; judge stories apart from looks, expand domains via approved sources | Judging style and case only together on designs |
 | D19 | **Background generation queue: a dedicated worker process runs the Claude Code CLI; downloads only through `fetch_asset`** ([ADR 010](docs/decisions/010-generation-job-queue.md)) | Accepting a case or visual starts the next production step without ever slowing the co-pilot; one job at a time, survives server restarts, no shell, no budget/timeout caps unless configured | A loop inside the server (shares fate with the co-pilot), reusing `jobs`, Bash-based downloads |
-| D15 | **Two themes (A/1 dark, A/3 light), Calendar, Board** ([ADR 006](docs/decisions/006-two-themes-studio-modules.md)) | Owner: keep both winners until one dominates; studio composes, Calendar publishes; Board gates visual direction | Single baseline |
-| D14 | **"On Air" brand + UI baseline, real data only** ([ADR 005](docs/decisions/005-on-air-brand-baseline.md)) | Owner verdict on the `--landing` contest | Patchbay (temporary) |
+| D15 | **Two themes (A/1 dark, A/3 light), Calendar, Board** ([ADR 006](docs/decisions/006-two-themes-studio-modules.md)); *superseded in part by D18: one theme remains* | Owner: keep both winners until one dominates; studio composes, Calendar publishes; Board gates visual direction | Single baseline (adopted by D18) |
+| D14 | **"On Air" brand + UI baseline, real data only** ([ADR 005](docs/decisions/005-on-air-brand-baseline.md)); *superseded by D18 (the real-data-only rule stands)* | Owner verdict on the `--landing` contest | Patchbay (temporary) |
 | D13 | **Knowledge-review changes adopted** ([ADR 003](docs/decisions/003-media-generation-knowledge-review.md)) | Fail-closed gate, fact binding, spoken/display tokens, hook/close craft, mix and peak targets | — |
 | D12 | **Capability tests declared in YAML, evaluated in Python** ([ADR 002](docs/decisions/002-capability-tests-in-python.md)) | One row per capability with coverage, rows and a reason; dbt tests keep schema integrity | dbt tests as capability carriers |
 
@@ -217,9 +218,10 @@ Raw snapshots are immutable. A `current` pointer per source selects the snapshot
 
 ### 6.1 Screens (single-page app)
 
-Two winning themes on one module structure (ADR 006): **On Air** (`onair`, dark, contest A/1) and
-**Photo Finish** (`photofinish`, light, contest A/3). The owner switches between them in the nav. Every
-screen shows real data or a labelled empty state (ADR 005).
+One theme, **Photo Finish** (light, contest A/3), on one module structure (ADR 009, which removed the
+"On Air" theme of ADR 005/006; the Calendar and Board modules of ADR 006 stand). `<html
+data-theme="photofinish">` is static and there is no theme switch. Every screen shows real data or a
+labelled empty state (ADR 005's real-data-only rule).
 
 1. **Front**: the brand's front door, with a fast lane (heatmap, studio, resume) and the latest real
    project on the monitor or finish strip.
@@ -308,7 +310,7 @@ screen shows real data or a labelled empty state (ADR 005).
 - Burned into every export (TikTok/Instagram APIs have no caption-file field); YouTube additionally gets SRT/VTT via `captions.insert` (400 quota units).
 - One timed-word JSON is the source for both burn-in and sidecar.
 - Cue rules: ≤ 2 lines; ≤ 42 chars/line landscape; vertical is limited by the safe-zone width, not the Netflix 32: at 76 px Inter Bold (≈0.56 em/char) the 885 px critical box fits **≈ 19 chars/line** (`maxCharsPerLine(format)` in `packages/captions`; measured 2026-09-29); reading speed target 15–17 CPS, hard max 20 CPS; cue duration 0.8–7 s; min gap 2 frames (Netflix timed-text guide).
-- Vertical style: 70–85 px text at 1920 h, weight 700, white on ~70 % black box or heavy stroke, contrast ≥ 4.5:1 (WCAG 2.2 SC 1.4.3); active-word highlight (accent colour) on shorts.
+- Vertical style: 70–85 px text at 1920 h, weight 700, graphite on a translucent sheet plate (the Photo Finish video palette, [ADR 009](docs/decisions/009-photo-finish-single-theme.md); it replaced white on ~70 % black), contrast ≥ 4.5:1 (WCAG 2.2 SC 1.4.3, asserted in `packages/design-tokens/src/video-theme.test.ts`); active-word highlight in the brand red on shorts.
 - **Safe zone (union of TikTok, Reels, Shorts), 1080×1920:** top 270 px, bottom 670 px, left 65 px, right 130 px → critical-content box ≈ 885×980 px; captions sit just above y ≈ 1250. Debug overlay in Studio and in test renders. (Platforms publish templates, not text specs — values are a conservative union; re-check yearly.)
 - Accessibility law: the European Accessibility Act binds platforms, not an individual creator; treat WCAG 2.2 SC 1.2.2 (captions, prerecorded) as the standard anyway.
 - Rationale data: 49 % always/often use captions, 59–64 % among 18–34 (XR/M8 Labs, May 2026). (The often-quoted "69 % sound off" figure comes from muted-autoplay feeds, not the shorts platforms, which play sound by default. It is not used as a rationale; ADR 003.)
@@ -507,7 +509,7 @@ Each milestone ends with its DoD passing. Estimates assume one agent working wit
   (replay) 5/5. The YouTube upload runs `PUBLISH_MODE=dry` (exact request plan asserted) until the owner
   creates the Google Cloud app (`packages/publish/SETUP.md`); then set `PUBLISH_MODE=live` for the live
   e2e (upload private → verify → `videos.delete`).
-- **UI baseline:** "On Air" (contest `landing-screens` A/1, owner verdict 2026-09-30, [ADR 005](docs/decisions/005-on-air-brand-baseline.md)).
+- **UI baseline:** "Photo Finish" (contest `landing-screens` A/3, the only theme since [ADR 009](docs/decisions/009-photo-finish-single-theme.md); the earlier "On Air" baseline of ADR 005 was removed).
   All seven §6.1 screens, real data only.
 
 ### M0 — Foundations

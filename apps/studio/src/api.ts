@@ -13,6 +13,7 @@ import type {
   Script,
   Source,
   Topic,
+  TopicHeatmap,
   UseCase,
 } from "@statreel/schemas";
 import type { Capability } from "./logic";
@@ -344,6 +345,8 @@ const enc = encodeURIComponent;
 export const api = {
   health: () => request<{ ok: boolean; at: string }>("GET", "/api/health"),
   heatmap: () => request<HeatmapResponse>("GET", "/api/heatmap"),
+  /** topic x video ordinal (ADR 011); `all` also lists every active topic of the controlled list */
+  heatmapTopics: (all: boolean) => request<TopicHeatmap>("GET", `/api/heatmap/topics?include_empty=${all ? "all" : "1"}`),
   recomputeHeatmap: () => request<{ cells: HeatmapCell[] }>("POST", "/api/heatmap/recompute"),
   sources: () => request<SourcesResponse>("GET", "/api/sources"),
   projects: () => request<{ projects: ProjectWithJobs[] }>("GET", "/api/projects"),
@@ -407,6 +410,7 @@ export const api = {
 /** Query keys, shared by pages and the SSE invalidation in events.ts. */
 export const qk = {
   heatmap: ["heatmap"] as const,
+  heatmapTopics: (all: boolean) => ["heatmap-topics", all] as const,
   sources: ["sources"] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["project", id] as const,

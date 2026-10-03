@@ -1,7 +1,8 @@
-# 009: Photo Finish is the single studio theme
+# 009 - Photo Finish is the single studio theme
 
-- **Status:** proposed (draft rev. 2, 2026-10-03; owner answered Q1)
+- **Status:** accepted (2026-10-03; owner answered Q1)
 - **Date:** 2026-10-03
+- **Spec:** [`docs/specs/2026-10-03-app-refresh/SPEC.md`](../specs/2026-10-03-app-refresh/SPEC.md) (A, B)
 - **Affects:** `packages/design-tokens`, `apps/studio` (theme runtime, Nav, Wordmark, Front, Heatmap, Projects, Calendar, Board styles), `DESIGN.md` §2/§6.1/§10. Supersedes ADR 005 and supersedes ADR 006 in part.
 
 ## Context
@@ -20,6 +21,9 @@
    - Geometry lives once in `packages/design-tokens/src/logo.ts` and is shared by the studio, the favicon and the video end card.
    - Colours: graphite frame, sheet-coloured cut-outs, and a signal-red leading bar.
 6. **Video palette (owner decision, 2026-10-03):** `videoTheme` moves to Photo Finish as well: the sheet background, graphite text and one clay-red signal, with text contrast of at least 4.5:1. The export name stays the same, so callers don't change. Generated videos (ADR 010) start from this palette.
+   - Values: ground `#eceff2`, surface `#ffffff`, graphite ink `#12161a`, muted `#38414a`, dim `#56616c`, hairlines `#c6ced5`, signal `#e4432a` (strokes and fills), brand `#b8321a` (`accentInk`: any text in the signal colour, because `#e4432a` on the sheet is only about 3.6:1).
+   - Burned captions: graphite on a translucent sheet plate (`rgba(245, 247, 249, 0.94)`), active word in the brand red. `video-theme.test.ts` asserts at least 4.5:1 for every text colour (and the plate over both the sheet and graphite).
+   - Rows faded on purpose by the slopegraph's focus dimming (opacity) are a deliberate de-emphasis and are not part of the contrast assertion.
 
 ## Consequences
 - Less CSS and TSX, one visual language, and simpler tests. The On Air "broadcast" front page goes away.

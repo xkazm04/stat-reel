@@ -248,10 +248,10 @@ describe("frame", () => {
       l30: sha(markup(30, "landscape")),
     }).toMatchInlineSnapshot(`
       {
-        "l30": "bde60386a10dc603",
-        "t0": "9ea2359103e32f10",
-        "t30": "2894e18fe227ee10",
-        "t40": "b7a0091f505c4bf1",
+        "l30": "6ddddfeaddc1e586",
+        "t0": "0a5622feffcb9352",
+        "t30": "641fd14bfe141315",
+        "t40": "9aa85afca1161ede",
       }
     `);
   });
