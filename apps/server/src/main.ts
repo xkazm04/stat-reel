@@ -10,6 +10,8 @@ import { CalendarService } from "./calendar";
 import { modes, paths, repoRoot, server } from "./config";
 import { openDb } from "./db";
 import { EventBus } from "./events";
+import { GenerationQueue } from "./generation/queue";
+import { GenerationEventsRelay } from "./generation/relay";
 import { HeatmapService } from "./heatmap-service";
 import { JobRunner } from "./jobs";
 import { CaseIdeas, StyleLibrary } from "./library";
@@ -37,9 +39,17 @@ export async function createServer() {
   const cases = new CaseIdeas(db);
   mkdirSync(path.join(paths.board, "items"), { recursive: true });
   runner.resume();
+  // generation (ADR 010): the server only owns the queue API and relays worker events; `pnpm worker` runs the jobs
+  const queue = new GenerationQueue(db);
+  const relay = new GenerationEventsRelay(db, bus);
+  relay.start();
+  // renders requested by the worker share the render lane (one render at a time); the composition lands in T9/T10
+  runner.register("gen_render", async () => {
+    throw new Error("generation renders are not wired yet (DataRace composition: T9, finalize: T10)");
+  }, { lane: "render" });
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
-  const app = buildApp({ db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline });
+  const app = buildApp({ db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner } });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     const root = path.relative(process.cwd(), dist);
@@ -60,5 +70,5 @@ export async function createServer() {
       serveStatic({ path: path.relative(process.cwd(), path.join(dist, "index.html")), onFound: cacheHeaders }),
     );
   }
-  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board, styles, cases };
+  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board, styles, cases, queue, relay };
 }

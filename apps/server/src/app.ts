@@ -22,9 +22,12 @@ import type { CalendarService } from "./calendar";
 import { type BoardService, DECISIONS, type Decision } from "./board";
 import { CASE_DECISIONS, type CaseDecision, type CaseIdeas, MIN_SPAN_YEARS, type StyleLibrary, type StyleOverride } from "./library";
 import type { Db } from "./db";
+import { type GenerationRouteDeps, registerGenerationRoutes } from "./generation/routes";
 
 export type AppDeps = {
   db: Db; calendar: CalendarService; board: BoardService; styles: StyleLibrary; cases: CaseIdeas; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
+  /** generation queue API (ADR 010); optional so lighter test apps need not build it */
+  generation?: GenerationRouteDeps;
 };
 
 const SERVABLE = [paths.renders, paths.audio, paths.board, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
@@ -190,6 +193,9 @@ export function buildApp(d: AppDeps) {
     d.runner.cancel(c.req.param("id"));
     return c.json({ ok: true });
   });
+
+  // ---- generation queue (ADR 010): enqueue/cancel/retry/log/config/worker + worker callbacks
+  if (d.generation) registerGenerationRoutes(app, d.generation);
 
   // ---- files (only under renders/audio)
   app.get("/files/*", (c) => {
