@@ -35,3 +35,34 @@ export {
   sceneAt,
   type TimingInput,
 } from "./timing";
+export {
+  buildSampleDataRace,
+  CARD,
+  type CardState,
+  DataRace,
+  DataRaceFrame,
+  type DataRaceRenderProps,
+  type DataRaceState,
+  dataRaceState,
+  orderedEvents,
+  parseDataRaceRenderProps,
+  type Phase,
+  phaseAt,
+  type RaceRow,
+  type SampleDataRace,
+  sampleDataRaceLedger,
+} from "./DataRace/index";
+export { calculateDataRaceMetadata } from "./Root";
+export {
+  computeTimingPlan,
+  makeTimeMap,
+  movingAverage,
+  periodAtFrame,
+  rankOrder,
+  renderTimingMd,
+  stickyOrders,
+  type TimeMap,
+  type TimingEventInput,
+  type TimingOptions,
+  type TimingPlanInput,
+} from "./timing/index";

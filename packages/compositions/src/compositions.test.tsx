@@ -143,6 +143,7 @@ describe("metadata", () => {
     expect(COMPOSITIONS.map((c) => [c.width, c.height, c.fps])).toEqual([
       [1080, 1920, 30],
       [1920, 1080, 30],
+      [1080, 1920, 30], // DataRace-vertical
     ]);
   });
 });

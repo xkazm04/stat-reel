@@ -1,0 +1,303 @@
+{
+  "$ref": "#/definitions/DataRaceProps",
+  "definitions": {
+    "DataRaceProps": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "const": "vertical",
+          "default": "vertical"
+        },
+        "data_provenance": {
+          "type": "string",
+          "enum": [
+            "real",
+            "sample"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hook": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "value_format": {
+          "type": "object",
+          "properties": {
+            "decimals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3,
+              "default": 1
+            },
+            "prefix": {
+              "type": "string",
+              "maxLength": 4,
+              "default": ""
+            },
+            "suffix": {
+              "type": "string",
+              "maxLength": 6,
+              "default": ""
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "axis_max": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "source_line": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 70
+        },
+        "periods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 22
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "default": []
+              },
+              "color": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "logo": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "file"
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "src": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "wordmark"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "minItems": 2
+              },
+              "value_ref": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+:[^#\\s]+#[a-z_]+$"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "logo",
+              "values",
+              "value_ref"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 2,
+          "maxItems": 10
+        },
+        "entity_count_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "missing_logos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              "entity_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "date_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24
+              },
+              "facts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "ref": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9-]+:[^#\\s]+#[a-z_]+$"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "ref"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 2
+              },
+              "start_frame": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "life_frames": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "date_label",
+              "facts",
+              "start_frame"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "spotlight": {
+          "type": "object",
+          "properties": {
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 28
+                  },
+                  "value_text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "ref": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+:[^#\\s]+#[a-z_]+$"
+                  }
+                },
+                "required": [
+                  "label",
+                  "value_text",
+                  "ref"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 2
+            }
+          },
+          "required": [
+            "facts"
+          ],
+          "additionalProperties": false
+        },
+        "timing_plan_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "data_provenance",
+        "title",
+        "hook",
+        "unit_label",
+        "source_line",
+        "periods",
+        "entities",
+        "spotlight",
+        "timing_plan_sha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
