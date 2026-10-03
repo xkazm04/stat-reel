@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import { ClaudeEngine, type LlmEngine, type LlmEvent, type LlmLimits, llmLimitsFromEnv, ReplayEngine, type StopReason, stopMessage, stopReasonFromSubtype } from "@statreel/llm";
+import { ClaudeEngine, draftPrompt, type LlmEngine, type LlmEvent, type LlmLimits, llmLimitsFromEnv, ReplayEngine, type StopReason, stopMessage, stopReasonFromSubtype } from "@statreel/llm";
 import { modes, paths, repoRoot, server } from "./config";
 import { type Db, llmEvents, llmSessions, now } from "./db";
 import type { EventBus } from "./events";
@@ -13,6 +13,7 @@ import type { ProjectService } from "./projects";
 import { executor, type Tools } from "./tools";
 
 const PROMPTS = path.join(repoRoot, "packages", "llm", "prompts");
+export { draftPrompt }; // moved to @statreel/llm so the fixture drift test can reach it
 export const LLM_FIXTURES = path.join(paths.fixtures, "llm");
 
 export function writeMcpConfig(): string {
@@ -20,16 +21,6 @@ export function writeMcpConfig(): string {
   const file = path.join(paths.statreelLocal, "mcp.json");
   writeFileSync(file, JSON.stringify({ mcpServers: { statreel: { type: "http", url: `http://${server.host}:${server.port}/mcp` } } }, null, 2));
   return file;
-}
-
-/** The standard first prompt for a project: deterministic text, so replay fixtures key on it. */
-export function draftPrompt(p: { id: string; title: string; sport: string; use_case_id: string; format: string; mode: string }): string {
-  return [
-    `Project ${p.id}: "${p.title}".`,
-    `Use case ${p.use_case_id}, sport ${p.sport}, format ${p.format}, mode ${p.mode}.`,
-    "Draft the props and the script for this video now, following your workflow. Use project id",
-    `"${p.id}" in set_props and write_script. Finish with one sentence naming the angle.`,
-  ].join(" ");
 }
 
 export class LlmService {

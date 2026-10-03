@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+export * from "./draft-prompt";
 export * from "./limits";
 
 export type LlmEvent =
