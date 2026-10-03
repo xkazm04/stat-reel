@@ -4,17 +4,33 @@
  * A row exists once a video or an accepted case resolves to the topic; "Show all topics" lists the
  * whole controlled list. The next ordinal is a ghost cell while a generation job is queued or
  * running. Every filled cell prints its age (never colour-only) and links to the video, or to the
- * Board case for a video without a served file. Arrows / Home / End move between linked cells.
+ * Board case for a video without a served file. The grid is ONE tab stop (roving tabindex, the same
+ * gridMove as the feasibility grid): arrows / Home / End reach every cell, linked or not, and a
+ * screen-reader summary states the grid's shape.
  */
 import { RECENCY_BUCKETS } from "@statreel/schemas";
 import { Link } from "@tanstack/react-router";
-import { type KeyboardEvent, useRef, useState } from "react";
+import { type FocusEvent, type KeyboardEvent, useRef, useState } from "react";
 import { Defer } from "../components/arrive";
 import { ViewSwitch } from "../components/HeatmapViews";
 import { Failure, Loading } from "../components/ui";
 import { useHeatmapTopics } from "../data";
 import { relTime } from "../logic";
-import { ageLabel, cellAria, sortTopics, type TopicRow, type TopicVideoCell, visibleColumns } from "../topicHeatmap";
+import {
+  ageLabel,
+  cellAria,
+  clampPos,
+  emptyCellLabel,
+  type GridPos,
+  newTabLabel,
+  nextPos,
+  sortTopics,
+  tabIndexFor,
+  type TopicRow,
+  type TopicVideoCell,
+  topicSummary,
+  visibleColumns,
+} from "../topicHeatmap";
 
 export function HeatmapTopics() {
   const [all, setAll] = useState(false);
@@ -27,34 +43,22 @@ export function HeatmapTopics() {
   const totalVideos = rows.reduce((a, t) => a + t.videos.length, 0);
   const grid = useRef<HTMLDivElement>(null);
 
+  // roving position over every cell; kept inside the grid when rows/columns shrink
+  const [pos, setPos] = useState<GridPos>({ r: 0, c: 0 });
+  const cur = clampPos(pos, rows.length, n);
+
+  const onFocus = (e: FocusEvent<HTMLDivElement>) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-r]");
+    if (el) setPos({ r: Number(el.dataset.r), c: Number(el.dataset.c) });
+  };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-r]");
-    if (!el) return;
-    const r = Number(el.dataset.r);
-    const c = Number(el.dataset.c);
-    if (e.key === "Home" || e.key === "End") {
-      e.preventDefault();
-      const cells = [...(grid.current?.querySelectorAll<HTMLElement>(`[data-r="${r}"]`) ?? [])];
-      (e.key === "Home" ? cells[0] : cells.at(-1))?.focus();
-      return;
-    }
-    const dir: Record<string, [number, number]> = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0] };
-    const d = dir[e.key];
-    if (!d) return;
+    if (!el || e.ctrlKey || e.metaKey || e.altKey) return;
+    const next = nextPos({ r: Number(el.dataset.r), c: Number(el.dataset.c) }, e.key, rows.length, n);
+    if (!next) return;
     e.preventDefault();
-    // walk in the direction until a focusable (linked) cell is found, or stop at the edge
-    let rr = r;
-    let cc = c;
-    for (;;) {
-      rr += d[0];
-      cc += d[1];
-      if (rr < 0 || rr >= rows.length || cc < 0 || cc >= n) return;
-      const next = grid.current?.querySelector<HTMLElement>(`[data-r="${rr}"][data-c="${cc}"]`);
-      if (next) {
-        next.focus();
-        return;
-      }
-    }
+    setPos(next);
+    grid.current?.querySelector<HTMLElement>(`[data-r="${next.r}"][data-c="${next.c}"]`)?.focus();
   };
 
   return (
@@ -93,6 +97,9 @@ export function HeatmapTopics() {
         {q.isError ? (
           <div className="hm-state">
             <Failure error={q.error} what="The topic heatmap" />
+            <button type="button" className="btn btn--sm" onClick={() => void q.refetch()} disabled={q.isFetching}>
+              {q.isFetching ? "Retrying" : "Retry"}
+            </button>
           </div>
         ) : q.isLoading || !data ? (
           <div className="hm-state">
@@ -121,12 +128,19 @@ export function HeatmapTopics() {
                   Topics are listed, but no video has finished yet. Cells fill as videos finish.
                 </p>
               ) : null}
+                <p className="sr-only" id="tp-summary" data-testid="topics-summary">
+                  {topicSummary(rows)}. Arrow keys move between cells; Enter opens a video.
+                </p>
               <div
                 ref={grid}
                 className="tp-grid"
                 role="grid"
                 aria-label="Videos per topic, by order of creation"
+                aria-rowcount={rows.length + 1}
+                aria-colcount={n + 1}
+                aria-describedby="tp-summary"
                 onKeyDown={onKeyDown}
+                onFocus={onFocus}
                 style={{ ["--cols" as string]: n + (cols.earlier ? 1 : 0) }}
               >
                 <div className="tp-row tp-row--head" role="row">
@@ -145,7 +159,7 @@ export function HeatmapTopics() {
                   ))}
                 </div>
                 {rows.map((t, ri) => (
-                  <TopicLine key={t.key} t={t} ri={ri} hasEarlier={cols.earlier > 0} ordinals={ordinals} />
+                  <TopicLine key={t.key} t={t} ri={ri} cur={cur} hasEarlier={cols.earlier > 0} ordinals={ordinals} />
                 ))}
               </div>
               <p className="hm-foot tp-foot">
@@ -163,7 +177,19 @@ export function HeatmapTopics() {
   );
 }
 
-function TopicLine({ t, ri, hasEarlier, ordinals }: { t: TopicRow; ri: number; hasEarlier: boolean; ordinals: number[] }) {
+function TopicLine({
+  t,
+  ri,
+  cur,
+  hasEarlier,
+  ordinals,
+}: {
+  t: TopicRow;
+  ri: number;
+  cur: GridPos;
+  hasEarlier: boolean;
+  ordinals: number[];
+}) {
   const byN = new Map(t.videos.map((v) => [v.n, v]));
   const next = t.videos.length + 1;
   const pendingLabel = t.pending.running ? "rendering" : t.pending.queued > 0 ? "queued" : null;
@@ -182,16 +208,20 @@ function TopicLine({ t, ri, hasEarlier, ordinals }: { t: TopicRow; ri: number; h
           {sub}
         </small>
       </div>
-      {hasEarlier ? <div className="tp-cell tp-cell--earlier" role="gridcell" aria-hidden="true" /> : null}
+      {hasEarlier ? <div className="tp-cell tp-cell--earlier" aria-hidden="true" /> : null}
       {ordinals.map((o, ci) => {
         const v = byN.get(o);
-        if (v) return <VideoCell key={o} topic={t.label} topicKey={t.key} v={v} total={t.videos.length} ri={ri} ci={ci} />;
+        if (v) return <VideoCell key={o} topic={t.label} topicKey={t.key} v={v} total={t.videos.length} ri={ri} ci={ci} tab={tabIndexFor(cur, ri, ci)} />;
         if (o === next && pendingLabel)
           return (
             <div
               key={o}
               className="tp-cell tp-cell--pending"
               role="gridcell"
+              data-r={ri}
+              data-c={ci}
+              tabIndex={tabIndexFor(cur, ri, ci)}
+              aria-label={emptyCellLabel(t.label, o, pendingLabel, false)}
               data-testid={`topic-cell-${t.key}-${o}`}
               data-bucket="pending"
             >
@@ -200,7 +230,15 @@ function TopicLine({ t, ri, hasEarlier, ordinals }: { t: TopicRow; ri: number; h
           );
         const none = o === 1 && !t.videos.length;
         return (
-          <div key={o} className="tp-cell tp-cell--empty" role="gridcell" aria-label={none ? `${t.label}: no video yet` : undefined}>
+          <div
+            key={o}
+            className="tp-cell tp-cell--empty"
+            role="gridcell"
+            data-r={ri}
+            data-c={ci}
+            tabIndex={tabIndexFor(cur, ri, ci)}
+            aria-label={emptyCellLabel(t.label, o, null, none)}
+          >
             {none ? <span className="tp-none">no video yet</span> : null}
           </div>
         );
@@ -216,6 +254,7 @@ function VideoCell({
   total,
   ri,
   ci,
+  tab,
 }: {
   topic: string;
   topicKey: string;
@@ -223,6 +262,7 @@ function VideoCell({
   total: number;
   ri: number;
   ci: number;
+  tab: 0 | -1;
 }) {
   const common = {
     role: "gridcell" as const,
@@ -232,12 +272,13 @@ function VideoCell({
     "data-c": ci,
     "data-testid": `topic-cell-${topicKey}-${v.n}`,
     "aria-label": cellAria(topic, v, total),
+    tabIndex: tab,
     title: v.title,
   };
   const label = <span className="num">{ageLabel(v.age_days)}</span>;
   if (v.url)
     return (
-      <a {...common} href={v.url} target="_blank" rel="noreferrer">
+      <a {...common} aria-label={newTabLabel(common["aria-label"])} href={v.url} target="_blank" rel="noreferrer">
         {label}
       </a>
     );
@@ -248,7 +289,7 @@ function VideoCell({
       </Link>
     );
   return (
-    <span {...common} tabIndex={-1}>
+    <span {...common}>
       {label}
     </span>
   );

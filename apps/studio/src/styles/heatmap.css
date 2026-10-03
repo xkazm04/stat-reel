@@ -1215,7 +1215,7 @@ html.hm-layer-open {
   border: 1px solid var(--color-line-strong);
 }
 a.tp-cell--video:hover,
-a.tp-cell--video:focus-visible {
+.tp-cell:focus-visible {
   outline: 2px solid var(--color-text);
   outline-offset: 1px;
 }
