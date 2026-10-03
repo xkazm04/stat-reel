@@ -62,7 +62,7 @@ export function ProjectsPage() {
               List
             </button>
           </div>
-          <Link className="btn btn--primary btn--sm" to="/heatmap" search={{ mode: "monetized" }}>
+          <Link className="btn btn--primary btn--sm" to="/heatmap" search={{ mode: "monetized", view: "feasibility" }}>
             New from a Go cell
           </Link>
         </div>
@@ -74,7 +74,7 @@ export function ProjectsPage() {
         <Loading what="the rundown" />
       ) : !projects.length ? (
         <Empty title="No project yet">
-          Create one from a Go cell on the <Link to="/heatmap">rights grid</Link>: open the cell, then Create project.
+          Create one from a Go cell on the <Link to="/heatmap" search={{ view: "feasibility" }}>rights grid</Link>: open the cell, then Create project.
         </Empty>
       ) : view === "board" ? (
         <Defer tier={1} id="rundown:sheet" minHeight={360}>

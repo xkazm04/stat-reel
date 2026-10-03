@@ -16,7 +16,7 @@ import { api, qk } from "./api";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
 import { WipeProvider } from "./components/ui";
-import { calendarQuery, heatmapQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
+import { calendarQuery, heatmapQuery, heatmapTopicsQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
 import { queryClient } from "./queryClient";
 
 /**
@@ -99,16 +99,20 @@ const indexRoute = createRoute({
  * over the grid, so the grid keeps its place and focus when the layer closes.
  * `focus` = "<usecase>|<sport>" names the cell to focus on the grid (`cell` is its legacy name).
  */
-export type HeatmapSearch = { mode?: Mode; focus?: string };
+export type HeatmapSearch = { mode?: Mode; focus?: string; view?: "topics" | "feasibility" };
 export const heatmapRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/heatmap",
   validateSearch: (s: Record<string, unknown>): HeatmapSearch => ({
     mode: asMode(s.mode),
     focus: typeof s.focus === "string" ? s.focus : typeof s.cell === "string" ? s.cell : undefined,
+    view: s.view === "feasibility" ? "feasibility" : s.view === "topics" ? "topics" : undefined,
   }),
   component: HeatmapPage,
-  loader: () => warm(heatmapQuery, sourcesQuery),
+  loader: ({ location }) =>
+    location.pathname === "/heatmap" && (location.search as { view?: string }).view !== "feasibility"
+      ? warm(heatmapTopicsQuery(false))
+      : warm(heatmapQuery, sourcesQuery),
 });
 const heatmapIndexRoute = createRoute({ getParentRoute: () => heatmapRoute, path: "/", component: () => null });
 export const heatmapCellRoute = createRoute({

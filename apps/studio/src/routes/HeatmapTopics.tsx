@@ -1,0 +1,255 @@
+/**
+ * Heatmap, Topics view (ADR 011): one row per topic of the controlled list, column n = the n-th
+ * video made for that topic, coloured by how recently it was made (fresh / recent / cooling / cold).
+ * A row exists once a video or an accepted case resolves to the topic; "Show all topics" lists the
+ * whole controlled list. The next ordinal is a ghost cell while a generation job is queued or
+ * running. Every filled cell prints its age (never colour-only) and links to the video, or to the
+ * Board case for a video without a served file. Arrows / Home / End move between linked cells.
+ */
+import { RECENCY_BUCKETS } from "@statreel/schemas";
+import { Link } from "@tanstack/react-router";
+import { type KeyboardEvent, useRef, useState } from "react";
+import { Defer } from "../components/arrive";
+import { ViewSwitch } from "../components/HeatmapViews";
+import { Failure, Loading } from "../components/ui";
+import { useHeatmapTopics } from "../data";
+import { relTime } from "../logic";
+import { ageLabel, cellAria, sortTopics, type TopicRow, type TopicVideoCell, visibleColumns } from "../topicHeatmap";
+
+export function HeatmapTopics() {
+  const [all, setAll] = useState(false);
+  const q = useHeatmapTopics(all);
+  const data = q.data;
+  const rows = data ? sortTopics(data.topics) : [];
+  const cols = visibleColumns(data?.max_videos ?? 0);
+  const n = cols.last - cols.first + 1;
+  const ordinals = Array.from({ length: n }, (_, i) => cols.first + i);
+  const totalVideos = rows.reduce((a, t) => a + t.videos.length, 0);
+  const grid = useRef<HTMLDivElement>(null);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-r]");
+    if (!el) return;
+    const r = Number(el.dataset.r);
+    const c = Number(el.dataset.c);
+    if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      const cells = [...(grid.current?.querySelectorAll<HTMLElement>(`[data-r="${r}"]`) ?? [])];
+      (e.key === "Home" ? cells[0] : cells.at(-1))?.focus();
+      return;
+    }
+    const dir: Record<string, [number, number]> = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0] };
+    const d = dir[e.key];
+    if (!d) return;
+    e.preventDefault();
+    // walk in the direction until a focusable (linked) cell is found, or stop at the edge
+    let rr = r;
+    let cc = c;
+    for (;;) {
+      rr += d[0];
+      cc += d[1];
+      if (rr < 0 || rr >= rows.length || cc < 0 || cc >= n) return;
+      const next = grid.current?.querySelector<HTMLElement>(`[data-r="${rr}"][data-c="${cc}"]`);
+      if (next) {
+        next.focus();
+        return;
+      }
+    }
+  };
+
+  return (
+    <main id="main" className="hm hm--topics">
+      <div className="hm-layer1 tp">
+        <header className="hm-head">
+          <div className="hm-title">
+            <p className="eyebrow">
+              {data
+                ? `${rows.length} topic${rows.length === 1 ? "" : "s"} · ${totalVideos} video${totalVideos === 1 ? "" : "s"}`
+                : "Topics"}
+            </p>
+            <h1>What we have made</h1>
+          </div>
+          <ul className="tp-legend" aria-label="Colour scale: how long ago a video was made">
+            {RECENCY_BUCKETS.map((b) => (
+              <li key={b.id} data-bucket={b.id}>
+                <i aria-hidden="true" />
+                <span>{b.label}</span>
+              </li>
+            ))}
+            <li data-bucket="pending">
+              <i aria-hidden="true" />
+              <span>queued / rendering</span>
+            </li>
+          </ul>
+          <div className="hm-ctl">
+            <ViewSwitch view="topics" />
+            <label className="tp-toggle">
+              <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} data-testid="topics-show-all" />
+              Show all topics
+            </label>
+          </div>
+        </header>
+
+        {q.isError ? (
+          <div className="hm-state">
+            <Failure error={q.error} what="The topic heatmap" />
+          </div>
+        ) : q.isLoading || !data ? (
+          <div className="hm-state">
+            <Loading what="the topic heatmap" />
+          </div>
+        ) : !rows.length ? (
+          <div className="hm-state">
+            <div className="empty" data-testid="topics-empty">
+              <b>No videos yet</b>
+              A row appears for a topic once a case in it is accepted on the Board; cells fill as videos finish.{" "}
+              <Link to="/board" search={{ tab: "cases" } as never}>
+                Open the Board cases
+              </Link>
+              , or see the{" "}
+              <Link to="/heatmap" search={{ view: "feasibility" }}>
+                feasibility grid
+              </Link>
+              . "Show all topics" lists the whole controlled list.
+            </div>
+          </div>
+        ) : (
+          <Defer tier={1} id="topics:grid" phClass="hm-wrap" minHeight={320}>
+            <div className="hm-wrap tp-wrap">
+              {totalVideos === 0 ? (
+                <p className="tp-note" data-testid="topics-no-videos">
+                  Topics are listed, but no video has finished yet. Cells fill as videos finish.
+                </p>
+              ) : null}
+              <div
+                ref={grid}
+                className="tp-grid"
+                role="grid"
+                aria-label="Videos per topic, by order of creation"
+                onKeyDown={onKeyDown}
+                style={{ ["--cols" as string]: n + (cols.earlier ? 1 : 0) }}
+              >
+                <div className="tp-row tp-row--head" role="row">
+                  <div className="tp-corner" role="columnheader">
+                    Topic
+                  </div>
+                  {cols.earlier ? (
+                    <div className="tp-colh tp-colh--earlier num" role="columnheader">
+                      +{cols.earlier} earlier
+                    </div>
+                  ) : null}
+                  {ordinals.map((o) => (
+                    <div key={o} className="tp-colh num" role="columnheader">
+                      {o}
+                    </div>
+                  ))}
+                </div>
+                {rows.map((t, ri) => (
+                  <TopicLine key={t.key} t={t} ri={ri} hasEarlier={cols.earlier > 0} ordinals={ordinals} />
+                ))}
+              </div>
+              <p className="hm-foot tp-foot">
+                <span>
+                  <kbd>Arrows</kbd> move between videos
+                </span>
+                <span>Column n is the n-th video made for the topic, oldest first.</span>
+                <span>{data.generated_at ? `As of ${relTime(data.generated_at)}` : ""}</span>
+              </p>
+            </div>
+          </Defer>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function TopicLine({ t, ri, hasEarlier, ordinals }: { t: TopicRow; ri: number; hasEarlier: boolean; ordinals: number[] }) {
+  const byN = new Map(t.videos.map((v) => [v.n, v]));
+  const next = t.videos.length + 1;
+  const pendingLabel = t.pending.running ? "rendering" : t.pending.queued > 0 ? "queued" : null;
+  const last = t.videos.at(-1);
+  const sub = last
+    ? ` · last ${ageLabel(last.age_days)}`
+    : t.accepted_cases
+      ? ` · ${t.accepted_cases} accepted case${t.accepted_cases === 1 ? "" : "s"}`
+      : "";
+  return (
+    <div className="tp-row" role="row" data-testid={`topic-row-${t.key}`}>
+      <div className="tp-rowh" role="rowheader">
+        <b>{t.label}</b>
+        <small className="num">
+          {t.videos.length} video{t.videos.length === 1 ? "" : "s"}
+          {sub}
+        </small>
+      </div>
+      {hasEarlier ? <div className="tp-cell tp-cell--earlier" role="gridcell" aria-hidden="true" /> : null}
+      {ordinals.map((o, ci) => {
+        const v = byN.get(o);
+        if (v) return <VideoCell key={o} topic={t.label} topicKey={t.key} v={v} total={t.videos.length} ri={ri} ci={ci} />;
+        if (o === next && pendingLabel)
+          return (
+            <div
+              key={o}
+              className="tp-cell tp-cell--pending"
+              role="gridcell"
+              data-testid={`topic-cell-${t.key}-${o}`}
+              data-bucket="pending"
+            >
+              <span className="num">{pendingLabel}</span>
+            </div>
+          );
+        const none = o === 1 && !t.videos.length;
+        return (
+          <div key={o} className="tp-cell tp-cell--empty" role="gridcell" aria-label={none ? `${t.label}: no video yet` : undefined}>
+            {none ? <span className="tp-none">no video yet</span> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function VideoCell({
+  topic,
+  topicKey,
+  v,
+  total,
+  ri,
+  ci,
+}: {
+  topic: string;
+  topicKey: string;
+  v: TopicVideoCell;
+  total: number;
+  ri: number;
+  ci: number;
+}) {
+  const common = {
+    role: "gridcell" as const,
+    className: "tp-cell tp-cell--video",
+    "data-bucket": v.bucket,
+    "data-r": ri,
+    "data-c": ci,
+    "data-testid": `topic-cell-${topicKey}-${v.n}`,
+    "aria-label": cellAria(topic, v, total),
+    title: v.title,
+  };
+  const label = <span className="num">{ageLabel(v.age_days)}</span>;
+  if (v.url)
+    return (
+      <a {...common} href={v.url} target="_blank" rel="noreferrer">
+        {label}
+      </a>
+    );
+  if (v.case_id)
+    return (
+      <Link {...common} to="/board" search={{ tab: "cases" } as never}>
+        {label}
+      </Link>
+    );
+  return (
+    <span {...common} tabIndex={-1}>
+      {label}
+    </span>
+  );
+}

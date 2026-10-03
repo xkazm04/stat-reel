@@ -337,7 +337,7 @@ function Frame({
           </div>
         </div>
         <nav className="pf-ways" aria-label="Ways into the work" ref={waysRef}>
-          <Link className="pf-way" to="/heatmap" search={{ mode }} style={css({ "--d": 2 })}>
+          <Link className="pf-way" to="/heatmap" search={{ mode, view: "feasibility" }} style={css({ "--d": 2 })}>
             <span className="pf-way__no num">01</span>
             <span className="pf-way__label">Open the heatmap</span>
             <span className="pf-way__detail">
@@ -1657,7 +1657,7 @@ function FirstShort({
               </Link>
             </>
           ) : (
-            <Link className="btn btn--primary" to="/heatmap" search={{ mode: "monetized" }}>
+            <Link className="btn btn--primary" to="/heatmap" search={{ mode: "monetized", view: "feasibility" }}>
               Find a Go cell
             </Link>
           )}

@@ -22,7 +22,7 @@ export function StudioIndex() {
   return (
     <main id="main" className="page">
       <Empty title="No project yet — create one from a Go cell">
-        The control room opens on a project. Open the <Link to="/heatmap">rights grid</Link>, pick a Go cell, then
+        The control room opens on a project. Open the <Link to="/heatmap" search={{ view: "feasibility" }}>rights grid</Link>, pick a Go cell, then
         Create project.
       </Empty>
     </main>

@@ -110,7 +110,7 @@ export function HeatmapCellLayer() {
     if (closing.current) return;
     closing.current = true;
     const done = () =>
-      void navigate({ to: "/heatmap", search: { mode, focus: key }, resetScroll: false });
+      void navigate({ to: "/heatmap", search: { mode, focus: key, view: "feasibility" }, resetScroll: false });
     const el = root.current;
     const target = visibleRect(document.querySelector(`[data-testid="cell-${usecase}-${sport}"]`));
     if (!el || !target || reduced) {
