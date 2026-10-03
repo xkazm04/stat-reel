@@ -11,7 +11,7 @@ import { z } from "zod";
 import type { AssetFetcher } from "./assets";
 import { jobPaths } from "./paths";
 import type { GenerationQueue } from "./queue";
-import { type GenerationValidator } from "./validator";
+import type { GenerationValidator } from "./validator";
 import { dataRaceValidator } from "./validate-data-race";
 
 export const jobIdInput = { job_id: z.string() };

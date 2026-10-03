@@ -53,7 +53,7 @@ export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => vo
         </button>
       </header>
       {j?.error ? <p className="jlog__err">{j.error}</p> : null}
-      <pre className="jlog__body mono" ref={pre} tabIndex={0}>
+      <pre className="jlog__body mono" ref={pre}>
         {text || "No log lines yet."}
       </pre>
     </aside>
