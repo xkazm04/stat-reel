@@ -267,8 +267,11 @@ describe("rule 4: non-revealing titles", () => {
   it("rejects a two-line title and a title over 42 characters", () => {
     expect(codes(withTitle("Which tree\ngrows fastest?"))).toContain("title-multiline");
     const long = "A".repeat(DATA_RACE_LIMITS.titleMaxChars + 1);
-    expect(codes(withTitle(long))).toContain("title-length");
-    expect(withTitle("A".repeat(DATA_RACE_LIMITS.titleMaxChars)).violations.some((v) => v.code === "title-length")).toBe(false);
+    // the length is the schema's alone (rule 0): one violation, not a second one from rule 4
+    const r = withTitle(long);
+    expect(r.violations.filter((v) => v.path === "title" && /too long/.test(v.message))).toHaveLength(1);
+    expect(codes(r)).not.toContain("title-length");
+    expect(withTitle("A".repeat(DATA_RACE_LIMITS.titleMaxChars)).violations.some((v) => /too long/.test(v.message))).toBe(false);
   });
   it("rejects a hook that does not end with '?'", () => {
     expect(codes(withHook("Watch the trees grow."))).toContain("hook-question");
@@ -279,15 +282,87 @@ describe("rule 4: non-revealing titles", () => {
       ((p.events as Record<string, unknown>[])[0] as Record<string, unknown>).title = "x".repeat(DATA_RACE_LIMITS.eventTitleMaxChars + 1);
       return undefined;
     });
-    expect(codes(r)).toContain("event-title-length");
-    expect(r.violations.find((v) => v.code === "event-title-length")?.message).toMatch(/limit is 36.*shorten/);
+    const hits = r.violations.filter((v) => v.path === "events.0.title");
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.message).toMatch(/shorten it - 36 characters fit/);
   });
   it("limits the hook to 3 lines at 96 px (60 characters) with an actionable message", () => {
     const over = `${"w".repeat(DATA_RACE_LIMITS.hookMaxChars)}?`;
     const r = withHook(over);
-    expect(codes(r)).toContain("hook-length");
-    expect(r.violations.find((v) => v.code === "hook-length")?.message).toMatch(/limit is 60.*shorten/);
-    expect(codes(withHook(`${"w".repeat(DATA_RACE_LIMITS.hookMaxChars - 1)}?`))).not.toContain("hook-length");
+    const hits = r.violations.filter((v) => v.path === "hook");
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.message).toMatch(/shorten it - 60 characters fit/);
+    expect(withHook(`${"w".repeat(DATA_RACE_LIMITS.hookMaxChars - 1)}?`).violations.filter((v) => v.path === "hook")).toEqual([]);
+  });
+});
+
+describe("rule 0: cross-field refinements (path + observed value)", () => {
+  const issues = (r: ReturnType<typeof run>, path: string) => r.violations.filter((v) => v.code === "schema" && v.path === path).map((v) => v.message);
+  const ents = (p: Record<string, unknown>) => p.entities as Record<string, unknown>[];
+  const ent = (p: Record<string, unknown>, i: number) => ents(p)[i] as Record<string, unknown>;
+  it("rejects a values array shorter or longer than periods, naming both lengths", () => {
+    const r = run((p) => {
+      (ents(p)[3] as { values: unknown[] }).values.pop();
+      (ents(p)[4] as { values: unknown[] }).values.push(1);
+      return undefined;
+    });
+    expect(issues(r, "entities.3.values").join()).toMatch(/entity 'dogwood' has 11 values for 12 periods/);
+    expect(issues(r, "entities.4.values").join()).toMatch(/entity 'elm' has 13 values for 12 periods/);
+  });
+  it("rejects a duplicate entity id, naming the id and the first occurrence", () => {
+    const r = run((p) => {
+      ent(p, 5).id = "alder";
+      return undefined;
+    });
+    expect(issues(r, "entities.5.id").join()).toMatch(/duplicate entity id 'alder' \(also entities\[0\]\.id\)/);
+  });
+  it("rejects a duplicate event id with or without a plan", () => {
+    const mutate = (p: Record<string, unknown>) => {
+      ev(p, 2).id = "launch";
+      return undefined;
+    };
+    expect(issues(run(mutate), "events.2.id").join()).toMatch(/duplicate event id 'launch' \(also events\[0\]\.id\)/);
+    const props = JSON.parse(JSON.stringify(makeProps(makePlan()))) as Record<string, unknown>;
+    mutate(props);
+    const noPlan = checkGenerationRules(props, undefined);
+    expect(noPlan.violations.filter((v) => v.path === "events.2.id")).toHaveLength(1);
+  });
+  it("rejects an event naming an entity that does not exist", () => {
+    const r = run((p) => set(ev(p, 1), "entity_id", "baobab"));
+    expect(issues(r, "events.1.entity_id").join()).toMatch(/event 'merger' names unknown entity 'baobab' \(entities: alder, birch/);
+    expect(codes(run((p) => set(ev(p, 1), "entity_id", "birch")))).not.toContain("schema");
+  });
+  it("rejects a missing_logos member that is not an entity, once", () => {
+    const r = run((p) => set(p, "missing_logos", [...(p.missing_logos as string[]), "ghost"]));
+    expect(issues(r, "missing_logos.9").join()).toMatch(/missing_logos names unknown entity 'ghost'/);
+    expect(r.violations.filter((v) => /unknown entity 'ghost'/.test(v.message))).toHaveLength(1);
+  });
+  it("caps periods, events and aliases", () => {
+    const L = DATA_RACE_LIMITS;
+    const r = run((p) => {
+      p.periods = Array.from({ length: L.maxPeriods + 1 }, (_, i) => `P${i}`);
+      p.events = Array.from({ length: L.maxEvents + 1 }, (_, i) => ({ ...ev(p, 0), id: `e${i}` }));
+      ent(p, 0).aliases = Array.from({ length: L.maxAliases + 1 }, (_, i) => `a${i}`);
+      return undefined;
+    });
+    expect(issues(r, "periods").join()).toMatch(/too many periods: at most 120 fit/);
+    expect(issues(r, "events").join()).toMatch(/too many events: at most 12 fit/);
+    expect(issues(r, "entities.0.aliases").join()).toMatch(/too many aliases: at most 6 fit/);
+  });
+  it("caps entity values at the period cap", () => {
+    const r = run((p) => {
+      ent(p, 0).values = Array.from({ length: DATA_RACE_LIMITS.maxPeriods + 1 }, () => 1);
+      return undefined;
+    });
+    expect(issues(r, "entities.0.values").join()).toMatch(/too many values \(one per period\): at most 120 fit/);
+  });
+  it("accepts exactly the cap", () => {
+    const r = run((p) => {
+      p.periods = Array.from({ length: DATA_RACE_LIMITS.maxPeriods }, (_, i) => `P${i}`);
+      for (const e of ents(p)) e.values = Array.from({ length: DATA_RACE_LIMITS.maxPeriods }, () => 1);
+      return undefined;
+    });
+    expect(codes(r)).not.toContain("schema");
   });
 });
 
@@ -302,10 +377,32 @@ describe("rule 0: text limits derived from the frame geometry", () => {
       ((ev.facts as Record<string, unknown>[])[0] as Record<string, unknown>).text = "f".repeat(DATA_RACE_LIMITS.factTextMaxChars + 1);
       return undefined;
     });
-    expect(messages(r, "title").join()).toMatch(/at most 42 characters, shorten/);
-    expect(messages(r, "hook").join()).toMatch(/at most 60 characters, shorten/);
-    expect(messages(r, "events.0.title").join()).toMatch(/at most 36 characters, shorten/);
-    expect(messages(r, "events.0.facts.0.text").join()).toMatch(/at most 48 characters, shorten/);
+    expect(messages(r, "title").join()).toMatch(/shorten it - 42 characters fit/);
+    expect(messages(r, "hook").join()).toMatch(/shorten it - 60 characters fit/);
+    expect(messages(r, "events.0.title").join()).toMatch(/shorten it - 36 characters fit/);
+    expect(messages(r, "events.0.facts.0.text").join()).toMatch(/shorten it - 48 characters fit/);
+  });
+  it("says how many characters fit on every other text field", () => {
+    const L = DATA_RACE_LIMITS;
+    const r = run((p) => {
+      p.unit_label = "u".repeat(L.unitLabelMaxChars + 1);
+      p.source_line = "s".repeat(L.sourceLineMaxChars + 1);
+      ((p.entities as Record<string, unknown>[])[0] as Record<string, unknown>).name = "n".repeat(L.nameMaxChars + 1);
+      ev(p, 0).date_label = "d".repeat(L.dateLabelMaxChars + 1);
+      const f = ((p.spotlight as Record<string, unknown>).facts as Record<string, unknown>[])[0] as Record<string, unknown>;
+      f.label = "l".repeat(L.spotlightLabelMaxChars + 1);
+      f.value_text = "v".repeat(L.spotlightValueMaxChars + 1);
+      return undefined;
+    });
+    const want: [string, number][] = [
+      ["unit_label", L.unitLabelMaxChars],
+      ["source_line", L.sourceLineMaxChars],
+      ["entities.0.name", L.nameMaxChars],
+      ["events.0.date_label", L.dateLabelMaxChars],
+      ["spotlight.facts.0.label", L.spotlightLabelMaxChars],
+      ["spotlight.facts.0.value_text", L.spotlightValueMaxChars],
+    ];
+    for (const [path, n] of want) expect(messages(r, path).join(), path).toMatch(new RegExp(`shorten it - ${n} characters fit`));
   });
   it("accepts text exactly at each limit", () => {
     const r = run((p) => {

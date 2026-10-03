@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { FACT_KEY_MESSAGE, FACT_KEY_PATTERN } from "./fact-key";
 
 // ------------------------------------------------------------------ registry + use cases
 
@@ -85,7 +86,7 @@ export type HeatmapCell = z.infer<typeof HeatmapCellSchema>;
 export const HookShape = z.enum(["payoff-first", "contradiction", "scenario", "stake"]);
 export const SceneKind = z.enum(["hook", "context", "reveal", "payoff", "close", "endcard"]);
 
-export const FactKey = z.string().regex(/^[a-z0-9-]+:[^#\s]+#[a-z_]+$/, "fact ref must be '<row fact_key>#<column>'");
+export const FactKey = z.string().regex(FACT_KEY_PATTERN, FACT_KEY_MESSAGE);
 
 export const SceneSchema = z.object({
   id: z.string(),
@@ -296,6 +297,7 @@ export type JobStatus = z.infer<typeof JobStatus>;
 
 export * from "./fixtures";
 
+export * from "./fact-key";
 export * from "./data-race";
 export * from "./generation-rules";
 export * from "./sha256";
