@@ -9,7 +9,7 @@
  */
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { desc, eq } from "drizzle-orm";
@@ -31,6 +31,7 @@ import type { EventBus } from "./events";
 import { type JobContext, type JobRunner, Refusal } from "./jobs";
 import type { ProjectService } from "./projects";
 import type { PipelineApi } from "./tools";
+import { createSourceHasher, findReusableRender, gcBundles, propsSha256 } from "./bundle-support";
 import { referencedAudioFiles, manifestBuildInfo } from "./manifest-support";
 import { parseFontsReport, renderTimeoutMs, runWorker, sweepJobFiles, sweepPartialRuns } from "./render-support";
 import type { Warehouse } from "./warehouse";
@@ -52,6 +53,8 @@ export const AUDIO_DEFAULTS = {
   musicPrompt:
     "Instrumental modern sports-analytics documentary bed, minimal electronic pulse, warm synth pads, restrained percussion, confident and curious, no vocals, clean mix leaving room for narration",
 };
+/** Remotion bundles kept on disk besides the current one (newest first). */
+const BUNDLES_KEPT = 2;
 const FIXTURES_AUDIO = path.join(paths.fixtures, "audio");
 const secret = (key: string): string => {
   const v = new Entry("statreel", key).getPassword();
@@ -67,6 +70,8 @@ export class Pipeline implements PipelineApi {
   private readonly runner: JobRunner;
   private readonly projects: ProjectService;
   private readonly wh: Warehouse;
+  /** bundle key, hashed once and re-read only when a source file's mtime/size changes */
+  private readonly hasher = createSourceHasher(repoRoot);
 
   constructor(d: { db: Db; bus: EventBus; runner: JobRunner; projects: ProjectService; wh: Warehouse }) {
     ({ db: this.db, bus: this.bus, runner: this.runner, projects: this.projects, wh: this.wh } = d);
@@ -248,6 +253,10 @@ export class Pipeline implements PipelineApi {
     const propsRow = this.projects.latestProps(p.projectId);
     const props = propsRow?.props;
     if (!props?.timing) throw new Error("no timing: generate audio first");
+    // same props + same source + same format as the latest render, files intact: reuse it (still gated below)
+    const prev = this.renders(p.projectId)[0];
+    const reusable = await findReusableRender(prev, { propsSha: propsSha256(props), sourceHash: await this.hasher.hash(), format: props.format });
+    if (prev && reusable) return this.reuseRender(p, ctx, project, props.format, prev, reusable);
     const run = new Date().toISOString().replace(/[:.]/g, "-");
     const dir = path.join(paths.renders, p.projectId, run);
     mkdirSync(dir, { recursive: true });
@@ -327,6 +336,20 @@ export class Pipeline implements PipelineApi {
     return { render_id: id, video: fileUrl(video), checks, policy: verdict };
   }
 
+  /** Skip-unchanged: a new render row over the previous deliverables, with the gate evaluated again for this target. */
+  private async reuseRender(p: { projectId: string; target: PublishTarget }, ctx: JobContext, project: { id: string }, format: string,
+    prev: ReturnType<Pipeline["renders"]>[number], manifest: unknown) {
+    ctx.progress(0.97, `reused render ${prev.id}`);
+    const verdict = await evaluatePolicy(manifest as ProvenanceManifest, p.target, this.opaOpts());
+    const id = randomUUID();
+    this.db.insert(renders).values({ id, project_id: p.projectId, job_id: ctx.id, format, path: prev.path, manifest_path: prev.manifest_path,
+      checks_json: prev.checks_json, policy_json: JSON.stringify({ ...verdict, target: p.target }), created_at: now() }).run();
+    this.projects.advance(p.projectId, "rendered");
+    if (verdict.allow) this.projects.advance(p.projectId, "gated");
+    this.bus.emit({ type: "render.done", project_id: project.id, render_id: id, allow: verdict.allow });
+    return { render_id: id, reused: prev.id, video: fileUrl(prev.path), checks: JSON.parse(prev.checks_json), policy: verdict, note: `reused render ${prev.id}` };
+  }
+
   private async buildManifest(o: { projectId: string; video: string; props: EraAdjustedProps; propsVersion: number; checks: ProvenanceManifest["checks"]; maxCpsValue: number }): Promise<ProvenanceManifest> {
     const info = manifestBuildInfo(compositionId(o.props), repoRoot);
     const { views, models } = info;
@@ -354,7 +377,7 @@ export class Pipeline implements PipelineApi {
     const session = this.db.$client.prepare("select engine, external_session_id from llm_sessions where project_id = ? order by started_at desc limit 1").get(o.projectId) as { engine: string; external_session_id: string | null } | undefined;
     return {
       subject: { file: "video.mp4", sha256: sha256File(o.video) },
-      build: { git_sha: gitSha(), composition: info.composition, props_sha256: createHash("sha256").update(JSON.stringify(o.props)).digest("hex"), renderer: info.renderer },
+      build: { git_sha: gitSha(), composition: info.composition, props_sha256: propsSha256(o.props), renderer: info.renderer, source_sha256: await this.hasher.hash() },
       data: { models, license_class: lineage.license_class, sources, facts_cited: [...new Set(facts)] },
       audio,
       fonts: fontManifest.fonts.map((f) => ({ family: f.family, license: f.license, sha256: f.sha256 })),
@@ -422,14 +445,16 @@ export class Pipeline implements PipelineApi {
   }
 
   private async worker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1, signal: AbortSignal | undefined = ctx?.signal): Promise<Record<string, unknown>> {
-    const full = { ...job, entry: ENTRY, bundleDir: path.join(paths.data, "cache", "bundle", sourceHash()) };
+    const bundleRoot = path.join(paths.data, "cache", "bundle");
+    const hash = await this.hasher.hash();
+    const full = { ...job, entry: ENTRY, bundleDir: path.join(bundleRoot, hash) };
     // props with word timings exceed the Windows command-line limit (32K): pass the job as a file
     const jobFile = path.join(paths.data, "cache", "jobs", `${randomUUID()}.json`);
     mkdirSync(path.dirname(jobFile), { recursive: true });
     writeFileSync(jobFile, JSON.stringify(full));
     let last = 0;
     try {
-      return await runWorker({
+      const res = await runWorker({
         cmd: renderNode(), args: [WORKER, jobFile], cwd: path.join(repoRoot, "apps", "server"), signal, timeoutMs: renderTimeoutMs(),
         onNote: (note) => ctx?.progress(last, note),
         onMessage: (msg) => {
@@ -438,6 +463,9 @@ export class Pipeline implements PipelineApi {
           ctx.progress(last, msg.stage);
         },
       });
+      // the bundle exists now: old code versions' bundles (~30 MB each) are garbage
+      await gcBundles(bundleRoot, BUNDLES_KEPT, hash).catch(() => {});
+      return res;
     } finally {
       rmSync(jobFile, { force: true });
     }
@@ -454,23 +482,6 @@ function gitSha(): string {
   } catch {
     return "unknown";
   }
-}
-
-/** Bundle cache key: content hash of every source that goes into the Remotion bundle. */
-function sourceHash(): string {
-  const h = createHash("sha256");
-  const walk = (dir: string) => {
-    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (!/\.test\./.test(e.name)) h.update(path.relative(repoRoot, p)).update(readFileSync(p));
-    }
-  };
-  for (const pkg of ["compositions", "viz", "captions", "design-tokens", "schemas"]) {
-    const src = path.join(repoRoot, "packages", pkg, "src");
-    if (existsSync(src)) walk(src);
-  }
-  return h.digest("hex").slice(0, 16);
 }
 
 async function blackSeconds(file: string, signal?: AbortSignal): Promise<number> {

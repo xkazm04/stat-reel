@@ -242,7 +242,7 @@ export type AudioAsset = z.infer<typeof AudioAssetSchema>;
 
 export const ProvenanceManifestSchema = z.object({
   subject: z.object({ file: z.string(), sha256: z.string() }),
-  build: z.object({ git_sha: z.string(), composition: z.string(), props_sha256: z.string(), renderer: z.string() }),
+  build: z.object({ git_sha: z.string(), composition: z.string(), props_sha256: z.string(), renderer: z.string(), /** content hash of the bundled sources; with props_sha256 it keys render reuse */ source_sha256: z.string().nullish() }),
   data: z.object({
     models: z.array(z.string()),
     license_class: z.string(),
