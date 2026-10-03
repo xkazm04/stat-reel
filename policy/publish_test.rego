@@ -78,7 +78,7 @@ test_empty_input_denied if {
 }
 
 test_checks_run_lists_every_rule if {
-	count(publish.checks_run) == 20
+	count(publish.checks_run) == 24
 	"evidence_missing" in publish.checks_run
 	"visibility_not_private" in publish.checks_run
 	"description_missing_attribution" in publish.checks_run
@@ -263,6 +263,70 @@ test_true_peak_negative if not denies(base, "true peak above -2 dBTP")
 test_true_peak_positive if denies(replace("/manifest/checks/true_peak_dbtp", -1.3), "true peak above -2 dBTP")
 
 test_true_peak_edge_ok if not denies(replace("/manifest/checks/true_peak_dbtp", -2), "true peak above -2 dBTP")
+
+# ------------------------------------------------------------------ resolution_not_allowed
+
+msg_res := "resolution is not 1080x1920 (vertical) or 1920x1080 (landscape)"
+
+test_resolution_vertical_negative if not denies(base, msg_res)
+
+test_resolution_landscape_negative if {
+	inp := patched([
+		{"op": "replace", "path": "/manifest/checks/width", "value": 1920},
+		{"op": "replace", "path": "/manifest/checks/height", "value": 1080},
+	])
+	not denies(inp, msg_res)
+}
+
+test_resolution_positive if denies(replace("/manifest/checks/width", 720), msg_res)
+
+test_resolution_swapped_dims_positive if {
+	# 1080x1080 is neither artboard
+	denies(replace("/manifest/checks/height", 1080), msg_res)
+}
+
+test_resolution_missing_is_missing_evidence if denies(remove("/manifest/checks/width"), "missing evidence: checks.width")
+
+# ------------------------------------------------------------------ fps_not_30
+
+test_fps_negative if not denies(base, "frame rate is not 30 fps")
+
+test_fps_positive if denies(replace("/manifest/checks/fps", 24), "frame rate is not 30 fps")
+
+test_fps_missing_is_missing_evidence if denies(remove("/manifest/checks/fps"), "missing evidence: checks.fps")
+
+# ------------------------------------------------------------------ duration_out_of_band
+
+msg_dur := "duration outside the 30-90 s band"
+
+test_duration_negative if not denies(base, msg_dur)
+
+test_duration_edges_ok if {
+	not denies(replace("/manifest/checks/duration_s", 30), msg_dur)
+	not denies(replace("/manifest/checks/duration_s", 90), msg_dur)
+}
+
+test_duration_too_short_positive if denies(replace("/manifest/checks/duration_s", 29.9), msg_dur)
+
+test_duration_too_long_positive if denies(replace("/manifest/checks/duration_s", 90.5), msg_dur)
+
+test_duration_missing_is_missing_evidence if {
+	denies(remove("/manifest/checks/duration_s"), "missing evidence: checks.duration_s")
+}
+
+# ------------------------------------------------------------------ black_frames_too_long
+
+msg_black := "black frames longer than 1 s"
+
+test_black_frames_negative if not denies(base, msg_black)
+
+test_black_frames_edge_ok if not denies(replace("/manifest/checks/black_frames_s", 1), msg_black)
+
+test_black_frames_positive if denies(replace("/manifest/checks/black_frames_s", 2.5), msg_black)
+
+test_black_frames_missing_is_missing_evidence if {
+	denies(remove("/manifest/checks/black_frames_s"), "missing evidence: checks.black_frames_s")
+}
 
 # ------------------------------------------------------------------ captions_not_burned_in
 

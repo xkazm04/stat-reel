@@ -25,6 +25,10 @@ checks_run := [
 	"evidence_not_number",
 	"loudness_out_of_range",
 	"true_peak_too_high",
+	"resolution_not_allowed",
+	"fps_not_30",
+	"duration_out_of_band",
+	"black_frames_too_long",
 	"captions_not_burned_in",
 	"caption_cps_too_high",
 	"safe_zone_violations",
@@ -41,7 +45,22 @@ required_evidence := [
 	"checks.loudness_lufs",
 	"checks.true_peak_dbtp",
 	"checks.font_fallbacks",
+	"checks.width",
+	"checks.height",
+	"checks.fps",
+	"checks.duration_s",
+	"checks.black_frames_s",
 ]
+
+# Delivery format (DESIGN §3 D16 / §6.1: 30-90 s videos; §6.3: 1080x1920 vertical or 1920x1080 landscape, 30 fps).
+allowed_resolutions := [[1080, 1920], [1920, 1080]]
+
+target_fps := 30
+
+duration_band_s := {"min": 30, "max": 90}
+
+# blackdetect runs at d=0.5 s, so a single detected stretch is already >= 0.5 s; more than 1 s in total is a defect.
+max_black_s := 1
 
 # v1 publishes private/draft only; anything else needs the owner's explicit approval.
 allowed_visibility := {"private", "draft"}
@@ -167,6 +186,42 @@ deny contains "true peak above -2 dBTP" if {
 	tp := evidence("checks.true_peak_dbtp")
 	is_number(tp)
 	tp > -2
+}
+
+# rule: resolution_not_allowed
+deny contains "resolution is not 1080x1920 (vertical) or 1920x1080 (landscape)" if {
+	w := evidence("checks.width")
+	h := evidence("checks.height")
+	is_number(w)
+	is_number(h)
+	not [w, h] in allowed_resolutions
+}
+
+# rule: fps_not_30
+deny contains "frame rate is not 30 fps" if {
+	f := evidence("checks.fps")
+	is_number(f)
+	abs(f - target_fps) > 0.01
+}
+
+# rule: duration_out_of_band
+deny contains "duration outside the 30-90 s band" if {
+	d := evidence("checks.duration_s")
+	is_number(d)
+	d < duration_band_s.min
+}
+
+deny contains "duration outside the 30-90 s band" if {
+	d := evidence("checks.duration_s")
+	is_number(d)
+	d > duration_band_s.max
+}
+
+# rule: black_frames_too_long
+deny contains "black frames longer than 1 s" if {
+	b := evidence("checks.black_frames_s")
+	is_number(b)
+	b > max_black_s
 }
 
 # ------------------------------------------------------------------ captions + safe zone

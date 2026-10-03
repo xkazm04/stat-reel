@@ -25,7 +25,7 @@ describe.skipIf(!opaAvailable)("evaluatePolicy (real opa)", () => {
     expect(r.warn).toEqual([]);
     expect(r.checks_run).toContain("evidence_missing");
     expect(r.checks_run).toContain("source_not_legal_on_monetized");
-    expect(r.checks_run.length).toBe(20);
+    expect(r.checks_run.length).toBe(24);
   });
 
   it("denies a non-commercial source on a monetized channel (DESIGN §8 negative e2e)", async () => {

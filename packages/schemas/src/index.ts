@@ -259,7 +259,8 @@ export const ProvenanceManifestSchema = z.object({
     true_peak_dbtp: z.number(),
     loudness_range_lu: z.number().nullish(),
     safe_zone_violations: z.number().int(),
-    font_fallbacks: z.number().int().default(0),
+    /** measured from the browser's font report; absent when the report was missing (the gate then denies it, never a silent 0) */
+    font_fallbacks: z.number().int().nullish(),
     width: z.number().int(), height: z.number().int(), fps: z.number(), duration_s: z.number(),
     video_codec: z.string(), audio_codec: z.string(), black_frames_s: z.number().default(0),
   }),

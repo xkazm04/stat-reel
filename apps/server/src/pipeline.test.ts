@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -123,5 +124,39 @@ describe("render cleanup on failure / cancel", () => {
     expect(existsSync(partial)).toBe(false);
     expect(existsSync(done)).toBe(true);
     expect(existsSync(old)).toBe(false);
+  });
+});
+
+describe("provenance manifest (pipeline-honest-gate-inputs)", () => {
+  it("derives build/views from the packages and lists only audio the current timing plays", async () => {
+    const { root, pipeline } = setup();
+    const dir = path.join(root, "audio", "p1");
+    mkdirSync(dir, { recursive: true });
+    const used = Buffer.from("current take");
+    writeFileSync(path.join(dir, "k1.mp3"), used);
+    writeFileSync(path.join(dir, "stale.mp3"), "an earlier take, no longer in the timing");
+    const sha = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
+    const { db } = pipeline as unknown as { db: { $client: { prepare: (q: string) => { run: (...a: unknown[]) => void } } } };
+    const ins = db.$client.prepare("insert into assets (id, project_id, kind, provider, plan_tier, path, sha256, generated_at) values (?, 'p1', 'tts', 'elevenlabs', 'starter', '', ?, '2026-01-01T00:00:00Z')");
+    ins.run("a1", sha(used));
+    ins.run("a2", sha("an earlier take, no longer in the timing"));
+    const video = path.join(root, "video.mp4");
+    writeFileSync(video, "v");
+    const wh = { lineage: vi.fn(async () => ({ license_class: "legal", sources: [] })), rows: vi.fn(async () => []) };
+    (pipeline as unknown as { wh: unknown }).wh = wh;
+    const props = { ...propsRow.props, rows: [], timing: { ...timing, scenes: [{ scene_id: "a", start_s: 0, end_s: 5, voice_src: "http://127.0.0.1:8787/files/audio/p1/k1.mp3" }] } };
+    const build = (pipeline as unknown as { buildManifest: (o: object) => Promise<{ build: { composition: string; renderer: string }; audio: { sha256: string }[]; disclosure: { ai_voice: boolean; ai_music: boolean }; data: { models: string[] } }> }).buildManifest;
+    const m = await build.call(pipeline, { projectId: "p1", video, props, propsVersion: 1, checks: {}, maxCpsValue: 10 });
+    expect(wh.lineage).toHaveBeenCalledWith(["f1_driver_era_adjusted"]);
+    expect(m.data.models).toEqual(["mart_era_adjusted", "f1_driver_era_adjusted"]);
+    expect(m.build.composition).toMatch(/^EraAdjustedSlope@\d+\.\d+\.\d+$/);
+    expect(m.build.renderer).toMatch(/^remotion@\d/);
+    expect(m.audio.map((a) => a.sha256)).toEqual([sha(used)]);
+    expect(m.disclosure).toMatchObject({ ai_voice: true, ai_music: false });
+
+    // the timing no longer plays any voice: the stale asset must not keep ai_voice true
+    const m2 = await build.call(pipeline, { projectId: "p1", video, props: { ...props, timing }, propsVersion: 2, checks: {}, maxCpsValue: 10 });
+    expect(m2.audio).toEqual([]);
+    expect(m2.disclosure.ai_voice).toBe(false);
   });
 });

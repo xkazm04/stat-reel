@@ -58,6 +58,9 @@ export const FONTS_USED: readonly { family: string; file: string; license: strin
     return { family: m.family, file: m.file, license: m.license, sha256: m.sha256, version: m.version };
   });
 
+/** Prefix of the console line carrying the font report (keep in sync with apps/server/src/render-support.ts). */
+export const FONTS_REPORT_PREFIX = "[statreel-fonts]";
+
 /** Families the composition requires; a render must fail if any falls back (DESIGN.md §6.3). */
 export const REQUIRED_FAMILIES = [...new Set(FONT_FACES.map((f) => f.family))];
 
@@ -97,8 +100,11 @@ function loadFonts(): void {
           [...document.fonts].some((f) => f.family.replace(/["']/g, "") === family && f.status === "loaded"),
         ]),
       );
-      // the smoke script and the render worker read this line to assert no fallback font was used
-      console.log(`[statreel-fonts]${JSON.stringify({ ...status, check })}`);
+      // machine-readable: the render worker forwards this line and the server turns it into
+      // checks.font_fallbacks (apps/server/src/render-support.ts parseFontsReport). `fallbacks` counts
+      // faces that failed to load plus required families the document does not report as loaded.
+      const fallbacks = status.failed.length + Object.values(check).filter((ok) => !ok).length;
+      console.log(`${FONTS_REPORT_PREFIX}${JSON.stringify({ ...status, check, fallbacks })}`);
       continueRender(handle);
     })
     .catch((err: unknown) => cancelRender(err instanceof Error ? err : new Error(String(err))));

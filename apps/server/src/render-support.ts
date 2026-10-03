@@ -160,3 +160,34 @@ export function sweepJobFiles(dir: string, beforeMs: number): string[] {
   }
   return removed;
 }
+
+// ------------------------------------------------------------------ font report (DESIGN §6.3)
+
+/** Keep in sync with FONTS_REPORT_PREFIX in packages/compositions/src/fonts.ts (a test pins the literal). */
+export const FONTS_REPORT_PREFIX = "[statreel-fonts]";
+
+export type FontsReport = { measured: boolean; fallbacks: number };
+
+/**
+ * Turns the console lines the worker forwarded into a measured fallback count. Every browser page logs
+ * one report; the worst page wins. No parsable report means `measured: false`: the caller must leave
+ * the evidence out (the gate then denies it as missing) rather than claim zero.
+ */
+export function parseFontsReport(logs: unknown): FontsReport {
+  let measured = false;
+  let fallbacks = 0;
+  for (const raw of Array.isArray(logs) ? logs : []) {
+    if (typeof raw !== "string" || !raw.startsWith(FONTS_REPORT_PREFIX)) continue;
+    try {
+      const r = JSON.parse(raw.slice(FONTS_REPORT_PREFIX.length)) as { failed?: unknown; check?: unknown; fallbacks?: unknown };
+      if (!Array.isArray(r.failed) || !r.check || typeof r.check !== "object") continue;
+      const missing = Object.values(r.check as Record<string, unknown>).filter((ok) => ok !== true).length;
+      const stated = typeof r.fallbacks === "number" ? r.fallbacks : 0;
+      fallbacks = Math.max(fallbacks, r.failed.length + missing, stated);
+      measured = true;
+    } catch {
+      /* a mangled report is no report */
+    }
+  }
+  return { measured, fallbacks };
+}

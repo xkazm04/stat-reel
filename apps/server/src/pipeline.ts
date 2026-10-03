@@ -31,7 +31,8 @@ import type { EventBus } from "./events";
 import { type JobContext, type JobRunner, Refusal } from "./jobs";
 import type { ProjectService } from "./projects";
 import type { PipelineApi } from "./tools";
-import { renderTimeoutMs, runWorker, sweepJobFiles, sweepPartialRuns } from "./render-support";
+import { referencedAudioFiles, manifestBuildInfo } from "./manifest-support";
+import { parseFontsReport, renderTimeoutMs, runWorker, sweepJobFiles, sweepPartialRuns } from "./render-support";
 import type { Warehouse } from "./warehouse";
 
 const execFileP = promisify(execFile);
@@ -267,7 +268,10 @@ export class Pipeline implements PipelineApi {
     const raw = path.join(dir, "raw.mp4");
     const video = path.join(dir, "video.mp4");
 
-    await this.worker({ mode: "video", compositionId: compositionId(props), props, output: raw }, ctx, 0.85);
+    const rendered = await this.worker({ mode: "video", compositionId: compositionId(props), props, output: raw }, ctx, 0.85);
+    // DESIGN §6.3: the browser's font report is the evidence; without one the field is left out and the gate denies it
+    const fonts = parseFontsReport(rendered.fontLogs);
+    if (!fonts.measured) ctx.progress(0.86, "no font report from the render: font_fallbacks unmeasured");
 
     // master the audio to -14 LUFS / <= -2 dBTP, keep the video stream untouched
     signal.throwIfAborted();
@@ -296,7 +300,7 @@ export class Pipeline implements PipelineApi {
 
     const checks = {
       loudness_lufs: round(loud.integratedLufs, 2), true_peak_dbtp: round(loud.truePeakDbtp, 2), loudness_range_lu: round(loud.loudnessRangeLu, 2),
-      safe_zone_violations: captionSafeZoneViolations(cues, props.format), font_fallbacks: 0,
+      safe_zone_violations: captionSafeZoneViolations(cues, props.format), ...(fonts.measured ? { font_fallbacks: fonts.fallbacks } : {}),
       width: v.width, height: v.height, fps: num! / (den || 1), duration_s: round(Number(probe.format.duration), 2),
       video_codec: v.codec_name, audio_codec: a?.codec_name ?? "none", black_frames_s: black,
     };
@@ -324,9 +328,9 @@ export class Pipeline implements PipelineApi {
   }
 
   private async buildManifest(o: { projectId: string; video: string; props: EraAdjustedProps; propsVersion: number; checks: ProvenanceManifest["checks"]; maxCpsValue: number }): Promise<ProvenanceManifest> {
-    const views = ["f1_driver_era_adjusted"];
+    const info = manifestBuildInfo(compositionId(o.props), repoRoot);
+    const { views, models } = info;
     const lineage = await this.wh.lineage(views);
-    const models = ["mart_era_adjusted", ...views];
     const snaps = await this.wh.rows(
       `select source_id, snapshot, license, license_class, attribution from meta.source_snapshots
        qualify row_number() over (partition by source_id order by built_at desc) = 1`);
@@ -336,7 +340,9 @@ export class Pipeline implements PipelineApi {
     }));
     const assetRows = this.db.select().from(assets).where(eq(assets.project_id, o.projectId)).all();
     const latestBySha = new Map(assetRows.map((r) => [r.sha256, r]));
-    const audio = [...latestBySha.values()].map((r) => ({
+    // only what the current timing plays: an asset from an earlier take must not keep disclosure.ai_voice true
+    const played = new Set(referencedAudioFiles(o.props.timing).map((f) => path.join(paths.audio, o.projectId, f)).filter((f) => existsSync(f)).map(sha256File));
+    const audio = [...latestBySha.values()].filter((r) => played.has(r.sha256)).map((r) => ({
       kind: r.kind as "tts" | "music", provider: "elevenlabs" as const, request_id: r.request_id, model_id: r.model_id ?? "unknown",
       voice_id: r.voice_id, prompt_sha256: r.prompt_sha256, plan_tier: r.plan_tier as PlanTier, generated_at: r.generated_at, sha256: r.sha256,
       scene_id: r.scene_id, c2pa: "unknown" as const, // provider marks may not survive AAC re-encode; never claimed (ADR 003)
@@ -348,7 +354,7 @@ export class Pipeline implements PipelineApi {
     const session = this.db.$client.prepare("select engine, external_session_id from llm_sessions where project_id = ? order by started_at desc limit 1").get(o.projectId) as { engine: string; external_session_id: string | null } | undefined;
     return {
       subject: { file: "video.mp4", sha256: sha256File(o.video) },
-      build: { git_sha: gitSha(), composition: `${compositionId(o.props)}@0.1.0`, props_sha256: createHash("sha256").update(JSON.stringify(o.props)).digest("hex"), renderer: "remotion@4.0.530" },
+      build: { git_sha: gitSha(), composition: info.composition, props_sha256: createHash("sha256").update(JSON.stringify(o.props)).digest("hex"), renderer: info.renderer },
       data: { models, license_class: lineage.license_class, sources, facts_cited: [...new Set(facts)] },
       audio,
       fonts: fontManifest.fonts.map((f) => ({ family: f.family, license: f.license, sha256: f.sha256 })),
