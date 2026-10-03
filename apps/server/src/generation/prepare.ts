@@ -1,5 +1,6 @@
 /** `prepare` step of a job (SPEC D.4): the job folder, case.json, and the config snapshot. */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import type { GenerationConfig, GenerationJob } from "@statreel/schemas";
 import { perTypeValue } from "@statreel/schemas";
 import type { Db } from "../db";
@@ -46,6 +47,9 @@ export function configSnapshot(config: GenerationConfig, jobType: GenerationJob[
 
 export function prepareDirs(p: JobPaths): void {
   for (const d of [p.refs, p.assets, p.out]) mkdirSync(d, { recursive: true });
+  // the asset ledger always exists; `fetch_asset` appends to it (the session never writes it)
+  const ledger = path.join(p.out, "assets.json");
+  if (!existsSync(ledger)) writeFileSync(ledger, "[]\n");
 }
 
 export function writeCaseJson(p: JobPaths, data: Record<string, unknown>): void {
