@@ -3,7 +3,7 @@
  * retire) and the Use cases list (registry formats, cases accepted through designs, case ideas from
  * the text-only case loop). No React here; covered by library.test.ts.
  */
-import type { UseCase } from "@statreel/schemas";
+import { DOMAIN_TOPIC, type Topic, type UseCase } from "@statreel/schemas";
 import type { BoardItem, CaseDecision, CaseIdea, StyleEntry, StyleStatus } from "../api";
 import { slug } from "./board";
 
@@ -163,6 +163,23 @@ export const DATA_STATUS_LABEL: Record<CaseIdea["data_status"], string> = {
   "new-source": "New source - needs your approval",
   guess: "Data guessed, not verified",
 };
+
+/** The topic an idea resolves to on its own: its picked topic, else the unambiguous domain mapping (ADR 011). */
+export const ideaTopic = (i: Pick<CaseIdea, "topic" | "domain">): { key: string; source: "case.topic" | "case.domain" } | null =>
+  i.topic ? { key: i.topic, source: "case.topic" } : DOMAIN_TOPIC[i.domain] ? { key: DOMAIN_TOPIC[i.domain]!, source: "case.domain" } : null;
+
+/** `sports` and `geoeconomy` ideas have no default: accepting one needs a picked topic first. */
+export const needsTopic = (i: Pick<CaseIdea, "topic" | "domain">): boolean => ideaTopic(i) === null;
+
+/** Pickable topics (never the reserved fallback), grouped by family in list order, for a <select>. */
+export function topicGroups(topics: readonly Topic[]): { family: Topic["family"]; topics: Topic[] }[] {
+  const out = new Map<Topic["family"], Topic[]>();
+  for (const t of [...topics].sort((a, b) => a.sort - b.sort)) {
+    if (t.key === "unassigned" || !t.active) continue;
+    out.set(t.family, [...(out.get(t.family) ?? []), t]);
+  }
+  return [...out].map(([family, list]) => ({ family, topics: list }));
+}
 
 /** Pending ideas first, then by span (longer timelines first). */
 export function inbox(ideas: readonly CaseIdea[]): CaseIdea[] {

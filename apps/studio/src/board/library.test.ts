@@ -1,7 +1,7 @@
 import type { UseCase } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import type { BoardItem, CaseIdea, StyleEntry } from "../api";
-import { caseDecisionForKey, caseRows, groupStyles, inbox, nextUndecided, parseTab, styleItems, visibleCaseRows, visibleStyles } from "./library";
+import { caseDecisionForKey, caseRows, groupStyles, ideaTopic, inbox, needsTopic, topicGroups, nextUndecided, parseTab, styleItems, visibleCaseRows, visibleStyles } from "./library";
 
 const item = (id: string, over: Partial<BoardItem> = {}): BoardItem => ({
   id, image: `items/${id}.png`, image_url: `/files/board/items/${id}.png`, video: null, video_url: null, duration_s: null,
@@ -19,7 +19,7 @@ const idea = (id: string, over: Partial<CaseIdea> = {}): CaseIdea => ({
   id, title: id, pitch: "p", domain: "music", arc: "a", insight: "i", why_lasts: "w",
   tension: { expectation: "e", reality: "r", strength: "strong" }, unknowns: [], beats: [],
   timeline: { unit: "year", from: 1960, to: 2020, years_from: 1960, years_to: 2020 }, span_years: 60, chart_ideas: ["streamgraph"],
-  kind: "observed", method: null, data_guess: null, feasibility: null,
+  kind: "observed", method: null, data_guess: null, feasibility: null, topic: null,
   requires: [], sources: [{ name: "MusicBrainz", url: "https://musicbrainz.org", license: "CC0" }], evidence: [], data_status: "new-source",
   source: null, status: "pending", decision: null, note: null, decided_at: null, created_at: "2026-10-01T00:00:00Z", ...over,
 });
@@ -69,6 +69,27 @@ describe("Style gallery", () => {
     const byId = new Map([item("x"), item("y"), item("z")].map((i) => [i.id, i]));
     const s = style("ink", "accepted", { item_ids: ["x", "gone", "y", "z"], hero_item_id: "y" });
     expect(styleItems(s, byId).map((i) => i.id)).toEqual(["y", "x", "z"]);
+  });
+});
+
+describe("Case topics (ADR 011)", () => {
+  it("resolves a picked topic, else the unambiguous domain, else nothing", () => {
+    expect(ideaTopic(idea("a", { domain: "f1" }))).toEqual({ key: "formula-1", source: "case.domain" });
+    expect(ideaTopic(idea("b", { domain: "music", topic: "boxing" }))).toEqual({ key: "boxing", source: "case.topic" });
+    expect(ideaTopic(idea("c", { domain: "sports" }))).toBeNull();
+    expect(ideaTopic(idea("d", { domain: "geoeconomy" }))).toBeNull();
+  });
+
+  it("asks for a topic before accepting only where the domain has no default", () => {
+    expect(needsTopic(idea("a", { domain: "sports" }))).toBe(true);
+    expect(needsTopic(idea("b", { domain: "geoeconomy", topic: "energy" }))).toBe(false);
+    expect(needsTopic(idea("c", { domain: "games" }))).toBe(false);
+  });
+
+  it("groups pickable topics by family in list order, without the reserved fallback or retired ones", () => {
+    const t = (key: string, family: "sport" | "other", sort: number, active = true) => ({ key, label: key, family, sort, active });
+    const g = topicGroups([t("unassigned", "other", 999), t("tennis", "sport", 4), t("golf", "sport", 3), t("old", "sport", 1, false), t("other", "other", 240)]);
+    expect(g.map((x) => [x.family, x.topics.map((y) => y.key)])).toEqual([["sport", ["golf", "tennis"]], ["other", ["other"]]]);
   });
 });
 

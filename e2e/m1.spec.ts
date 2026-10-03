@@ -80,6 +80,14 @@ test("produce: audio -> render -> checks -> manifest -> gate allows monetized", 
   expect(JSON.parse(render.policy_json).allow).toBe(true);
 });
 
+test("topics: the finished render is on the ledger under Formula 1 (API; the view is T6)", async ({ request }) => {
+  const h = await (await request.get(`${API}/api/heatmap/topics`)).json();
+  const f1 = h.topics.find((t: { key: string }) => t.key === "formula-1");
+  expect(f1.videos).toHaveLength(1);
+  expect(f1.videos[0]).toMatchObject({ n: 1, bucket: "fresh", age_days: 0, project_id: projectId });
+  expect(f1.videos[0].url).toMatch(/^\/files\/renders\//);
+});
+
 test("negative gate: a non-commercial source is refused on a monetized channel", async ({ request }) => {
   const res = await request.post(`${API}/api/projects/${projectId}/policy-probe`, {
     data: { target: { platform: "youtube", monetized: true, ai_disclosure: true }, with_source: { id: "openf1", license_class: "non_commercial", verdict: "non_commercial" } },

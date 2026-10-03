@@ -8,7 +8,7 @@
  * decided ideas - grouped by verdict.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { api, CASE_DECISIONS, type CaseDecision, type CaseIdea, type CasesResponse, qk, serverError } from "../api";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useHeatmap } from "../data";
@@ -20,8 +20,11 @@ import {
   DATA_STATUS_LABEL,
   DOMAIN_LABEL,
   inbox,
+  ideaTopic,
   KIND_LABEL,
+  needsTopic,
   nextUndecided,
+  topicGroups,
   visibleCaseRows,
 } from "./library";
 import { useBoard } from "./shared";
@@ -44,6 +47,23 @@ function useDecideCase() {
       void qc.invalidateQueries({ queryKey: qk.cases });
       // a rejected idea leaves the lists: offer to take it back (D.1)
       if (v.decision !== "accept") showUndo(`Rejected · ${CASE_DECISION_META[v.decision].label.toLowerCase()} · ${idea.title}`, () => api.undoCaseDecision(idea.id));
+    },
+  });
+}
+
+function useTopics() {
+  return useQuery({ queryKey: qk.topics, queryFn: () => api.topics(), staleTime: 60_000 });
+}
+
+function useSetTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; topic: string | null }) => api.setCaseTopic(v.id, v.topic),
+    onSuccess: (idea) => {
+      qc.setQueryData<CasesResponse>(qk.cases, (prev) =>
+        prev ? { ...prev, ideas: prev.ideas.map((i) => (i.id === idea.id ? idea : i)) } : prev,
+      );
+      void qc.invalidateQueries({ queryKey: qk.cases });
     },
   });
 }
@@ -272,6 +292,7 @@ function IdeaDialog({
   const closeBtn = useRef<HTMLButtonElement>(null);
   const decide = useDecideCase();
   const undo = useUndoCase();
+  const [topicAsked, setTopicAsked] = useState(false);
   const [note, setNote] = useState(idea.note ?? "");
   const idx = order.findIndex((i) => i.id === idea.id);
   const prev = idx > 0 ? order[idx - 1] : undefined;
@@ -294,10 +315,17 @@ function IdeaDialog({
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on every idea change
   useEffect(() => {
     setNote(idea.note ?? "");
+    setTopicAsked(false);
     dlg.current?.querySelector(".bd-idlg__body")?.scrollTo({ top: 0 });
   }, [idea.id]);
 
-  const send = (d: CaseDecision) =>
+  const send = (d: CaseDecision) => {
+    // accepting needs a topic (ADR 011): sports / geo-economy ideas have no default, so ask for one first
+    if (d === "accept" && needsTopic(idea)) {
+      setTopicAsked(true);
+      dlg.current?.querySelector<HTMLSelectElement>("[data-testid='idea-topic']")?.focus();
+      return;
+    }
     decide.mutate(
       { id: idea.id, decision: d, note },
       {
@@ -308,6 +336,7 @@ function IdeaDialog({
         },
       },
     );
+  };
 
   const onKey = (e: KeyboardEvent<HTMLDialogElement>) => {
     if ((e.target as HTMLElement).closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -360,7 +389,7 @@ function IdeaDialog({
       </div>
 
       <div className="bd-idlg__body">
-        <IdeaBody idea={idea} />
+        <IdeaBody idea={idea} picker={<TopicPicker idea={idea} asked={topicAsked} />} />
       </div>
 
       <div className="bd-lb__bar bd-idlg__bar">
@@ -417,7 +446,52 @@ function IdeaDialog({
   );
 }
 
-function IdeaBody({ idea }: { idea: CaseIdea }) {
+/** "Pick topic": the controlled list (ADR 011) decides which row of the topic heatmap a finished video lands in. */
+function TopicPicker({ idea, asked }: { idea: CaseIdea; asked: boolean }) {
+  const topics = useTopics();
+  const set = useSetTopic();
+  const auto = ideaTopic(idea);
+  const label = new Map((topics.data?.topics ?? []).map((t) => [t.key, t.label]));
+  const missing = needsTopic(idea);
+  return (
+    <div className="bd-idea__topic">
+      <label className="bd-sel">
+        <span className="label">Topic</span>
+        <select
+          data-testid="idea-topic"
+          value={idea.topic ?? ""}
+          aria-invalid={asked && missing ? true : undefined}
+          aria-describedby={`tp-${idea.id}`}
+          disabled={set.isPending || topics.isLoading}
+          onChange={(e) => set.mutate({ id: idea.id, topic: e.target.value || null })}
+        >
+          <option value="">
+            {auto && auto.source === "case.domain" ? `From domain: ${label.get(auto.key) ?? auto.key}` : "Pick topic"}
+          </option>
+          {topicGroups(topics.data?.topics ?? []).map((g) => (
+            <optgroup key={g.family} label={g.family === "geoeconomy" ? "Geo-economy" : g.family[0]!.toUpperCase() + g.family.slice(1)}>
+              {g.topics.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <span id={`tp-${idea.id}`} className={asked && missing ? "bd-style__err" : "bd-dim"} role={asked && missing ? "alert" : undefined}>
+        {asked && missing
+          ? "Pick a topic before accepting: this domain has no default."
+          : missing
+            ? "No topic yet: its videos would show under Unassigned."
+            : "Decides the heatmap row of this case's videos."}
+      </span>
+      {set.isError ? <span className="bd-style__err">{serverError(set.error)}</span> : null}
+    </div>
+  );
+}
+
+function IdeaBody({ idea, picker }: { idea: CaseIdea; picker?: ReactNode }) {
   const t = idea.timeline;
   return (
     <article className={`bd-idea bd-idea--${idea.status}`} data-testid={`idea-${idea.id}`}>
@@ -434,6 +508,7 @@ function IdeaBody({ idea }: { idea: CaseIdea }) {
         </span>
       </header>
       <p className="bd-idea__pitch">{idea.pitch}</p>
+      {picker}
       <dl className="bd-idea__dl">
         <div>
           <dt>Over time</dt>

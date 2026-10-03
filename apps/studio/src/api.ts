@@ -12,6 +12,7 @@ import type {
   PublishTarget,
   Script,
   Source,
+  Topic,
   UseCase,
 } from "@statreel/schemas";
 import type { Capability } from "./logic";
@@ -290,6 +291,8 @@ export type CaseIdea = {
   method: string | null;
   data_guess: string | null;
   feasibility: "likely" | "possible" | "hard" | null;
+  /** topics.key (ADR 011); null until picked or implied by an unambiguous domain */
+  topic: string | null;
   source: Record<string, unknown> | null;
   status: "pending" | "accepted" | "rejected" | string;
   decision: CaseDecision | null;
@@ -393,6 +396,10 @@ export const api = {
     request<CaseIdea>("POST", `/api/cases/${enc(id)}/decision`, { decision, note: note?.trim() || undefined }),
   /** Undo the owner's decision on a case idea: back to pending (409 while a generation job runs for it). */
   undoCaseDecision: (id: string) => request<CaseIdea>("DELETE", `/api/cases/${enc(id)}/decision`),
+  /** The controlled topic list (active topics). */
+  topics: () => request<{ topics: Topic[] }>("GET", "/api/topics"),
+  /** Pick (or with null clear) the topic of a case idea. */
+  setCaseTopic: (id: string, topic: string | null) => request<CaseIdea>("PATCH", `/api/cases/${enc(id)}`, { topic }),
   /** A JSON file the server exposes under /files (e.g. a render's manifest.json). */
   file: <T>(path: string) => request<T>("GET", path),
 };
@@ -410,6 +417,7 @@ export const qk = {
   board: ["board"] as const,
   styles: ["styles"] as const,
   cases: ["cases"] as const,
+  topics: ["topics"] as const,
   file: (path: string) => ["file", path] as const,
   health: ["health"] as const,
 };
