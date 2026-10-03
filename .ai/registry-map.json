@@ -3268,7 +3268,7 @@
         "e2e/fixtures/generation/visual_options/out/variants/v2.props.json",
         "e2e/fixtures/generation/visual_options/out/variants/v3.md",
         "e2e/fixtures/generation/visual_options/out/variants/v3.props.json",
-        "e2e/fixtures/llm/33718c2ee96e23f826002afd.jsonl",
+        "e2e/fixtures/llm/cd4f7d4ade65d0bffd52472c.jsonl",
         "e2e/generation.spec.ts",
         "e2e/global-setup.ts"
       ],

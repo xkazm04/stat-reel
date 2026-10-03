@@ -117,9 +117,11 @@ export function templateIn(text: string, vars: Record<string, string> = {}): str
 }
 
 /** Fixture key: engine + templated prompt + system prompt content (editing a prompt pack re-keys). */
+// The system prompt is hashed with LF line endings: a Windows checkout may hold CRLF while a fresh
+// clone holds LF (.gitattributes eol=lf), and the key must not depend on which one recorded it.
 export const fixtureKey = (engine: string, prompt: string, resume: string | undefined, systemPrompt?: string) =>
   createHash("sha256")
-    .update(JSON.stringify({ engine, prompt, resume: resume ? "resumed" : null, ...(systemPrompt ? { system: createHash("sha256").update(systemPrompt).digest("hex") } : {}) }))
+    .update(JSON.stringify({ engine, prompt, resume: resume ? "resumed" : null, ...(systemPrompt ? { system: createHash("sha256").update(systemPrompt.replace(/\r\n/g, "\n")).digest("hex") } : {}) }))
     .digest("hex").slice(0, 24);
 type KeyOpts = Pick<RunOptions, "prompt" | "resume" | "vars" | "systemPromptFile">;
 
