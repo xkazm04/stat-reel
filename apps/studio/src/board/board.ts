@@ -111,13 +111,22 @@ export function caseOf(
 
 // ------------------------------------------------------------------ filters and counts
 
-/** Rejected proposals are never listed (D.1): "all" means every non-rejected item. */
-export type StatusFilter = "all" | Exclude<ItemState, "rejected">;
-export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "pending", "accepted"];
+/**
+ * SPEC D.1: rejected proposals are not listed in the default views, so "all" means every
+ * non-rejected item. The "rejected" filter is the one deliberate way back to them (the rejected
+ * lane: read-only, with Undo and re-decide), so a mistaken reject outlives its toast.
+ */
+export type StatusFilter = "all" | ItemState;
+export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "pending", "accepted", "rejected"];
 
-/** The items the owner still sees: everything except rejected proposals (they stay in the data for the loops). */
-export const visibleItems = <T extends Pick<BoardItem, "status" | "decision">>(all: readonly T[]): T[] =>
-  all.filter((i) => itemState(i) !== "rejected");
+/**
+ * The items the owner sees for a status filter: everything except rejected proposals (they stay in
+ * the data for the loops), unless the rejected lane itself is the filter.
+ */
+export const visibleItems = <T extends Pick<BoardItem, "status" | "decision">>(
+  all: readonly T[],
+  status: StatusFilter = "all",
+): T[] => (status === "rejected" ? [...all] : all.filter((i) => itemState(i) !== "rejected"));
 export const asStatusFilter = (v: unknown): StatusFilter =>
   typeof v === "string" && (STATUS_FILTERS as readonly string[]).includes(v) ? (v as StatusFilter) : "all";
 

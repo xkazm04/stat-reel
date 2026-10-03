@@ -135,11 +135,20 @@ describe("filters, counts, groups", () => {
     expect(filterItems(items, { ...NO_FILTER, style: "style:loom" })).toHaveLength(2);
     expect(filterItems(items, { ...NO_FILTER, case: "new:dynasty-river" })).toHaveLength(1);
   });
-  it("hides rejected proposals: visibleItems, no rejected filter, ledger tallies keep them", () => {
+  it("hides rejected proposals by default (SPEC D.1) and lists them only in the rejected lane", () => {
     expect(visibleItems(items)).toHaveLength(2);
-    expect(visibleItems(items).every((i) => itemState(i) !== "rejected")).toBe(true);
-    expect(STATUS_FILTERS).toEqual(["all", "pending", "accepted"]);
-    expect(asStatusFilter("rejected")).toBe("all");
+    for (const status of ["all", "pending", "accepted"] as const) {
+      const shown = visibleItems(filterItems(items, { ...NO_FILTER, status }), status);
+      expect(shown.every((i) => itemState(i) !== "rejected")).toBe(true);
+    }
+    expect(STATUS_FILTERS).toEqual(["all", "pending", "accepted", "rejected"]);
+    expect(asStatusFilter("rejected")).toBe("rejected");
+    expect(asStatusFilter("bogus")).toBe("all");
+    // the rejected lane: the filter selects them and visibleItems no longer strips them
+    const lane = visibleItems(filterItems(items, { ...NO_FILTER, status: "rejected" }), "rejected");
+    expect(lane).toHaveLength(2);
+    expect(lane.every((i) => itemState(i) === "rejected")).toBe(true);
+    // tallies keep rejections as feedback either way
     const shown = new Set(visibleItems(items).map((i) => i.id));
     const L = ledger(items, undefined, (i) => shown.has(i.id));
     expect(L.styles.reduce((a, s) => a + s.rejected, 0)).toBeGreaterThan(0);

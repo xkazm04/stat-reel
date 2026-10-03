@@ -47,6 +47,7 @@ const CasesView = lazy(() => import("./CasesView").then((m) => ({ default: m.Cas
 const StylesView = lazy(() => import("./StylesView").then((m) => ({ default: m.StylesView })));
 const WallVariant = lazy(() => import("./WallVariant").then((m) => ({ default: m.WallVariant })));
 const LightTableVariant = lazy(() => import("./LightTableVariant").then((m) => ({ default: m.LightTableVariant })));
+const RejectedLane = lazy(() => import("./RejectedLane").then((m) => ({ default: m.RejectedLane })));
 const MatrixVariant = lazy(() => import("./MatrixVariant").then((m) => ({ default: m.MatrixVariant })));
 const tabFallback = <SkeletonRows rows={4} h={120} />;
 
@@ -64,6 +65,7 @@ const STATUS_WORD: Record<StatusFilter, string> = {
   all: "All",
   pending: "Pending",
   accepted: "Accepted",
+  rejected: "Rejected",
 };
 
 const hasAxisFilter = (f: BoardFilter) => f.style !== "all" || f.case !== "all";
@@ -114,7 +116,7 @@ export function BoardPage() {
   const all = board.data?.items ?? [];
   const counts = useMemo(() => countItems(all), [all]);
   const scoped = useMemo(() => filterItems(all, filter), [all, filter]);
-  const items = useMemo(() => visibleItems(scoped), [scoped]);
+  const items = useMemo(() => visibleItems(scoped, filter.status), [scoped, filter.status]);
   const styleOpts = useMemo(() => axisOptions(all, "style", names), [all, names]);
   const caseOpts = useMemo(() => axisOptions(all, "case", names), [all, names]);
   const filtered = !isDefaultFilter(filter);
@@ -272,7 +274,7 @@ export function BoardPage() {
                 </button>
               ) : null}
               <span className="bd-filters__n num" aria-live="polite">
-                {items.length} of {counts.total - counts.rejected} shown
+                {items.length} of {filter.status === "rejected" ? counts.rejected : counts.total - counts.rejected} shown
               </span>
             </div>
           ) : null}
@@ -290,7 +292,13 @@ export function BoardPage() {
             <>
               {!items.length ? (
                 <Empty
-                  title={filter.status === "pending" && !hasAxisFilter(filter) ? "Nothing left to review" : "Nothing matches these filters"}
+                  title={
+                    filter.status === "rejected" && !hasAxisFilter(filter)
+                      ? "No rejected shots"
+                      : filter.status === "pending" && !hasAxisFilter(filter)
+                        ? "Nothing left to review"
+                        : "Nothing matches these filters"
+                  }
                   className="bd-empty"
                 >
                   {counts.total - counts.rejected} shots are open for review ({counts.rejected} rejected are hidden).{" "}
@@ -299,8 +307,14 @@ export function BoardPage() {
                   </button>
                 </Empty>
               ) : null}
-              {/* the Wall stays mounted while its lightbox is open on a shot that just left the grid (a rejection) */}
-              {items.length || variant === 1 ? (
+              {/* the rejected lane (SPEC D.1): one read-only list for every variant, with Undo and re-decide */}
+              {filter.status === "rejected" ? (
+                items.length ? (
+                  <Suspense fallback={tabFallback}>
+                    <RejectedLane items={items} names={names} />
+                  </Suspense>
+                ) : null
+              ) : /* the Wall stays mounted while its lightbox is open on a shot that just left the grid (a rejection) */ items.length || variant === 1 ? (
                 <Defer tier={2} id="board:shots" minHeight={items.length ? 480 : 0}>
                   <Suspense fallback={tabFallback}>
                     <V items={items} scoped={scoped} all={all} names={names} />

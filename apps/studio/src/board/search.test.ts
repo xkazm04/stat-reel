@@ -17,6 +17,9 @@ describe("board search params", () => {
     expect(search).toEqual({ st: "all", style: "style:loom", case: "uc:x" });
     expect(filterFromSearch(parseBoardSearch(search))).toEqual(f);
   });
+  it("accepts the rejected lane as a status", () => {
+    expect(parseBoardSearch({ st: "rejected" })).toEqual({ st: "rejected" });
+  });
   it("omits defaults so the URL stays clean", () => {
     expect(searchFromFilter(DEFAULT_FILTER)).toEqual({ st: undefined, style: undefined, case: undefined });
     expect(parseBoardSearch({ st: "pending", style: "all" })).toEqual({});
