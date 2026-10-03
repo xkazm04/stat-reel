@@ -1,6 +1,6 @@
 # 010: Background generation queue (dedicated worker process, Claude Code CLI)
 
-- **Status:** proposed (draft rev. 2, 2026-10-03; owner answered Q4–Q7)
+- **Status:** accepted, implementing (T7 queue core, T8 Claude runner; draft rev. 2, 2026-10-03, owner answered Q4–Q7)
 - **Date:** 2026-10-03
 - **Affects:**
   - `apps/server`: `db.ts` (`generation_jobs`, `generation_job_events`, `worker_lease`, `board_items.case_idea_id`, `busy_timeout`); `generation/*` (including `worker-main.ts`, `assets.ts`); `jobs.ts` (render lanes); `mcp.ts` tools; `/api/generation/*`;

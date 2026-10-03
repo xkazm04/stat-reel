@@ -288,9 +288,11 @@ export type PolicyResult = z.infer<typeof PolicyResultSchema>;
 
 export const ProjectStatus = z.enum(["idea", "data-ready", "scripted", "rendered", "gated", "published"]);
 export type ProjectStatus = z.infer<typeof ProjectStatus>;
-export const JobKind = z.enum(["ingest", "transform", "audio", "render", "publish", "metrics", "llm"]);
+export const JobKind = z.enum(["ingest", "transform", "audio", "render", "publish", "metrics", "llm", "gen_render"]);
 export type JobKind = z.infer<typeof JobKind>;
 export const JobStatus = z.enum(["queued", "running", "succeeded", "failed", "cancelled", "refused"]);
 export type JobStatus = z.infer<typeof JobStatus>;
 
 export * from "./fixtures";
+export * from "./generation";
+export * from "./pipeline";
