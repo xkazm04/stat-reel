@@ -107,4 +107,28 @@ describe("JobRunner", () => {
     expect(second.get(id)?.status).toBe("succeeded");
     expect(resumedWith).toEqual({ project: "p1" });
   });
+
+  it("runs startup sweeps before re-queuing, and a throwing sweep does not block the resume", async () => {
+    const { db } = setup();
+    const first = new JobRunner(db, new EventBus());
+    first.register("render", () => new Promise(() => {}));
+    const id = first.enqueue("render", {});
+    await tick();
+
+    const order: string[] = [];
+    const second = new JobRunner(db, new EventBus());
+    second.register("render", async () => {
+      order.push("job");
+      return {};
+    });
+    second.onStartup(() => {
+      order.push("sweep-1");
+      throw new Error("disk gone");
+    });
+    second.onStartup(() => order.push("sweep-2"));
+    second.resume();
+    await second.idle();
+    expect(order).toEqual(["sweep-1", "sweep-2", "job"]);
+    expect(second.get(id)?.status).toBe("succeeded");
+  });
 });

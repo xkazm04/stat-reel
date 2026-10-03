@@ -27,6 +27,8 @@ export class JobRunner {
   private waiters: (() => void)[] = [];
   /** kinds that share a single slot (e.g. `gen_render` runs on the `render` lane); default lane = the kind */
   private lanes = new Map<string, string>();
+  /** startup sweeps (partial run dirs, orphan job files): run by resume() before anything is re-queued */
+  private startupHooks: (() => void)[] = [];
 
   constructor(private readonly db: Db, private readonly bus: EventBus) {}
 
@@ -63,8 +65,20 @@ export class JobRunner {
     for (const a of this.active.values()) if (a.id === id) a.controller.abort();
   }
 
-  /** Re-queue jobs a previous process left running, then start every kind's queue. */
+  /** Registers a sweep for what a crashed process left behind; a throwing hook never blocks the resume. */
+  onStartup(hook: () => void): void {
+    this.startupHooks.push(hook);
+  }
+
+  /** Run the startup sweeps, re-queue jobs a previous process left running, then start every kind's queue. */
   resume(): void {
+    for (const hook of this.startupHooks) {
+      try {
+        hook();
+      } catch (err) {
+        console.warn(`[jobs] startup sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     this.db.update(jobs).set({ status: "queued", started_at: null, progress: 0 }).where(eq(jobs.status, "running")).run();
     const kinds = new Set(this.db.select({ kind: jobs.kind }).from(jobs).where(eq(jobs.status, "queued")).all().map((r) => r.kind));
     for (const k of kinds) this.pump(k);

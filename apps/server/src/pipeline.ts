@@ -7,7 +7,7 @@
  * render: x64 worker (ADR 004) -> loudness mastering (-14 LUFS, <= -2 dBTP) -> ffprobe/blackdetect ->
  *         SRT/VTT, thumbnail -> provenance manifest -> OPA gate
  */
-import { spawn, execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -31,6 +31,7 @@ import type { EventBus } from "./events";
 import { type JobContext, type JobRunner, Refusal } from "./jobs";
 import type { ProjectService } from "./projects";
 import type { PipelineApi } from "./tools";
+import { renderTimeoutMs, runWorker, sweepJobFiles, sweepPartialRuns } from "./render-support";
 import type { Warehouse } from "./warehouse";
 
 const execFileP = promisify(execFile);
@@ -80,6 +81,12 @@ export class Pipeline implements PipelineApi {
     this.runner.register("render", (p, ctx) => this.renderJob(p as { projectId: string; target: PublishTarget }, ctx));
     this.runner.register("publish", (p, ctx) => this.publishJob(p as { projectId: string; title?: string; description?: string; tags?: string[] }, ctx));
     this.runner.register("metrics", (_p, ctx) => this.metricsJob(ctx));
+    // a crash or kill leaves partial run dirs and worker job files; nothing is running yet when resume() calls this
+    const startedAt = Date.now();
+    this.runner.onStartup(() => {
+      sweepPartialRuns(paths.renders);
+      sweepJobFiles(path.join(paths.data, "cache", "jobs"), startedAt);
+    });
   }
 
   // ------------------------------------------------------------------ public API
@@ -138,6 +145,9 @@ export class Pipeline implements PipelineApi {
   // ------------------------------------------------------------------ audio
 
   private async audioJob(p: { projectId: string; target?: PublishTarget; chain?: boolean }, ctx: JobContext) {
+    // a cancelled audio job must stop spending provider credits and must never chain into a render
+    const stop = () => ctx.signal.throwIfAborted();
+    stop();
     const project = this.projects.get(p.projectId);
     const propsRow = this.projects.latestProps(p.projectId);
     const scriptRow = this.projects.latestScript(p.projectId);
@@ -167,11 +177,13 @@ export class Pipeline implements PipelineApi {
     const voiced: { scene_id: string; voiceStart: number; duration: number; file: string; alignment: Parameters<typeof wordsFromAlignment>[1]; asset: Partial<AudioAsset> }[] = [];
     let cursor = 0;
     for (const [i, sc] of scenes.entries()) {
+      stop();
       ctx.progress((i / scenes.length) * 0.6, `voice ${sc.scene_id}`);
       const g = await generateTts(deps, { voiceId: AUDIO_DEFAULTS.voiceId, text: sceneSpokenText(sc), modelId: AUDIO_DEFAULTS.ttsModel, sceneId: sc.scene_id });
       voiced.push({ scene_id: sc.scene_id, voiceStart: cursor, duration: g.durationS, file: keep(g.audioPath), alignment: g.alignment, asset: g.asset });
       cursor += g.durationS + AUDIO_DEFAULTS.sceneGapS;
     }
+    stop();
     const duration = Math.round((voiced.at(-1)!.voiceStart + voiced.at(-1)!.duration + AUDIO_DEFAULTS.tailS) * 30) / 30;
 
     // 2. scene timeline in AUDIO time (voice starts). The composition cuts the picture voice_lead_s
@@ -190,6 +202,7 @@ export class Pipeline implements PipelineApi {
     const plan = planMusicCues(timelineScenes.map((s) => ({ scene_id: s.scene_id, kind: kinds.get(s.scene_id)!, start_s: s.start_s, end_s: s.end_s })));
     const musicAssets: Partial<AudioAsset>[] = [];
     for (const cue of plan.cues) {
+      stop();
       const m = await generateMusic(deps, { prompt: AUDIO_DEFAULTS.musicPrompt, musicLengthMs: cue.lengthMs, forceInstrumental: true });
       cue.src = fileUrl(keep(m.audioPath));
       musicAssets.push(m.asset);
@@ -202,6 +215,7 @@ export class Pipeline implements PipelineApi {
     const timing: Timeline = { duration_s: duration, scenes: timelineScenes, words, cues, music: mix.timelineMusic, voice_lead_s: lead };
 
     // 5. record assets (plan tier per asset) and attach timing
+    stop();
     for (const a of [...voiced.map((v) => v.asset), ...musicAssets]) {
       this.db.insert(assets).values({
         id: randomUUID(), project_id: p.projectId, kind: a.kind!, provider: "elevenlabs", request_id: a.request_id ?? null, model_id: a.model_id ?? null,
@@ -211,7 +225,7 @@ export class Pipeline implements PipelineApi {
     }
     this.projects.attachTiming(p.projectId, timing);
     ctx.progress(1, "audio ready");
-    if (p.chain && p.target) this.runner.enqueue("render", { projectId: p.projectId, target: p.target }, p.projectId);
+    if (p.chain && p.target && !ctx.signal.aborted) this.runner.enqueue("render", { projectId: p.projectId, target: p.target }, p.projectId);
     return { duration_s: duration, cues: cues.length, max_cps: maxCps(cues), music_cues: plan.cues.length, budget: budget.snapshot() };
   }
 
@@ -236,31 +250,48 @@ export class Pipeline implements PipelineApi {
     const run = new Date().toISOString().replace(/[:.]/g, "-");
     const dir = path.join(paths.renders, p.projectId, run);
     mkdirSync(dir, { recursive: true });
+    // the run dir is created by this job, so until its row is committed everything in it is partial
+    let committed = false;
+    try {
+      return await this.renderRun(p, ctx, { project, propsRow: propsRow!, props: props as EraAdjustedProps & { timing: Timeline }, dir }, () => (committed = true));
+    } finally {
+      if (!committed) rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  private async renderRun(p: { projectId: string; target: PublishTarget }, ctx: JobContext,
+    r: { project: NonNullable<ReturnType<ProjectService["get"]>>; propsRow: NonNullable<ReturnType<ProjectService["latestProps"]>>; props: EraAdjustedProps & { timing: Timeline }; dir: string },
+    commit: () => void) {
+    const { project, propsRow, props, dir } = r;
+    const signal = ctx.signal;
     const raw = path.join(dir, "raw.mp4");
     const video = path.join(dir, "video.mp4");
 
     await this.worker({ mode: "video", compositionId: compositionId(props), props, output: raw }, ctx, 0.85);
 
     // master the audio to -14 LUFS / <= -2 dBTP, keep the video stream untouched
+    signal.throwIfAborted();
     ctx.progress(0.87, "mastering");
     const mixWav = path.join(dir, "mix.wav");
     const masterWav = path.join(dir, "master.wav");
-    await execFileP("ffmpeg", ["-hide_banner", "-y", "-i", raw, "-vn", "-ac", "2", "-ar", "48000", mixWav]);
+    await execFileP("ffmpeg", ["-hide_banner", "-y", "-i", raw, "-vn", "-ac", "2", "-ar", "48000", mixWav], { signal });
     await normalizeTo({ input: mixWav, output: masterWav, targetLufs: -14, truePeak: -2.3 });
-    await execFileP("ffmpeg", ["-hide_banner", "-y", "-i", raw, "-i", masterWav, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", video]);
+    signal.throwIfAborted();
+    await execFileP("ffmpeg", ["-hide_banner", "-y", "-i", raw, "-i", masterWav, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", video], { signal });
 
+    signal.throwIfAborted();
     ctx.progress(0.92, "checks");
     const loud = await measureLoudness(video);
-    const probe = JSON.parse((await execFileP("ffprobe", ["-v", "error", "-show_streams", "-show_format", "-of", "json", video])).stdout);
+    const probe = JSON.parse((await execFileP("ffprobe", ["-v", "error", "-show_streams", "-show_format", "-of", "json", video], { signal })).stdout);
     const v = probe.streams.find((s: { codec_type: string }) => s.codec_type === "video");
     const a = probe.streams.find((s: { codec_type: string }) => s.codec_type === "audio");
     const [num, den] = String(v.r_frame_rate).split("/").map(Number);
-    const black = await blackSeconds(video);
+    const black = await blackSeconds(video, signal);
     const cues = props.timing.cues;
     writeFileSync(path.join(dir, "captions.srt"), toSrt(cues));
     writeFileSync(path.join(dir, "captions.vtt"), toVtt(cues));
     const payoff = props.timing.scenes.find((s) => s.scene_id === props.scenes.find((x) => x.kind === "payoff")?.id) ?? props.timing.scenes[0]!;
-    const still = await this.worker({ mode: "stills", compositionId: compositionId(props), props, frames: [(payoff.start_s + payoff.end_s) / 2], outDir: path.join(dir, "thumb") }, undefined);
+    const still = await this.worker({ mode: "stills", compositionId: compositionId(props), props, frames: [(payoff.start_s + payoff.end_s) / 2], outDir: path.join(dir, "thumb") }, undefined, 1, signal);
     copyFileSync((still.stills as string[])[0]!, path.join(dir, "thumb.png"));
 
     const checks = {
@@ -272,12 +303,14 @@ export class Pipeline implements PipelineApi {
     const manifest = await this.buildManifest({ projectId: p.projectId, video, props, propsVersion: propsRow!.version, checks, maxCpsValue: maxCps(cues) });
     writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
+    signal.throwIfAborted();
     ctx.progress(0.97, "gate");
     const verdict = await evaluatePolicy(manifest, p.target, this.opaOpts());
     const id = randomUUID();
     const renderedAt = now();
     this.db.insert(renders).values({ id, project_id: p.projectId, job_id: ctx.id, format: props.format, path: video, manifest_path: path.join(dir, "manifest.json"),
       checks_json: JSON.stringify(checks), policy_json: JSON.stringify({ ...verdict, target: p.target }), created_at: renderedAt }).run();
+    commit();
     // the videos ledger behind the topic heatmap (ADR 011): one row per finished render, topic resolved from the project
     new TopicService(this.db).recordRender({ render_id: id, project_id: p.projectId, title: project.title, format: props.format,
       path: path.relative(paths.data, video).split(path.sep).join("/"), duration_s: checks.duration_s, created_at: renderedAt });
@@ -382,36 +415,26 @@ export class Pipeline implements PipelineApi {
     return { policyDir: paths.policy, opaBin: process.env.OPA_BIN ?? (process.platform === "win32" ? path.join(repoRoot, ".tools", "opa.exe") : "opa") };
   }
 
-  private worker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1): Promise<Record<string, unknown>> {
+  private async worker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1, signal: AbortSignal | undefined = ctx?.signal): Promise<Record<string, unknown>> {
     const full = { ...job, entry: ENTRY, bundleDir: path.join(paths.data, "cache", "bundle", sourceHash()) };
     // props with word timings exceed the Windows command-line limit (32K): pass the job as a file
     const jobFile = path.join(paths.data, "cache", "jobs", `${randomUUID()}.json`);
     mkdirSync(path.dirname(jobFile), { recursive: true });
     writeFileSync(jobFile, JSON.stringify(full));
-    return new Promise((resolve, reject) => {
-      const child = spawn(renderNode(), [WORKER, jobFile], { cwd: path.join(repoRoot, "apps", "server"), windowsHide: true });
-      ctx?.signal.addEventListener("abort", () => child.kill());
-      let buf = "";
-      let done: Record<string, unknown> | undefined;
-      let error = "";
-      child.stdout.on("data", (d: Buffer) => {
-        buf += d.toString("utf8");
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl).trim();
-          buf = buf.slice(nl + 1);
-          if (!line.startsWith("{")) continue;
-          const msg = JSON.parse(line) as { type: string; progress?: number; stage?: string; message?: string };
-          if (msg.type === "progress" && ctx) ctx.progress(Math.min(scale, (msg.stage === "bundle" ? 0.05 : 0.05 + 0.95 * (msg.progress ?? 0)) * scale), msg.stage);
-          if (msg.type === "done") done = msg;
-          if (msg.type === "error") error = msg.message ?? "render failed";
-        }
+    let last = 0;
+    try {
+      return await runWorker({
+        cmd: renderNode(), args: [WORKER, jobFile], cwd: path.join(repoRoot, "apps", "server"), signal, timeoutMs: renderTimeoutMs(),
+        onNote: (note) => ctx?.progress(last, note),
+        onMessage: (msg) => {
+          if (msg.type !== "progress" || !ctx) return;
+          last = Math.min(scale, (msg.stage === "bundle" ? 0.05 : 0.05 + 0.95 * (msg.progress ?? 0)) * scale);
+          ctx.progress(last, msg.stage);
+        },
       });
-      let stderr = "";
-      child.stderr.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
-      child.on("error", reject);
-      child.on("close", (code) => (done && code === 0 ? resolve(done) : reject(new Error(error || `render worker exited ${code}: ${stderr.slice(-1500)}`))));
-    });
+    } finally {
+      rmSync(jobFile, { force: true });
+    }
   }
 }
 
@@ -444,7 +467,7 @@ function sourceHash(): string {
   return h.digest("hex").slice(0, 16);
 }
 
-async function blackSeconds(file: string): Promise<number> {
-  const { stderr } = await execFileP("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-vf", "blackdetect=d=0.5:pix_th=0.05", "-an", "-f", "null", "-"], { maxBuffer: 64 * 1024 * 1024 });
+async function blackSeconds(file: string, signal?: AbortSignal): Promise<number> {
+  const { stderr } = await execFileP("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-vf", "blackdetect=d=0.5:pix_th=0.05", "-an", "-f", "null", "-"], { maxBuffer: 64 * 1024 * 1024, signal });
   return round([...stderr.matchAll(/black_duration:([\d.]+)/g)].reduce((s, m) => s + Number(m[1]), 0), 2);
 }
