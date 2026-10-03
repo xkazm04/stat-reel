@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8787";
+const API = `http://127.0.0.1:${process.env.E2E_API_PORT ?? "8787"}`;
 const ffprobe = (file: string) =>
   JSON.parse(execFileSync("ffprobe", ["-v", "error", "-show_streams", "-show_format", "-of", "json", file], { encoding: "utf8" }));
 
