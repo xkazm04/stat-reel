@@ -23,5 +23,7 @@ duration_s:
   min: 45
   max: 75
 props_schema: null
-query_templates: []
+query_templates:
+- >-
+  winner_age_by_race: select race_date, season, display_name, age_at_win, shared_drive, fact_key from llm.f1_race_winners order by race_date, race_id
 notes: null

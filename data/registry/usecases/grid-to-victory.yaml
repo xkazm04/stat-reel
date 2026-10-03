@@ -24,5 +24,7 @@ duration_s:
   min: 45
   max: 75
 props_schema: null
-query_templates: []
+query_templates:
+- >-
+  winning_grid_by_race: select race_date, season, display_name, grid_position, shared_drive, fact_key from llm.f1_race_winners order by race_date, race_id  -- grid_position is NULL when not recorded; filter or label, never assume pole
 notes: null

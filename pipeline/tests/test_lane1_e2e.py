@@ -350,3 +350,50 @@ def test_standings_by_round_shape_rank_gap_and_keys(replay_run):
                           where a.n <> b.k""").fetchone()[0] == 0
     # Indianapolis counts for the championship in 1950-1960
     assert con.execute("select count(*) from llm.f1_season_standings_by_round s join core.matches m on m.match_id = s.race_id where m.is_indianapolis").fetchone()[0] > 0
+
+
+# --------------------------------------------------------------------------- llm.f1_race_winners
+
+
+def winners_oracle(results_csv: Path, races_csv: Path, drivers_csv: Path) -> dict[tuple[int, str], dict]:
+    """Far-side oracle: winners per Grand Prix straight from the CSVs, age from date of birth in Python."""
+    from datetime import date
+
+    con = duckdb.connect()
+    races = {r[0]: r[1] for r in con.execute(
+        f"select id, date from read_csv('{races_csv.as_posix()}') where grandPrixId <> 'indianapolis'").fetchall()}
+    born = dict(con.execute(f"select id, dateOfBirth from read_csv('{drivers_csv.as_posix()}')").fetchall())
+    rows = con.execute(f"select raceId, driverId, positionNumber, positionText, sharedCar, gridPositionNumber from read_csv('{results_csv.as_posix()}')").fetchall()
+    out = {}
+    for race, driver, pos, text, shared, grid in rows:
+        if race in races and pos == 1 and text not in NON_STARTS:
+            d, b = races[race], born[driver]
+            d = d if isinstance(d, date) else date.fromisoformat(str(d))
+            out[(race, driver)] = {"age": (d - b).days / 365.2425, "grid": grid, "shared": bool(shared)}
+    return out
+
+
+def test_race_winners_match_the_far_side_oracle(replay_run):
+    con = replay_run["con"]
+    oracle = winners_oracle(FIXTURE / "f1db-races-race-results.csv", FIXTURE / "f1db-races.csv", FIXTURE / "f1db-drivers.csv")
+    got = {(race, driver): {"age": age, "grid": grid, "shared": shared} for race, driver, age, grid, shared in con.execute(
+        "select race_id, player_id, age_at_win, grid_position, shared_drive from llm.f1_race_winners").fetchall()}
+    assert set(got) == set(oracle)
+    for key, want in oracle.items():
+        assert got[key]["age"] == pytest.approx(want["age"], abs=1e-9), key
+        assert got[key]["grid"] == want["grid"], key
+        assert got[key]["shared"] == want["shared"], key
+    assert any(v["shared"] for v in oracle.values()), "fixture contains a shared winning drive"
+    assert any(v["grid"] is None for v in oracle.values()), "fixture contains a winner with no recorded grid"
+
+
+def test_race_winners_one_winner_per_race_except_shared_drives(replay_run):
+    con = replay_run["con"]
+    unique, total = con.execute("select count(distinct (race_id, player_id)), count(*) from llm.f1_race_winners").fetchone()
+    assert unique == total
+    assert con.execute("select count(*) from (select race_id, count(*) n, bool_or(shared_drive) s from llm.f1_race_winners group by 1) where n > 1 and not s").fetchone()[0] == 0
+    # every Grand Prix with results has a winner; the Indianapolis 500 is not one
+    assert con.execute("""select count(*) from core.matches m where m.has_results and not m.is_indianapolis
+                          and m.match_id not in (select race_id from llm.f1_race_winners)""").fetchone()[0] == 0
+    assert con.execute("select count(*) from llm.f1_race_winners w join core.matches m on m.match_id = w.race_id where m.is_indianapolis").fetchone()[0] == 0
+    assert con.execute("select min(age_at_win) from llm.f1_race_winners").fetchone()[0] > 18

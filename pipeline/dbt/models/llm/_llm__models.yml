@@ -171,3 +171,30 @@ models:
       - {name: is_final_round, description: "True on the last round with results of the season (for the current season: the latest race so far)."}
       - {name: drops_apply, description: "True for seasons before 1991, when only a best-N subset of results counted: points_cum may then exceed the official total."}
       - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_race_winners
+    description: >-
+      One row per (race, winning driver) of every Grand Prix since 1950 (Indianapolis 500 rounds excluded): who
+      won, for which team, how old they were and where they started. A car shared between drivers (1950s) gives one
+      row per driver who classified first in it (shared_drive = true), so a race can have more than one row.
+      Source F1DB (CC BY 4.0), attribution required.
+    data_tests:
+      - dbt_utils_free_unique_combination:
+          columns: [race_id, player_id]
+    columns:
+      - {name: fact_key, description: "Stable id of this race-win fact; cite it as <fact_key>#<column>."}
+      - {name: race_id, description: "f1db race id."}
+      - {name: season, description: "Championship year."}
+      - {name: round, description: "Round number within the season."}
+      - {name: race_date, description: "Race date; the data clock for time-evolution videos."}
+      - {name: grand_prix_id, description: "Grand Prix slug (e.g. monaco)."}
+      - {name: race_name, description: "Official race name."}
+      - {name: player_id, description: "f1db driver id of the winner (slug)."}
+      - {name: display_name, description: "Winner's name as commonly used (use this on screen)."}
+      - {name: full_name, description: "Winner's full legal name."}
+      - {name: team_id, description: "f1db constructor id of the winning car."}
+      - {name: team_name, description: "Constructor name of the winning car."}
+      - {name: date_of_birth, description: "Winner's date of birth (from the f1db driver record)."}
+      - {name: age_at_win, description: "Winner's exact age on race day in years (decimal: days since birth / 365.2425)."}
+      - {name: grid_position, description: "Winner's starting grid position; NULL when f1db has no grid for that entry (common in early seasons and for pit-lane starts) - never assume pole."}
+      - {name: shared_drive, description: "True when the winning car was shared between drivers (1950s); the win is credited to each of them."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}
