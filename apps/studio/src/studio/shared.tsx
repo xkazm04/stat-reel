@@ -9,7 +9,7 @@ import type { Job, ProjectDetail } from "../api";
 import { StatusChip } from "../components/glyphs";
 import { latestRender, renderPolicy, useHeatmap, useProject } from "../data";
 import { useJobProgress } from "../events";
-import { activeJob, pct } from "../onair";
+import { activeJob, pct } from "../display";
 
 export function useStudio() {
   const { projectId } = useParams({ from: "/studio/$projectId" });

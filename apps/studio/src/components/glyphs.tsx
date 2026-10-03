@@ -6,7 +6,7 @@
  */
 import type { CellStatus, LicenseClass } from "@statreel/schemas";
 import type { ReactNode } from "react";
-import { LICENCE_WORD, STATUS_WORD } from "../onair";
+import { LICENCE_WORD, STATUS_WORD } from "../display";
 
 export type GlyphKind = CellStatus;
 

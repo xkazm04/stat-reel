@@ -47,7 +47,7 @@ import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading } from "../components/ui";
 import { useCalendar, useHeatmap, useMetrics } from "../data";
 import { MODE_LABEL, relTime } from "../logic";
-import { formatLabel } from "../onair";
+import { formatLabel } from "../display";
 
 // ------------------------------------------------------------------ marks
 

@@ -7,7 +7,7 @@ import type { CellStatus, HeatmapCell, Mode, Source } from "@statreel/schemas";
 import { type CSSProperties, useId } from "react";
 import { barEnd, bestSource, byClass, CLASS_ORDER, finishShare, isShort, LINE } from "../finishline";
 import { MODE_LABEL } from "../logic";
-import { kindLong, LICENCE_WORD } from "../onair";
+import { kindLong, LICENCE_WORD } from "../display";
 
 const css = (o: Record<string, string | number>): CSSProperties => o as CSSProperties;
 

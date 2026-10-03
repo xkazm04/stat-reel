@@ -15,7 +15,7 @@ import { artStyle, Empty, Failure, Loading } from "../components/ui";
 import { useMetrics, useProjects } from "../data";
 import { useJobProgress } from "../events";
 import { MODE_LABEL, nextAction, relTime, STAGE_LABEL, STAGES } from "../logic";
-import { activeJob, fmtNum, formatLabel, pad2, pct, rundownOrder } from "../onair";
+import { activeJob, fmtNum, formatLabel, pad2, pct, rundownOrder } from "../display";
 import type { ProjectsSearch } from "../router";
 import { byUpdated, GATE_POS, laneState, sayLine, sheetCounts } from "../rundown";
 

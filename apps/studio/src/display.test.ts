@@ -4,21 +4,16 @@ import {
   activeJob,
   bestCells,
   biggestMovers,
-  composeDescription,
   fmtDuration,
   fmtValue,
-  modeDiff,
   neverFetchedFor,
-  parseTags,
-  rankSteps,
   resumeCandidate,
   rundownOrder,
   sparkPoints,
   splitName,
-  tickerFacts,
   trendSummary,
   verdictCounts,
-} from "./onair";
+} from "./display";
 
 const cell = (
   usecase: string,
@@ -42,15 +37,13 @@ describe("names and figures", () => {
     expect(fmtDuration(65.28)).toBe("1:05");
     expect(fmtDuration(null)).toBe("—");
   });
-  it("orders movers by rank change and rolls ranks step by step", () => {
+  it("orders movers by rank change", () => {
     const rows = [
       { name: "a", raw_rank: 1, adjusted_rank: 4 },
       { name: "b", raw_rank: 43, adjusted_rank: 1 },
       { name: "c", raw_rank: 2, adjusted_rank: 3 },
     ];
     expect(biggestMovers(rows, 2).map((r) => r.name)).toEqual(["b", "a"]);
-    expect(rankSteps(4, 1)).toEqual([4, 3, 2, 1]);
-    expect(rankSteps(2, 3)).toEqual([2, 3]);
   });
 });
 
@@ -65,44 +58,18 @@ describe("rights desk", () => {
   it("counts verdicts", () => {
     expect(verdictCounts(sources)).toEqual({ legal: 1, non_commercial: 1, paid: 1, avoid: 2 });
   });
-  it("builds the ticker from counts only", () => {
-    const cells = [
-      cell("u", "F1", "monetized", "go"),
-      cell("u", "F1", "non_commercial", "go"),
-      cell("u", "NBA", "non_commercial", "data-ready"),
-    ];
-    const facts = tickerFacts({
-      sources,
-      capabilities: [{ status: "pass" }, { status: "fail" }],
-      cells,
-      usecases: 10,
-      projects: 1,
-    });
-    expect(facts).toContain("5 sources on the registry");
-    expect(facts).toContain("2 never fetched");
-    expect(facts).toContain("1 of 2 capability tests pass");
-    expect(facts).toContain("1 of 40 cells go · monetized");
-    expect(facts).toContain("1 go · 1 data ready · non-commercial");
-    expect(facts).toContain("1 project in the rundown");
-    expect(
-      tickerFacts({ sources, capabilities: [], cells, usecases: 10, projects: null }).some((f) =>
-        f.includes("rundown"),
-      ),
-    ).toBe(false);
-  });
   it("lists never-fetched sources for a cell", () => {
     expect(neverFetchedFor(sources, "F1", ["hist"]).map((s) => s.id)).toEqual(["f1com"]);
     expect(neverFetchedFor(sources, "NBA", ["hist"]).map((s) => s.id)).toEqual(["nbacom"]);
     expect(neverFetchedFor(sources, "NHL", ["hist"])).toEqual([]);
   });
-  it("finds cells the mode switch changes and the best cells to make", () => {
+  it("picks the best cells to make", () => {
     const cells = [
       cell("a", "F1", "monetized", "ask"),
       cell("a", "F1", "non_commercial", "data-ready"),
       cell("b", "F1", "monetized", "go"),
       cell("b", "F1", "non_commercial", "go"),
     ];
-    expect([...modeDiff(cells).entries()]).toEqual([["a", ["F1"]]]);
     expect(bestCells(cells, "monetized", () => 1).map((c) => c.usecase)).toEqual(["b", "a"]);
   });
   it("summarises a GO trend honestly", () => {
@@ -148,19 +115,5 @@ describe("charts and rundown", () => {
       ])?.created_at,
     ).toBe("1");
     expect(activeJob([{ status: "failed", created_at: "1" }])).toBeNull();
-  });
-});
-
-describe("publish", () => {
-  it("mirrors what the server appends to the description", () => {
-    expect(
-      composeDescription({
-        description: "",
-        fallbackTitle: "T",
-        methodNote: "Method.",
-        attributions: ["Data: F1DB (CC BY 4.0)", null, "Data: F1DB (CC BY 4.0)"],
-      }),
-    ).toBe("T\n\nMethod.\n\nData: F1DB (CC BY 4.0)\n\nNarration and music are AI-generated (ElevenLabs).");
-    expect(parseTags(" F1, data ,, x")).toEqual(["F1", "data", "x"]);
   });
 });

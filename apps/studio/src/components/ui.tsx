@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { errorText } from "../api";
-import { sparkPoints } from "../onair";
+import { sparkPoints } from "../display";
 
 /** An honest, labelled empty state. */
 export function Empty({

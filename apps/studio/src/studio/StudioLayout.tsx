@@ -1,8 +1,8 @@
 /**
  * Studio shell: the project header (crumb back to the Rundown, title, facts, the stage) and the
- * tab strip over the two compose screens: Control room and Render & gate. The stage is drawn per
- * theme: On Air's slanted six-step stepper, Photo Finish's race track with six gates and a marker
- * (published = the finish line). Publishing moved to the Calendar (ADR 006).
+ * tab strip over the two compose screens: Control room and Render & gate. The stage is
+ * the race track with six gates and a marker (published = the finish line, ADR 009). Publishing
+ * moved to the Calendar (ADR 006).
  */
 import type { Mode } from "@statreel/schemas";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
@@ -11,7 +11,7 @@ import { FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading } from "../components/ui";
 import { MODE_LABEL, relTime, STAGE_LABEL, STAGES, stageIndex } from "../logic";
-import { fmtDuration, formatLabel } from "../onair";
+import { fmtDuration, formatLabel } from "../display";
 import { useStudio } from "./shared";
 
 export function StudioLayout() {
@@ -66,14 +66,6 @@ export function StudioLayout() {
           </div>
         </div>
         <div className="wk-stage">
-          <div className="stepper" role="img" aria-label={`Stage: ${stageWord}, ${si + 1} of ${STAGES.length}`}>
-            {STAGES.map((s, i) => (
-              <span key={s} className={`step ${i < si ? "done" : i === si ? "now" : ""}`}>
-                <b>{i + 1}</b>
-                {STAGE_LABEL[s]}
-              </span>
-            ))}
-          </div>
           <div
             className={`race${p.status === "published" ? " is-done" : ""}`}
             role="img"

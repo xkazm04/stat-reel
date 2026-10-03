@@ -23,7 +23,7 @@ import { useHeatmap, useSources } from "../data";
 import { LINE, REACH } from "../finishline";
 import { cellHint, focusKey, gridMove, parseFocus, sportCounts } from "../heatmap";
 import { cellOf, countStatuses, MODE_LABEL, relTime, SPORTS, trendSeries } from "../logic";
-import { formatLabel, pad2, STATUS_ORDER, STATUS_WORD, trendSummary } from "../onair";
+import { formatLabel, pad2, STATUS_ORDER, STATUS_WORD, trendSummary } from "../display";
 import type { HeatmapSearch } from "../router";
 
 type OpenCell = (uc: UseCase, sport: Sport, el: HTMLElement) => void;

@@ -1,7 +1,7 @@
-/* StatReel studio — shared base for both themes (ADR 006). Tokens (and the @font-face rules) live in
+/* StatReel studio — shared base (ADR 006, one theme since ADR 009). Tokens (and the @font-face rules) live in
    @statreel/design-tokens/tokens.css: one semantic vocabulary, values per `data-theme`.
    Colours, control shapes and motion come only from tokens. Theme set pieces live in
-   onair.css / photofinish.css; page modules in their own files. */
+   photofinish.css; page modules in their own files. */
 
 *,
 *::before,
@@ -140,7 +140,7 @@ kbd {
   top: 8px;
 }
 
-/* ── Navigation (structure; each theme dresses it in onair.css / photofinish.css) ── */
+/* ── Navigation (structure; Photo Finish dresses it in photofinish.css) ── */
 .nav {
   position: sticky;
   top: 0;
@@ -362,7 +362,7 @@ kbd {
   }
 }
 
-/* ── Buttons (shape from the control tokens: a parallelogram in On Air, a ruled key in Photo Finish) ── */
+/* ── Buttons (shape from the control tokens: a ruled key in Photo Finish) ── */
 .btn {
   position: relative;
   display: inline-flex;

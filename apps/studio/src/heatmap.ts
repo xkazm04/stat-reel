@@ -6,7 +6,7 @@
  */
 import type { CellStatus, HeatmapCell, LicenseClass, Mode, Sport } from "@statreel/schemas";
 import { allowedIn, decisionAid, failingKinds, SPORTS } from "./logic";
-import { bestCells } from "./onair";
+import { bestCells } from "./display";
 
 /** The short second line inside a cell: why, in three words. */
 export function cellHint(c: HeatmapCell): string {

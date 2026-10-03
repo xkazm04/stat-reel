@@ -1,6 +1,6 @@
 /* 04–05 Studio — compose only (ADR 006): the control room and render & gate. The project header
-   and tab strip are shared. One structure for both themes; On Air dresses it as the A/1 control
-   room, Photo Finish as the A/3 workspace (see the [data-theme="photofinish"] block at the end). */
+   and tab strip are shared. One theme (ADR 009): Photo Finish, the A/3 workspace (see the
+   [data-theme="photofinish"] block at the end). */
 
 .studio {
   min-height: calc(100vh - var(--nav-height));
@@ -91,50 +91,6 @@
 .wk-stage {
   grid-area: stage;
   align-self: center;
-}
-.stepper {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 2px;
-  min-width: min(640px, 48vw);
-}
-.step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 8px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--color-text-dim);
-  border: 1px solid var(--color-line-strong);
-  clip-path: var(--control-clip);
-  overflow: hidden;
-}
-.step b {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 12px;
-  opacity: 0.75;
-}
-.step.done {
-  background: var(--color-surface-2);
-  color: var(--color-text-muted);
-  border-color: var(--color-surface-2);
-}
-.step.now {
-  background: var(--color-brand);
-  color: var(--color-brand-ink);
-  border-color: var(--color-brand);
-}
-/* the race track (Photo Finish's stage): hidden in On Air */
-.race {
-  display: none;
 }
 .tabs {
   grid-area: tabs;
@@ -1419,9 +1375,6 @@ button.tl-b {
     grid-template-columns: 1fr;
     grid-template-areas: "top" "stage" "tabs";
   }
-  .stepper {
-    min-width: 0;
-  }
   .stagebar {
     grid-template-columns: 1fr 1fr;
   }
@@ -1463,13 +1416,6 @@ button.tl-b {
   }
 }
 @media (max-width: 640px) {
-  .stepper {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .step {
-    font-size: 13px;
-    padding: 0 8px;
-  }
   .tabs a {
     padding: 8px 12px;
     font-size: 15px;
@@ -1557,9 +1503,6 @@ button.tl-b {
 [data-theme="photofinish"] .wk-tag--quiet {
   border-style: dashed;
   color: var(--color-text-dim);
-}
-[data-theme="photofinish"] .stepper {
-  display: none;
 }
 [data-theme="photofinish"] .race {
   display: flex;

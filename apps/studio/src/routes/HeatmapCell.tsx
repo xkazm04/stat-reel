@@ -22,7 +22,7 @@ import { artStyle, Loading, useReducedMotion } from "../components/ui";
 import { useHeatmap, useProjects, useSources } from "../data";
 import { cellFixes, focusKey, neighbours } from "../heatmap";
 import { type Capability, cellOf, MODE_LABEL, SPORTS, STAGE_LABEL } from "../logic";
-import { formatLabel, kindLong, LICENCE_WORD, neverFetchedFor, pad2, STATUS_AIR, STATUS_WORD } from "../onair";
+import { formatLabel, kindLong, LICENCE_WORD, neverFetchedFor, pad2, STATUS_AIR, STATUS_WORD } from "../display";
 import type { HeatmapSearch } from "../router";
 
 // ------------------------------------------------------------------ choreography

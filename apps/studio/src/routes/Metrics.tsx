@@ -13,7 +13,7 @@ import { artStyle, Empty, Failure, Loading, Sparkline } from "../components/ui";
 import { useHeatmap, useMetrics } from "../data";
 import { useEvents } from "../events";
 import { relTime } from "../logic";
-import { fmtDuration, fmtNum } from "../onair";
+import { fmtDuration, fmtNum } from "../display";
 
 function Bars({ title, groups, nameOf }: { title: string; groups: MetricsGroup[]; nameOf: (k: string) => string }) {
   const max = Math.max(0, ...groups.map((g) => g.views ?? 0));

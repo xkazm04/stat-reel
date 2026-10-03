@@ -1,8 +1,6 @@
 import "@statreel/design-tokens/tokens.css";
 import "./styles/base.css";
-import "./styles/onair.css";
 import "./styles/photofinish.css";
-import "./styles/front.css";
 import "./styles/front-pf.css";
 import "./styles/heatmap.css";
 import "./styles/studio.css";
