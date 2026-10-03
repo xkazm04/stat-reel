@@ -17,6 +17,10 @@ export class Refusal extends Error {
   }
 }
 
+/** Why a job was cancelled; recorded in the job's `error` text, the status stays `cancelled`. */
+export type CancelCause = "owner" | "shutdown" | "timeout";
+const CAUSES: readonly string[] = ["owner", "shutdown", "timeout"];
+
 export type JobContext = { id: string; signal: AbortSignal; progress: (p: number, note?: string) => void };
 export type Handler = (params: Record<string, unknown>, ctx: JobContext) => Promise<Record<string, unknown>>;
 export type Job = typeof jobs.$inferSelect;
@@ -29,6 +33,8 @@ export class JobRunner {
   private lanes = new Map<string, string>();
   /** startup sweeps (partial run dirs, orphan job files): run by resume() before anything is re-queued */
   private startupHooks: (() => void)[] = [];
+  /** set by shutdown(): nothing new starts; queued rows stay queued for the next process's resume() */
+  private closing = false;
 
   constructor(private readonly db: Db, private readonly bus: EventBus) {}
 
@@ -58,11 +64,33 @@ export class JobRunner {
     return (projectId ? q.where(eq(jobs.project_id, projectId)) : q).all().sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
 
-  cancel(id: string): void {
+  cancel(id: string, cause: CancelCause = "owner"): void {
     const job = this.get(id);
     if (!job) return;
-    if (job.status === "queued") this.finish(id, "cancelled", null, "cancelled before start");
-    for (const a of this.active.values()) if (a.id === id) a.controller.abort();
+    if (job.status === "queued") this.finish(id, "cancelled", null, `cancelled before start (cause: ${cause})`);
+    for (const a of this.active.values()) if (a.id === id) a.controller.abort(cause);
+  }
+
+  /**
+   * Graceful stop: no new job starts, running jobs are aborted with cause "shutdown" and awaited up to
+   * `timeoutMs` (a handler that ignores its signal is abandoned; resume() re-queues its row next start).
+   */
+  async shutdown(timeoutMs = 10_000): Promise<{ aborted: number; timedOut: boolean }> {
+    this.closing = true;
+    const running = [...this.active.values()];
+    for (const a of running) a.controller.abort("shutdown" satisfies CancelCause);
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = await Promise.race([
+      Promise.all(running.map((a) => a.done)).then(() => false),
+      new Promise<boolean>((r) => { timer = setTimeout(() => r(true), timeoutMs); }),
+    ]);
+    clearTimeout(timer);
+    return { aborted: running.length, timedOut };
+  }
+
+  private cancelError(signal: AbortSignal): string {
+    const cause = typeof signal.reason === "string" && CAUSES.includes(signal.reason) ? signal.reason : "owner";
+    return `cancelled (cause: ${cause})`;
   }
 
   /** Registers a sweep for what a crashed process left behind; a throwing hook never blocks the resume. */
@@ -97,7 +125,7 @@ export class JobRunner {
 
   private pump(kind: string): void {
     const lane = this.laneOf(kind);
-    if (this.active.has(lane)) return;
+    if (this.closing || this.active.has(lane)) return;
     const handler = this.handlers.get(kind);
     if (!handler) return;
     const next = this.db.select().from(jobs).where(and(eq(jobs.kind, kind), eq(jobs.status, "queued"))).all()
@@ -117,17 +145,20 @@ export class JobRunner {
     const done = (async () => {
       try {
         const result = await handler(JSON.parse(next.params_json), ctx);
-        if (controller.signal.aborted) this.finish(next.id, "cancelled", null, "cancelled");
+        if (controller.signal.aborted) this.finish(next.id, "cancelled", null, this.cancelError(controller.signal));
         else this.finish(next.id, "succeeded", result, null);
       } catch (err) {
-        if (controller.signal.aborted) this.finish(next.id, "cancelled", null, "cancelled");
+        if (controller.signal.aborted) this.finish(next.id, "cancelled", null, this.cancelError(controller.signal));
         else if (err instanceof Refusal) this.finish(next.id, "refused", null, err.message);
         else this.finish(next.id, "failed", null, err instanceof Error ? err.message : String(err));
       } finally {
         this.active.delete(lane);
         for (const k of this.handlers.keys()) if (this.laneOf(k) === lane) this.pump(k);
       }
-    })();
+    })().catch((err) => {
+      // finish()/pump() itself failed (e.g. the DB closed under us): `done` must never reject unhandled
+      console.error(`[jobs] job ${next.id} bookkeeping failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+    });
     this.active.set(lane, { id: next.id, controller, done });
   }
 

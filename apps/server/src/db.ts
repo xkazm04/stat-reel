@@ -355,4 +355,13 @@ export function openDb(file: string): Db {
   return drizzle(sqlite) as Db;
 }
 
+/** Orderly stop: fold the WAL into the main file, then release the handle (the generation worker keeps its own). */
+export function closeDb(db: Db): void {
+  try {
+    db.$client.pragma("wal_checkpoint(TRUNCATE)");
+  } finally {
+    db.$client.close();
+  }
+}
+
 export const now = () => new Date().toISOString();

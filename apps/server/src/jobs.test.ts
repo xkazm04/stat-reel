@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { openDb } from "./db";
 import { EventBus } from "./events";
 import { JobRunner, Refusal } from "./jobs";
@@ -130,5 +130,57 @@ describe("JobRunner", () => {
     await second.idle();
     expect(order).toEqual(["sweep-1", "sweep-2", "job"]);
     expect(second.get(id)?.status).toBe("succeeded");
+  });
+
+  it("a throwing bus listener neither breaks emit nor the job's completion", async () => {
+    const { runner, bus } = setup();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    bus.subscribe(() => {
+      throw new Error("listener bug");
+    });
+    const seen: string[] = [];
+    bus.subscribe((e) => seen.push(e.type));
+    runner.register("render", async () => ({ ok: true }));
+    const id = runner.enqueue("render", {});
+    await runner.idle();
+    expect(runner.get(id)?.status).toBe("succeeded");
+    expect(seen).toContain("job.succeeded");
+    expect(bus.dropped).toBeGreaterThan(0);
+    log.mockRestore();
+  });
+
+  it("records the cancel cause: owner by default, shutdown from shutdown()", async () => {
+    const { runner } = setup();
+    const hang = async (_p: unknown, ctx: { signal: AbortSignal }) => {
+      await new Promise((_, reject) => ctx.signal.addEventListener("abort", () => reject(new Error("aborted"))));
+      return {};
+    };
+    runner.register("render", hang);
+    const a = runner.enqueue("render", {});
+    const queued = runner.enqueue("render", {});
+    await tick();
+    runner.cancel(queued);
+    runner.cancel(a);
+    await runner.idle();
+    expect(runner.get(a)).toMatchObject({ status: "cancelled", error: "cancelled (cause: owner)" });
+    expect(runner.get(queued)?.error).toContain("cause: owner");
+
+    const b = runner.enqueue("render", {});
+    await tick();
+    const res = await runner.shutdown(1000);
+    expect(res).toEqual({ aborted: 1, timedOut: false });
+    expect(runner.get(b)).toMatchObject({ status: "cancelled", error: "cancelled (cause: shutdown)" });
+    // nothing starts after shutdown; the row stays queued for the next process
+    const c = runner.enqueue("render", {});
+    await tick();
+    expect(runner.get(c)?.status).toBe("queued");
+  });
+
+  it("shutdown gives up on a handler that ignores its signal", async () => {
+    const { runner } = setup();
+    runner.register("render", () => new Promise(() => {}));
+    runner.enqueue("render", {});
+    await tick();
+    expect(await runner.shutdown(20)).toEqual({ aborted: 1, timedOut: true });
   });
 });
