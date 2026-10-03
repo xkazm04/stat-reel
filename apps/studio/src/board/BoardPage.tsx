@@ -16,8 +16,9 @@
  * case-loop inbox.
  */
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import type { BoardItem } from "../api";
+import { Defer, SkeletonRows } from "../components/arrive";
 import { Empty, Failure, Loading } from "../components/ui";
 import {
   asStatusFilter,
@@ -32,14 +33,17 @@ import {
   VARIANTS,
   type Variant,
 } from "./board";
-import { CasesView } from "./CasesView";
-import { LightTableVariant } from "./LightTableVariant";
-import { parseTab, type Tab, TABS } from "./library";
-import { MatrixVariant } from "./MatrixVariant";
+import { parseTab, TABS, type Tab } from "./library";
 import { useBoard, useCaseNames } from "./shared";
-import { StylesView } from "./StylesView";
-import { WallVariant } from "./WallVariant";
 import "./board.css";
+
+/** Each tab and prototype variant is its own chunk: only the one on screen is fetched. */
+const CasesView = lazy(() => import("./CasesView").then((m) => ({ default: m.CasesView })));
+const StylesView = lazy(() => import("./StylesView").then((m) => ({ default: m.StylesView })));
+const WallVariant = lazy(() => import("./WallVariant").then((m) => ({ default: m.WallVariant })));
+const LightTableVariant = lazy(() => import("./LightTableVariant").then((m) => ({ default: m.LightTableVariant })));
+const MatrixVariant = lazy(() => import("./MatrixVariant").then((m) => ({ default: m.MatrixVariant })));
+const tabFallback = <SkeletonRows rows={4} h={120} />;
 
 export type VariantProps = {
   /** the items after the filters, newest first */
@@ -140,53 +144,59 @@ export function BoardPage() {
       </nav>
 
       {tab === "styles" ? (
-        <StylesView names={names} />
+        <Suspense fallback={tabFallback}>
+          <StylesView names={names} />
+        </Suspense>
       ) : tab === "cases" ? (
-        <CasesView />
+        <Suspense fallback={tabFallback}>
+          <CasesView />
+        </Suspense>
       ) : board.isError ? (
         <Failure error={board.error} what="The board" />
       ) : board.isLoading ? (
         <Loading what="the board" />
       ) : (
         <>
-          <section className="bd-strip" aria-label="Board counts">
-            <dl className="bd-counts">
-              <div className="bd-count bd-count--pending">
-                <dt>Pending</dt>
-                <dd className="num">{counts.pending}</dd>
+          <Defer tier={1} id="board:strip" minHeight={96}>
+            <section className="bd-strip" aria-label="Board counts">
+              <dl className="bd-counts">
+                <div className="bd-count bd-count--pending">
+                  <dt>Pending</dt>
+                  <dd className="num">{counts.pending}</dd>
+                </div>
+                <div className="bd-count bd-count--accepted">
+                  <dt>Accepted</dt>
+                  <dd className="num">{counts.accepted}</dd>
+                </div>
+                <div className="bd-count bd-count--rejected">
+                  <dt>Rejected</dt>
+                  <dd className="num">{counts.rejected}</dd>
+                  <dd className="bd-count__sub num">
+                    style {counts.reject_style} · case {counts.reject_case} · both {counts.reject_both}
+                  </dd>
+                </div>
+                <div className="bd-count">
+                  <dt>Styles</dt>
+                  <dd className="num">{counts.styles}</dd>
+                </div>
+                <div className="bd-count">
+                  <dt>Cases</dt>
+                  <dd className="num">{counts.cases}</dd>
+                  <dd className="bd-count__sub num">
+                    {counts.cases - counts.proposed} existing · {counts.proposed} proposed
+                  </dd>
+                </div>
+              </dl>
+              <div className="bd-source">
+                <p>
+                  Shots come from the <b>board</b> skill loops
+                  {counts.loops.length ? ` (${counts.loops.join(", ")})` : ""}. They are design outputs, not results:
+                  nothing here is published, and your decisions are its training signal.
+                </p>
+                <code className="mono">node .claude/skills/board/scripts/board.mjs loop|harvest|sync</code>
               </div>
-              <div className="bd-count bd-count--accepted">
-                <dt>Accepted</dt>
-                <dd className="num">{counts.accepted}</dd>
-              </div>
-              <div className="bd-count bd-count--rejected">
-                <dt>Rejected</dt>
-                <dd className="num">{counts.rejected}</dd>
-                <dd className="bd-count__sub num">
-                  style {counts.reject_style} · case {counts.reject_case} · both {counts.reject_both}
-                </dd>
-              </div>
-              <div className="bd-count">
-                <dt>Styles</dt>
-                <dd className="num">{counts.styles}</dd>
-              </div>
-              <div className="bd-count">
-                <dt>Cases</dt>
-                <dd className="num">{counts.cases}</dd>
-                <dd className="bd-count__sub num">
-                  {counts.cases - counts.proposed} existing · {counts.proposed} proposed
-                </dd>
-              </div>
-            </dl>
-            <div className="bd-source">
-              <p>
-                Shots come from the <b>board</b> skill loops
-                {counts.loops.length ? ` (${counts.loops.join(", ")})` : ""}. They are design outputs, not results:
-                nothing here is published, and your decisions are its training signal.
-              </p>
-              <code className="mono">node .claude/skills/board/scripts/board.mjs loop|harvest|sync</code>
-            </div>
-          </section>
+            </section>
+          </Defer>
 
           {all.length ? (
             <div className="bd-filters">
@@ -255,7 +265,11 @@ export function BoardPage() {
               </button>
             </Empty>
           ) : (
-            <V items={items} all={all} names={names} />
+            <Defer tier={2} id="board:shots" minHeight={480}>
+              <Suspense fallback={tabFallback}>
+                <V items={items} all={all} names={names} />
+              </Suspense>
+            </Defer>
           )}
         </>
       )}

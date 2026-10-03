@@ -21,12 +21,15 @@ import {
   useState,
 } from "react";
 import type { ProjectDetail, ProjectWithJobs } from "../api";
+import { Defer } from "../components/arrive";
 import { useCreateProject } from "../components/createProject";
 import { DnsList, FinishPicture, LaneBar, ModeSwitch, SourceChip } from "../components/finish";
 import { Arrow, FormatIcon, Glyph, NotEqual, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { LaneArt } from "../components/LaneArt";
-import { type PlayerMeta, Programme, Slate } from "../components/Programme";
+import { Programme } from "../components/LazyProgramme";
+import type { PlayerMeta } from "../components/Programme";
+import { Slate } from "../components/Slate";
 import { useReducedMotion } from "../components/ui";
 import { Wordmark } from "../components/Wordmark";
 import { latestRender, renderPolicy, useHeatmap, useProjects, useSources } from "../data";
@@ -58,7 +61,7 @@ import {
   verdictCounts,
 } from "../onair";
 import type { FrontSearch } from "../router";
-import { useProgramme } from "./Front";
+import { useProgramme } from "./useProgramme";
 
 const css = (o: Record<string, string | number>): CSSProperties => o as CSSProperties;
 /** A use case's lane colour: its ident token (Photo Finish maps idents onto the ten lane colours). */
@@ -97,26 +100,40 @@ export function FrontPhotoFinish() {
 
   return (
     <main id="main" className="pf-landing">
-      <Frame mode={mode} sources={sources} srcState={src} cells={cells} usecases={usecases} projects={pr} reduced={reduced} />
-      <Lanes
-        usecases={usecases}
-        cells={cells}
+      <Frame
         mode={mode}
-        setMode={setMode}
-        reduced={reduced}
-        loading={hm.isLoading}
-        error={hm.isError}
-        sceneOpen={!!openUc}
-        onOpen={(u) => go({ format: u.id, mode })}
-      />
-      <TheLine sources={sources} mode={mode} setMode={setMode} loading={src.isLoading} error={src.isError} />
-      <FirstShort
-        detail={programme.detail}
-        loading={programme.loading || pr.isLoading}
-        error={pr.isError}
+        sources={sources}
+        srcState={src}
+        cells={cells}
         usecases={usecases}
+        projects={pr}
         reduced={reduced}
       />
+      <Defer tier={openUc ? 0 : 1} id="pf:lanes" anchor="pf-lanes" phClass="pf-lanes" minHeight="80vh">
+        <Lanes
+          usecases={usecases}
+          cells={cells}
+          mode={mode}
+          setMode={setMode}
+          reduced={reduced}
+          loading={hm.isLoading}
+          error={hm.isError}
+          sceneOpen={!!openUc}
+          onOpen={(u) => go({ format: u.id, mode })}
+        />
+      </Defer>
+      <Defer tier={2} id="pf:line" visible anchor="pf-line" phClass="pf-line" minHeight="70vh">
+        <TheLine sources={sources} mode={mode} setMode={setMode} loading={src.isLoading} error={src.isError} />
+      </Defer>
+      <Defer tier={3} id="pf:short" visible anchor="pf-short" phClass="pf-short" minHeight="70vh">
+        <FirstShort
+          detail={programme.detail}
+          loading={programme.loading || pr.isLoading}
+          error={pr.isError}
+          usecases={usecases}
+          reduced={reduced}
+        />
+      </Defer>
       <footer className="pf-foot deco-ticks">
         <a className="pf-foot__mark" href="#pf-frame" aria-label="Back to the top">
           <Wordmark />

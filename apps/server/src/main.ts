@@ -2,19 +2,21 @@
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
+import type { Context } from "hono";
+import { compress } from "hono/compress";
 import { buildApp } from "./app";
+import { BoardService } from "./board";
+import { CalendarService } from "./calendar";
 import { modes, paths, repoRoot, server } from "./config";
 import { openDb } from "./db";
 import { EventBus } from "./events";
 import { HeatmapService } from "./heatmap-service";
 import { JobRunner } from "./jobs";
+import { CaseIdeas, StyleLibrary } from "./library";
 import { LlmService } from "./llm-service";
 import { IMPLEMENTED_COMPOSITIONS, Pipeline } from "./pipeline";
 import { ProjectService } from "./projects";
 import { makeTools } from "./tools";
-import { CalendarService } from "./calendar";
-import { BoardService } from "./board";
-import { CaseIdeas, StyleLibrary } from "./library";
 import { Warehouse } from "./warehouse";
 
 export async function createServer() {
@@ -40,8 +42,23 @@ export async function createServer() {
   const app = buildApp({ db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
-    app.use("/*", serveStatic({ root: path.relative(process.cwd(), dist) }));
-    app.get("*", serveStatic({ path: path.relative(process.cwd(), path.join(dist, "index.html")) }));
+    const root = path.relative(process.cwd(), dist);
+    // Built assets are content-hashed (vite emits /assets/<name>-<hash>.<ext>): cache them for a year.
+    // Everything else (index.html, the SPA fallback, favicons) revalidates so a new build lands at once.
+    const cacheHeaders = (file: string, c: Context) => {
+      c.header("cache-control", /[\\/]assets[\\/]/.test(file) ? "public, max-age=31536000, immutable" : "no-cache");
+    };
+    // Text assets travel gzipped; the SPA is served only from here, never /api, /events, /files or /mcp.
+    app.use("/*", async (c, next) => {
+      const p = c.req.path;
+      if (/^\/(api|events|files|mcp)(\/|$)/.test(p)) return next();
+      return compress()(c, next);
+    });
+    app.use("/*", serveStatic({ root, onFound: cacheHeaders }));
+    app.get(
+      "*",
+      serveStatic({ path: path.relative(process.cwd(), path.join(dist, "index.html")), onFound: cacheHeaders }),
+    );
   }
   return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board, styles, cases };
 }

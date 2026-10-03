@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, errorText, type MetricsGroup } from "../api";
+import { Defer } from "../components/arrive";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading, Sparkline } from "../components/ui";
 import { useHeatmap, useMetrics } from "../data";
@@ -109,70 +110,76 @@ export function MetricsPage() {
         </Empty>
       ) : (
         <>
-          <div className="table-wrap">
-            <table className="tbl tbl--metrics">
-              <thead>
-                <tr>
-                  <th>Publication</th>
-                  <th>Platform</th>
-                  <th>Visibility</th>
-                  <th className="num">Views</th>
-                  <th className="num">Avg view</th>
-                  <th className="num">Watch time</th>
-                  <th className="num">Likes</th>
-                  <th className="num">Comments</th>
-                  <th className="num">Shares</th>
-                  <th className="num">Subs ±</th>
-                  <th>Daily views</th>
-                  <th>Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pubs.map((p) => (
-                  <tr key={p.publication_id} style={artStyle(identVar(p.use_case_id))}>
-                    <td>
-                      <Link to="/studio/$projectId" params={{ projectId: p.project_id }} className="tbl__link">
-                        {p.title}
-                      </Link>
-                      <span className="tbl__sub mono">
-                        {p.external_id ?? "no id"} · {relTime(p.published_at)}
-                      </span>
-                    </td>
-                    <td>{p.platform}</td>
-                    <td>
-                      <span className="pub pub--private">
-                        <i />
-                        {p.visibility}
-                      </span>
-                      {p.mode === "dry" ? <span className="dry">DRY RUN</span> : null}
-                    </td>
-                    <td className="num">{fmtNum(p.views)}</td>
-                    <td className="num">{p.avg_view_duration_s === null ? "—" : fmtDuration(p.avg_view_duration_s)}</td>
-                    <td className="num">
-                      {p.watch_time_s === null ? "—" : `${fmtNum(Math.round(p.watch_time_s / 60))} min`}
-                    </td>
-                    <td className="num">{fmtNum(p.likes)}</td>
-                    <td className="num">{fmtNum(p.comments)}</td>
-                    <td className="num">{fmtNum(p.shares)}</td>
-                    <td className="num">{fmtNum(p.subs_delta)}</td>
-                    <td>
-                      <Sparkline
-                        values={p.daily.map((d) => d.views)}
-                        w={100}
-                        h={22}
-                        label={`Daily views, ${p.daily.length} days`}
-                      />
-                    </td>
-                    <td className="tbl__note">{p.data}</td>
+          <Defer tier={1} id="metrics:table" phClass="table-wrap" minHeight={220}>
+            <div className="table-wrap">
+              <table className="tbl tbl--metrics">
+                <thead>
+                  <tr>
+                    <th>Publication</th>
+                    <th>Platform</th>
+                    <th>Visibility</th>
+                    <th className="num">Views</th>
+                    <th className="num">Avg view</th>
+                    <th className="num">Watch time</th>
+                    <th className="num">Likes</th>
+                    <th className="num">Comments</th>
+                    <th className="num">Shares</th>
+                    <th className="num">Subs ±</th>
+                    <th>Daily views</th>
+                    <th>Data</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="metrics-grid">
-            <Bars title="Per use case" groups={met.data?.by_use_case ?? []} nameOf={ucName} />
-            <Bars title="Per sport" groups={met.data?.by_sport ?? []} nameOf={(k) => k} />
-          </div>
+                </thead>
+                <tbody>
+                  {pubs.map((p) => (
+                    <tr key={p.publication_id} style={artStyle(identVar(p.use_case_id))}>
+                      <td>
+                        <Link to="/studio/$projectId" params={{ projectId: p.project_id }} className="tbl__link">
+                          {p.title}
+                        </Link>
+                        <span className="tbl__sub mono">
+                          {p.external_id ?? "no id"} · {relTime(p.published_at)}
+                        </span>
+                      </td>
+                      <td>{p.platform}</td>
+                      <td>
+                        <span className="pub pub--private">
+                          <i />
+                          {p.visibility}
+                        </span>
+                        {p.mode === "dry" ? <span className="dry">DRY RUN</span> : null}
+                      </td>
+                      <td className="num">{fmtNum(p.views)}</td>
+                      <td className="num">
+                        {p.avg_view_duration_s === null ? "—" : fmtDuration(p.avg_view_duration_s)}
+                      </td>
+                      <td className="num">
+                        {p.watch_time_s === null ? "—" : `${fmtNum(Math.round(p.watch_time_s / 60))} min`}
+                      </td>
+                      <td className="num">{fmtNum(p.likes)}</td>
+                      <td className="num">{fmtNum(p.comments)}</td>
+                      <td className="num">{fmtNum(p.shares)}</td>
+                      <td className="num">{fmtNum(p.subs_delta)}</td>
+                      <td>
+                        <Sparkline
+                          values={p.daily.map((d) => d.views)}
+                          w={100}
+                          h={22}
+                          label={`Daily views, ${p.daily.length} days`}
+                        />
+                      </td>
+                      <td className="tbl__note">{p.data}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Defer>
+          <Defer tier={2} id="metrics:bars" visible phClass="metrics-grid" minHeight={180}>
+            <div className="metrics-grid">
+              <Bars title="Per use case" groups={met.data?.by_use_case ?? []} nameOf={ucName} />
+              <Bars title="Per sport" groups={met.data?.by_sport ?? []} nameOf={(k) => k} />
+            </div>
+          </Defer>
           <p className="page__foot">
             Retention curves are not pulled yet (DESIGN §6.7): they appear once live publications exist and the metrics
             job stores them.

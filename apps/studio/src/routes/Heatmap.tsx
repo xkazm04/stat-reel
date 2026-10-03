@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Outlet, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText, qk } from "../api";
+import { Defer } from "../components/arrive";
 import { LaneBar, ModeSwitch } from "../components/finish";
 import { Field, FormatIcon, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
@@ -233,32 +234,34 @@ export function HeatmapPage() {
           <div className="hm-wrap">{pf ? <FinishSheet {...gridProps} /> : <RightsGrid {...gridProps} />}</div>
         )}
 
-        <p className="hm-foot">
-          <span>
-            <kbd>Arrows</kbd> move
-          </span>
-          <span>
-            <kbd>Enter</kbd> open a cell
-          </span>
-          <span>
-            <kbd>Esc</kbd> back to the grid
-          </span>
-          <span>
-            Basis: tested capabilities ({caps.filter((c) => c.status === "pass").length} pass of {caps.length}) ×
-            registry × built compositions · {trend.length} snapshot{trend.length === 1 ? "" : "s"}
-          </span>
-          <span className="hm-snap">
-            <span>{lastSnap ? `Snapshot ${relTime(lastSnap)}` : "No snapshot yet"}</span>
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => recompute.mutate()}
-              disabled={recompute.isPending}
-            >
-              {recompute.isPending ? "Recomputing" : "Recompute"}
-            </button>
-          </span>
-        </p>
+        <Defer tier={1} id="hm:foot" phClass="hm-foot" minHeight={48}>
+          <p className="hm-foot">
+            <span>
+              <kbd>Arrows</kbd> move
+            </span>
+            <span>
+              <kbd>Enter</kbd> open a cell
+            </span>
+            <span>
+              <kbd>Esc</kbd> back to the grid
+            </span>
+            <span>
+              Basis: tested capabilities ({caps.filter((c) => c.status === "pass").length} pass of {caps.length}) ×
+              registry × built compositions · {trend.length} snapshot{trend.length === 1 ? "" : "s"}
+            </span>
+            <span className="hm-snap">
+              <span>{lastSnap ? `Snapshot ${relTime(lastSnap)}` : "No snapshot yet"}</span>
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => recompute.mutate()}
+                disabled={recompute.isPending}
+              >
+                {recompute.isPending ? "Recomputing" : "Recompute"}
+              </button>
+            </span>
+          </p>
+        </Defer>
       </div>
       <Outlet />
     </main>

@@ -1,0 +1,102 @@
+/* ── Arrival: page transition, staggered sections, skeletons (components/arrive.tsx) ───────────
+   Opacity + a short rise only, `backwards` fill so no transform survives (a lingering transform
+   would trap position:fixed descendants such as dialogs). Reduced motion removes every animation
+   here; the staggered mount itself stays because it spreads work, not motion. */
+:root {
+  --arrive-dur: 240ms;
+  --arrive-rise: 10px;
+}
+
+@keyframes arrive-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--arrive-rise));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sk-sweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+@keyframes loading-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Route enter: every screen's <main> eases in once when its route mounts. */
+#main {
+  animation: arrive-in var(--arrive-dur) var(--ease-out) backwards;
+}
+
+/* A mounted Defer adds no box; its children arrive. */
+.defer {
+  display: contents;
+}
+.defer--in > * {
+  animation: arrive-in var(--arrive-dur) var(--ease-out) backwards;
+}
+
+.defer-ph {
+  position: relative;
+  min-width: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.sk {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 1em;
+  border-radius: 6px;
+  background:
+    linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--color-text) 7%, transparent) 50%, transparent 70%)
+    0 0 / 250% 100% no-repeat,
+    color-mix(in srgb, var(--color-text) 5%, transparent);
+  animation: sk-sweep 1.5s var(--ease-linear) infinite;
+}
+.sk--title {
+  height: 44px;
+  max-width: 520px;
+  margin: 8px 0 18px;
+}
+.sk-rows {
+  display: grid;
+  gap: 10px;
+}
+.sk-rows .sk {
+  height: auto;
+}
+
+/* Pending indicators wait 150 ms before showing, so a fast load never flashes. */
+.loading {
+  opacity: 0;
+  animation: loading-in 160ms linear 150ms forwards;
+}
+.page--pending {
+  display: grid;
+  align-content: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #main,
+  .defer--in > * {
+    animation: none;
+  }
+  .sk {
+    animation: none;
+    background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  }
+  .loading {
+    animation: none;
+    opacity: 1;
+  }
+}

@@ -41,6 +41,7 @@ import {
   weekStart,
   wiredChannels,
 } from "../calendar";
+import { Defer } from "../components/arrive";
 import { Arrow, FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading } from "../components/ui";
@@ -170,90 +171,112 @@ export function CalendarPage() {
         <Loading what="the calendar" />
       ) : (
         <>
-          <section className="cal-channels" aria-labelledby="h-channels">
-            <h2 className="sec-h sec-h--page" id="h-channels">
-              <span>Channels · {channels.length}</span>
-              <span>
-                {wired.length} wired · {channels.length - wired.length} not wired
-              </span>
-            </h2>
-            {channels.length ? (
-              <ul className="ch-cards">
-                {channels.map((c) => {
-                  const mine = slots.filter((s) => s.channel_id === c.id);
-                  return (
-                    <li key={c.id} className={`ch-card ch-card--${c.status}`}>
-                      <div className="ch-card__h">
-                        <b className="ch-card__name">{c.name}</b>
-                        <span className={`ch-state ch-state--${c.status}`}>
-                          <ChannelMark status={c.status} />
-                          {channelLabel(c)}
-                        </span>
-                      </div>
-                      <p className="ch-card__note">{c.note ?? "no note"}</p>
-                      <p className="ch-card__n num">
-                        {c.status === "not_wired"
-                          ? "Cannot take a slot until it is wired."
-                          : `${mine.filter((s) => isUpcoming(s.status)).length} upcoming · ${mine.filter((s) => s.status === "published").length} published`}
-                      </p>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <Empty title="No channel">The server seeds YouTube, TikTok and Instagram; none came back.</Empty>
-            )}
-          </section>
-
-          <div className="cal-main">
-            <section className="cal-ready" aria-labelledby="h-ready">
-              <h2 className="sec-h sec-h--page" id="h-ready">
-                <span>Ready to schedule · {ready.length}</span>
-                <span>gated, not on the calendar</span>
+          <Defer tier={1} id="cal:channels" phClass="cal-channels" minHeight={140}>
+            <section className="cal-channels" aria-labelledby="h-channels">
+              <h2 className="sec-h sec-h--page" id="h-channels">
+                <span>Channels · {channels.length}</span>
+                <span>
+                  {wired.length} wired · {channels.length - wired.length} not wired
+                </span>
               </h2>
-              {ready.length ? (
-                <ul className="ready-list">
-                  {ready.map((r) => (
-                    <ReadyItem key={r.project_id} r={r} wired={wired} ucName={ucName(r.use_case_id)} />
-                  ))}
+              {channels.length ? (
+                <ul className="ch-cards">
+                  {channels.map((c) => {
+                    const mine = slots.filter((s) => s.channel_id === c.id);
+                    return (
+                      <li key={c.id} className={`ch-card ch-card--${c.status}`}>
+                        <div className="ch-card__h">
+                          <b className="ch-card__name">{c.name}</b>
+                          <span className={`ch-state ch-state--${c.status}`}>
+                            <ChannelMark status={c.status} />
+                            {channelLabel(c)}
+                          </span>
+                        </div>
+                        <p className="ch-card__note">{c.note ?? "no note"}</p>
+                        <p className="ch-card__n num">
+                          {c.status === "not_wired"
+                            ? "Cannot take a slot until it is wired."
+                            : `${mine.filter((s) => isUpcoming(s.status)).length} upcoming · ${mine.filter((s) => s.status === "published").length} published`}
+                        </p>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
-                <Empty title="Nothing ready">
-                  A video becomes ready when Produce renders it and the publish gate allows the latest render. Open a
-                  project in the <Link to="/studio">studio</Link> and produce it until the gate says ALLOW.
+                <Empty title="No channel">The server seeds YouTube, TikTok and Instagram; none came back.</Empty>
+              )}
+            </section>
+          </Defer>
+
+          <Defer tier={2} id="cal:main" minHeight={320}>
+            <div className="cal-main">
+              <section className="cal-ready" aria-labelledby="h-ready">
+                <h2 className="sec-h sec-h--page" id="h-ready">
+                  <span>Ready to schedule · {ready.length}</span>
+                  <span>gated, not on the calendar</span>
+                </h2>
+                {ready.length ? (
+                  <ul className="ready-list">
+                    {ready.map((r) => (
+                      <ReadyItem key={r.project_id} r={r} wired={wired} ucName={ucName(r.use_case_id)} />
+                    ))}
+                  </ul>
+                ) : (
+                  <Empty title="Nothing ready">
+                    A video becomes ready when Produce renders it and the publish gate allows the latest render. Open a
+                    project in the <Link to="/studio">studio</Link> and produce it until the gate says ALLOW.
+                  </Empty>
+                )}
+              </section>
+
+              <Defer tier={1} id="cal:week" phClass="cal-week" minHeight={320}>
+                <WeekView week={week} setWeek={setWeek} slots={slots} chById={chById} />
+              </Defer>
+            </div>
+          </Defer>
+
+          <Defer tier={3} id="cal:slots" visible phClass="cal-slots" minHeight={240}>
+            <section className="cal-slots" aria-labelledby="h-slots">
+              <h2 className="sec-h sec-h--page" id="h-slots" tabIndex={-1}>
+                <span>Every slot · {slots.length}</span>
+                <span>
+                  {upcoming.length} upcoming · {history.length} done or stopped
+                </span>
+              </h2>
+              {slots.length ? (
+                <>
+                  {upcoming.length ? <h3 className="slot-group">Upcoming</h3> : null}
+                  <ul className="slot-list">
+                    {upcoming.map((s) => (
+                      <SlotRow
+                        key={s.id}
+                        s={s}
+                        channel={chById.get(s.channel_id)}
+                        pubs={pubs}
+                        testid={newest.get(s.project_id)?.id === s.id}
+                      />
+                    ))}
+                  </ul>
+                  {history.length ? <h3 className="slot-group">History</h3> : null}
+                  <ul className="slot-list">
+                    {history.map((s) => (
+                      <SlotRow
+                        key={s.id}
+                        s={s}
+                        channel={chById.get(s.channel_id)}
+                        pubs={pubs}
+                        testid={newest.get(s.project_id)?.id === s.id}
+                      />
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <Empty title="No slot yet">
+                  Schedule a ready video above, or publish it now; slots appear here and on the week.
                 </Empty>
               )}
             </section>
-
-            <WeekView week={week} setWeek={setWeek} slots={slots} chById={chById} />
-          </div>
-
-          <section className="cal-slots" aria-labelledby="h-slots">
-            <h2 className="sec-h sec-h--page" id="h-slots" tabIndex={-1}>
-              <span>Every slot · {slots.length}</span>
-              <span>
-                {upcoming.length} upcoming · {history.length} done or stopped
-              </span>
-            </h2>
-            {slots.length ? (
-              <>
-                {upcoming.length ? <h3 className="slot-group">Upcoming</h3> : null}
-                <ul className="slot-list">
-                  {upcoming.map((s) => (
-                    <SlotRow key={s.id} s={s} channel={chById.get(s.channel_id)} pubs={pubs} testid={newest.get(s.project_id)?.id === s.id} />
-                  ))}
-                </ul>
-                {history.length ? <h3 className="slot-group">History</h3> : null}
-                <ul className="slot-list">
-                  {history.map((s) => (
-                    <SlotRow key={s.id} s={s} channel={chById.get(s.channel_id)} pubs={pubs} testid={newest.get(s.project_id)?.id === s.id} />
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <Empty title="No slot yet">Schedule a ready video above, or publish it now; slots appear here and on the week.</Empty>
-            )}
-          </section>
+          </Defer>
           <p className="page__foot">
             Times are local ({Intl.DateTimeFormat().resolvedOptions().timeZone}). Scheduled slots can move or be
             cancelled until the tick picks them up; a failed slot keeps the job's error verbatim.

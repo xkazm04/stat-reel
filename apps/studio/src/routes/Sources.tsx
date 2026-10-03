@@ -4,6 +4,7 @@
  */
 import type { LicenseClass, Source } from "@statreel/schemas";
 import { useState } from "react";
+import { Defer } from "../components/arrive";
 import { LicChip, TestChip } from "../components/glyphs";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useSources } from "../data";
@@ -68,108 +69,116 @@ export function SourcesPage() {
           <h2 className="sec-h sec-h--page">
             <span>Registry · {shown.length} sources</span>
           </h2>
-          <div className="table-wrap">
-            <table className="tbl tbl--sources">
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>Verdict</th>
-                  <th>Licence</th>
-                  <th>Kinds</th>
-                  <th>Access · hosts</th>
-                  <th>Attribution</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((s) => (
-                  <tr key={s.id} className={s.verdict === "avoid" ? "is-avoid" : ""}>
-                    <td>
-                      {s.verdict === "avoid" ? <s className="mono">{s.id}</s> : <b className="mono">{s.id}</b>}
-                      <span className="tbl__sub">{s.sport === "all" ? "all sports" : s.sport}</span>
-                    </td>
-                    <td>
-                      <LicChip cls={s.verdict} />
-                      {s.verdict === "avoid" ? <span className="tbl__sub never-tag">never fetched</span> : null}
-                    </td>
-                    <td>
-                      {s.license}
-                      {s.verdict_note ? <span className="tbl__sub">{s.verdict_note}</span> : null}
-                      {s.terms_checked_at ? <span className="tbl__sub">terms checked {s.terms_checked_at}</span> : null}
-                    </td>
-                    <td>
-                      {s.kinds.length ? s.kinds.map((k) => kindLong(k)).join(", ") : "—"}
-                      {s.partial_kinds.length ? (
-                        <span className="tbl__sub">partial: {s.partial_kinds.map((k) => kindLong(k)).join(", ")}</span>
-                      ) : null}
-                    </td>
-                    <td>
-                      {s.access.replace("_", " ")}
-                      <span className="tbl__sub mono">
-                        {s.hosts.length
-                          ? s.hosts.join(", ")
-                          : s.verdict === "avoid"
-                            ? "no hosts: unreachable in code"
-                            : "no hosts"}
-                      </span>
-                    </td>
-                    <td>{s.attribution ?? "—"}</td>
-                    <td className="tbl__note">{s.notes ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className="sec-h sec-h--page">
-            <span>Tested capabilities · {caps.length}</span>
-            <span>{caps.filter((c) => c.status === "pass").length} pass</span>
-          </h2>
-          {caps.length ? (
+          <Defer tier={1} id="sources:registry" phClass="table-wrap" minHeight={260}>
             <div className="table-wrap">
-              <table className="tbl">
+              <table className="tbl tbl--sources">
                 <thead>
                   <tr>
-                    <th>Sport</th>
-                    <th>Kind</th>
                     <th>Source</th>
-                    <th>Licence class</th>
-                    <th>Status</th>
-                    <th>Coverage</th>
-                    <th className="num">Rows</th>
-                    <th>Detail</th>
+                    <th>Verdict</th>
+                    <th>Licence</th>
+                    <th>Kinds</th>
+                    <th>Access · hosts</th>
+                    <th>Attribution</th>
+                    <th>Notes</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {caps
-                    .filter((c) => sport === "all" || c.sport === sport)
-                    .map((c) => (
-                      <tr key={`${c.sport}|${c.kind}|${c.source_id}`}>
-                        <td>{c.sport}</td>
-                        <td>{kindLong(c.kind)}</td>
-                        <td className="mono">{c.source_id}</td>
-                        <td>
-                          <LicChip cls={c.license_class} />
-                        </td>
-                        <td>
-                          <TestChip status={c.status} />
-                        </td>
-                        <td className="num">
-                          {c.coverage_from ? `${c.coverage_from}–${c.coverage_to ?? "now"}` : "—"}
-                        </td>
-                        <td className="num">{c.rows.toLocaleString("en-US")}</td>
-                        <td className="tbl__note">{c.detail}</td>
-                      </tr>
-                    ))}
+                  {shown.map((s) => (
+                    <tr key={s.id} className={s.verdict === "avoid" ? "is-avoid" : ""}>
+                      <td>
+                        {s.verdict === "avoid" ? <s className="mono">{s.id}</s> : <b className="mono">{s.id}</b>}
+                        <span className="tbl__sub">{s.sport === "all" ? "all sports" : s.sport}</span>
+                      </td>
+                      <td>
+                        <LicChip cls={s.verdict} />
+                        {s.verdict === "avoid" ? <span className="tbl__sub never-tag">never fetched</span> : null}
+                      </td>
+                      <td>
+                        {s.license}
+                        {s.verdict_note ? <span className="tbl__sub">{s.verdict_note}</span> : null}
+                        {s.terms_checked_at ? (
+                          <span className="tbl__sub">terms checked {s.terms_checked_at}</span>
+                        ) : null}
+                      </td>
+                      <td>
+                        {s.kinds.length ? s.kinds.map((k) => kindLong(k)).join(", ") : "—"}
+                        {s.partial_kinds.length ? (
+                          <span className="tbl__sub">
+                            partial: {s.partial_kinds.map((k) => kindLong(k)).join(", ")}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        {s.access.replace("_", " ")}
+                        <span className="tbl__sub mono">
+                          {s.hosts.length
+                            ? s.hosts.join(", ")
+                            : s.verdict === "avoid"
+                              ? "no hosts: unreachable in code"
+                              : "no hosts"}
+                        </span>
+                      </td>
+                      <td>{s.attribution ?? "—"}</td>
+                      <td className="tbl__note">{s.notes ?? "—"}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          ) : (
-            <Empty title="No capability tested yet">
-              Run <span className="mono">just transform</span>: until a capability passes, every cell on the rights grid
-              says "not tested" and stays Blocked.
-            </Empty>
-          )}
+          </Defer>
+
+          <Defer tier={2} id="sources:caps" visible minHeight={200}>
+            <h2 className="sec-h sec-h--page">
+              <span>Tested capabilities · {caps.length}</span>
+              <span>{caps.filter((c) => c.status === "pass").length} pass</span>
+            </h2>
+            {caps.length ? (
+              <div className="table-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Sport</th>
+                      <th>Kind</th>
+                      <th>Source</th>
+                      <th>Licence class</th>
+                      <th>Status</th>
+                      <th>Coverage</th>
+                      <th className="num">Rows</th>
+                      <th>Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {caps
+                      .filter((c) => sport === "all" || c.sport === sport)
+                      .map((c) => (
+                        <tr key={`${c.sport}|${c.kind}|${c.source_id}`}>
+                          <td>{c.sport}</td>
+                          <td>{kindLong(c.kind)}</td>
+                          <td className="mono">{c.source_id}</td>
+                          <td>
+                            <LicChip cls={c.license_class} />
+                          </td>
+                          <td>
+                            <TestChip status={c.status} />
+                          </td>
+                          <td className="num">
+                            {c.coverage_from ? `${c.coverage_from}–${c.coverage_to ?? "now"}` : "—"}
+                          </td>
+                          <td className="num">{c.rows.toLocaleString("en-US")}</td>
+                          <td className="tbl__note">{c.detail}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Empty title="No capability tested yet">
+                Run <span className="mono">just transform</span>: until a capability passes, every cell on the rights
+                grid says "not tested" and stays Blocked.
+              </Empty>
+            )}
+          </Defer>
           <p className="page__foot">
             Licence classes:{" "}
             {Object.entries(LICENCE_WORD)

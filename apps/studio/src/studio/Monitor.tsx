@@ -6,7 +6,9 @@
 import type { PlayerRef } from "@remotion/player";
 import type { EraAdjustedProps, Format } from "@statreel/schemas";
 import { type RefObject, useEffect, useState } from "react";
-import { type PlayerMeta, Programme, Slate } from "../components/Programme";
+import { Programme } from "../components/LazyProgramme";
+import type { PlayerMeta } from "../components/Programme";
+import { Slate } from "../components/Slate";
 import { timecode } from "../logic";
 
 export function usePlayerFrame(ref: RefObject<PlayerRef | null>, meta: PlayerMeta | null): number {

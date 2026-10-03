@@ -8,8 +8,9 @@
 import type { PlayerRef } from "@remotion/player";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { api, errorText, qk } from "../api";
+import { Defer } from "../components/arrive";
 import { Arrow } from "../components/glyphs";
 import type { PlayerMeta } from "../components/Programme";
 import { latestRender, renderPolicy } from "../data";
@@ -18,9 +19,10 @@ import { canSchedule, sceneSpans } from "../studio-logic";
 import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
 import { PropsPanel } from "./PropsPanel";
-import { ScriptModal } from "./ScriptModal";
 import { JobError, JobLine, lastJobOf, PublicationStatus, produceJob, useStudio, Verdict } from "./shared";
 import { Tracks } from "./Tracks";
+
+const ScriptModal = lazy(() => import("./ScriptModal").then((m) => ({ default: m.ScriptModal })));
 
 export function ControlRoom() {
   const { detail, usecase, heatmap } = useStudio();
@@ -51,7 +53,12 @@ export function ControlRoom() {
     },
     [spans, meta],
   );
-  const openScript = useCallback((at: string | null) => setScript({ open: true, at }), []);
+  // the script dialog is a chunk of its own, fetched the first time it is asked for
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const openScript = useCallback((at: string | null) => {
+    setScriptLoaded(true);
+    setScript({ open: true, at });
+  }, []);
 
   if (!detail) return null;
   const running = produceJob(detail);
@@ -133,41 +140,53 @@ export function ControlRoom() {
         </ul>
       ) : null}
       <div className="room">
-        <PropsPanel
-          detail={detail}
-          usecase={usecase}
-          cells={heatmap?.cells ?? []}
-          onOpenScript={() => openScript(props?.scenes[0]?.id ?? null)}
-        />
-        <Monitor
-          props={props}
-          compositionName={usecase?.composition}
-          playerRef={playerRef}
-          meta={meta}
-          onMeta={onMeta}
-        />
-        <Copilot detail={detail} />
-        <Tracks
-          props={props}
-          spans={spans}
-          duration={duration}
-          playerRef={playerRef}
-          meta={meta}
-          onScene={(id) => {
-            seekScene(id);
-            openScript(id);
-          }}
-        />
+        <Defer tier={1} id="room:props" phClass="props panel-col" minHeight={300}>
+          <PropsPanel
+            detail={detail}
+            usecase={usecase}
+            cells={heatmap?.cells ?? []}
+            onOpenScript={() => openScript(props?.scenes[0]?.id ?? null)}
+          />
+        </Defer>
+        <Defer tier={2} id="room:pgm" phClass="pgm" minHeight={300}>
+          <Monitor
+            props={props}
+            compositionName={usecase?.composition}
+            playerRef={playerRef}
+            meta={meta}
+            onMeta={onMeta}
+          />
+        </Defer>
+        <Defer tier={3} id="room:copilot" phClass="copilot panel-col" minHeight={300}>
+          <Copilot detail={detail} />
+        </Defer>
+        <Defer tier={4} id="room:tl" phClass="tl" minHeight={120}>
+          <Tracks
+            props={props}
+            spans={spans}
+            duration={duration}
+            playerRef={playerRef}
+            meta={meta}
+            onScene={(id) => {
+              seekScene(id);
+              openScript(id);
+            }}
+          />
+        </Defer>
       </div>
-      <ScriptModal
-        open={script.open}
-        at={script.at}
-        onClose={() => setScript((s) => ({ ...s, open: false }))}
-        detail={detail}
-        props={props}
-        spans={spans}
-        onSeek={seekScene}
-      />
+      {scriptLoaded ? (
+        <Suspense fallback={null}>
+          <ScriptModal
+            open={script.open}
+            at={script.at}
+            onClose={() => setScript((s) => ({ ...s, open: false }))}
+            detail={detail}
+            props={props}
+            spans={spans}
+            onSeek={seekScene}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

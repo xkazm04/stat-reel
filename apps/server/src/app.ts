@@ -4,6 +4,8 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import type { HttpBindings } from "@hono/node-server";
 import { Hono } from "hono";
+import { compress } from "hono/compress";
+import { etag } from "hono/etag";
 import { streamSSE } from "hono/streaming";
 import { PublishTargetSchema } from "@statreel/schemas";
 import { paths } from "./config";
@@ -30,6 +32,20 @@ const TYPES: Record<string, string> = { ".mp4": "video/mp4", ".png": "image/png"
 
 export function buildApp(d: AppDeps) {
   const app = new Hono<{ Bindings: HttpBindings }>();
+
+  // Reads revalidate instead of re-downloading: gzip, a strong ETag (a matching If-None-Match gets a
+  // bodyless 304) and `no-cache`, so a screen always sees fresh data but unchanged JSON costs no bytes.
+  // GET /api only: SSE (/events), /files (ranges, media) and /mcp are never compressed or buffered.
+  app.use("/api/*", async (c, next) => {
+    if (c.req.method !== "GET") {
+      await next();
+      return;
+    }
+    c.header("cache-control", "no-cache");
+    await compress()(c, async () => {
+      await etag()(c, next);
+    });
+  });
 
   app.get("/api/health", (c) => c.json({ ok: true, at: new Date().toISOString() }));
 

@@ -8,6 +8,7 @@ import type { Mode } from "@statreel/schemas";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type CSSProperties, useState } from "react";
 import type { MetricsPublication, ProjectWithJobs } from "../api";
+import { Defer } from "../components/arrive";
 import { Arrow, FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading, Sparkline } from "../components/ui";
@@ -160,82 +161,90 @@ export function ProjectsPage() {
           Create one from a Go cell on the <Link to="/heatmap">rights grid</Link>: open the cell, then Create project.
         </Empty>
       ) : view === "board" && pf ? (
-        <RaceSheet projects={projects} live={live} pubsOf={pubsOf} />
+        <Defer tier={1} id="rundown:sheet" minHeight={360}>
+          <RaceSheet projects={projects} live={live} pubsOf={pubsOf} />
+        </Defer>
       ) : view === "board" ? (
         <div className="board">
-          {STAGES.map((s) => {
+          {STAGES.map((s, si) => {
             const col = projects.filter((p) => p.status === s);
             return (
-              <section className="board__col" key={s} aria-label={STAGE_LABEL[s]}>
-                <h2 className="board__h">
-                  <b className="num">{pad2(col.length)}</b>
-                  {STAGE_LABEL[s]}
-                </h2>
-                {col.length ? (
-                  col.map((p) => <Card key={p.id} p={p} live={live} pubs={pubsOf(p.id)} />)
-                ) : (
-                  <p className="board__none">Nothing here</p>
-                )}
-              </section>
+              <Defer key={s} tier={si + 1} id={`rundown:${s}`} phClass="board__col" minHeight={220}>
+                <section className="board__col" aria-label={STAGE_LABEL[s]}>
+                  <h2 className="board__h">
+                    <b className="num">{pad2(col.length)}</b>
+                    {STAGE_LABEL[s]}
+                  </h2>
+                  {col.length ? (
+                    col.map((p) => <Card key={p.id} p={p} live={live} pubs={pubsOf(p.id)} />)
+                  ) : (
+                    <p className="board__none">Nothing here</p>
+                  )}
+                </section>
+              </Defer>
             );
           })}
         </div>
       ) : (
-        <div className="table-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Project</th>
-                <th>Stage</th>
-                <th>Next</th>
-                <th>Sport</th>
-                <th>Format</th>
-                <th>Mode</th>
-                <th>Job</th>
-                <th>Views</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.map((p, i) => {
-                const job = activeJob(p.jobs);
-                const n = nextAction(p.status, p.jobs[0]);
-                const pubs = pubsOf(p.id);
-                const views = pubs.some((x) => x.views !== null) ? pubs.reduce((a, x) => a + (x.views ?? 0), 0) : null;
-                return (
-                  <tr key={p.id} style={artStyle(identVar(p.use_case_id))}>
-                    <td className="num">{pad2(i + 1)}</td>
-                    <td>
-                      <Link to="/studio/$projectId" params={{ projectId: p.id }} className="tbl__link">
-                        {p.title}
-                      </Link>
-                      <span className="tbl__sub mono">{p.id}</span>
-                    </td>
-                    <td>{STAGE_LABEL[p.status] ?? p.status}</td>
-                    <td className={`row__next--${n.tone}`}>{n.verb}</td>
-                    <td>{p.sport}</td>
-                    <td>{formatLabel(p.format)}</td>
-                    <td>{MODE_LABEL[p.mode as Mode] ?? p.mode}</td>
-                    <td className="mono">
-                      {job ? `${job.kind} ${pct(live.get(job.id)?.progress ?? job.progress)}` : "—"}
-                    </td>
-                    <td className="num">
-                      {pubs.length
-                        ? views === null
-                          ? pubs.every((x) => x.mode === "dry")
-                            ? "— dry run"
-                            : "—"
-                          : fmtNum(views)
-                        : "—"}
-                    </td>
-                    <td>{relTime(p.created_at)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Defer tier={1} id="rundown:list" phClass="table-wrap" minHeight={260}>
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Project</th>
+                  <th>Stage</th>
+                  <th>Next</th>
+                  <th>Sport</th>
+                  <th>Format</th>
+                  <th>Mode</th>
+                  <th>Job</th>
+                  <th>Views</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projects.map((p, i) => {
+                  const job = activeJob(p.jobs);
+                  const n = nextAction(p.status, p.jobs[0]);
+                  const pubs = pubsOf(p.id);
+                  const views = pubs.some((x) => x.views !== null)
+                    ? pubs.reduce((a, x) => a + (x.views ?? 0), 0)
+                    : null;
+                  return (
+                    <tr key={p.id} style={artStyle(identVar(p.use_case_id))}>
+                      <td className="num">{pad2(i + 1)}</td>
+                      <td>
+                        <Link to="/studio/$projectId" params={{ projectId: p.id }} className="tbl__link">
+                          {p.title}
+                        </Link>
+                        <span className="tbl__sub mono">{p.id}</span>
+                      </td>
+                      <td>{STAGE_LABEL[p.status] ?? p.status}</td>
+                      <td className={`row__next--${n.tone}`}>{n.verb}</td>
+                      <td>{p.sport}</td>
+                      <td>{formatLabel(p.format)}</td>
+                      <td>{MODE_LABEL[p.mode as Mode] ?? p.mode}</td>
+                      <td className="mono">
+                        {job ? `${job.kind} ${pct(live.get(job.id)?.progress ?? job.progress)}` : "—"}
+                      </td>
+                      <td className="num">
+                        {pubs.length
+                          ? views === null
+                            ? pubs.every((x) => x.mode === "dry")
+                              ? "— dry run"
+                              : "—"
+                            : fmtNum(views)
+                          : "—"}
+                      </td>
+                      <td>{relTime(p.created_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Defer>
       )}
     </main>
   );

@@ -5,6 +5,7 @@
  */
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { Defer } from "../components/arrive";
 import { StatusChip } from "../components/glyphs";
 import { Empty, Loading } from "../components/ui";
 import { latestRender, renderChecks, renderFile, renderPolicy, useManifest } from "../data";
@@ -61,233 +62,241 @@ export function RenderGatePage() {
         </Empty>
       ) : (
         <div className="rg__grid">
-          <section className="panel rg__video">
-            <h2 className="sec-h">
-              <span>Render · {render.format}</span>
-              <span>{checks && typeof checks.duration_s === "number" ? `${checks.duration_s} s` : ""}</span>
-            </h2>
-            <div className={`rg__frame${render.format === "landscape" ? " wide" : ""}`}>
-              {video ? (
-                <video src={video} controls preload="metadata" poster={renderFile(render, "thumb.png") ?? undefined}>
-                  <track
-                    kind="captions"
-                    src={renderFile(render, "captions.vtt") ?? undefined}
-                    srcLang="en"
-                    label="English"
-                  />
-                </video>
-              ) : (
-                <p className="sum-p">No file URL for this render.</p>
-              )}
-            </div>
-            <ul className="links">
-              {[
-                ["video.mp4", "Video"],
-                ["captions.srt", "Captions · SRT"],
-                ["captions.vtt", "Captions · VTT"],
-                ["thumb.png", "Thumbnail"],
-                ["manifest.json", "Manifest · JSON"],
-              ].map(([f, l]) => {
-                const href = renderFile(render, f as string);
-                return href ? (
-                  <li key={f}>
-                    <a href={href} target="_blank" rel="noreferrer">
-                      {l}
-                    </a>
-                  </li>
-                ) : null;
-              })}
-            </ul>
-          </section>
-
-          <section className="panel rg__gate">
-            <h2 className="sec-h">
-              <span>Policy gate · OPA</span>
-              <span>
-                {policy?.target
-                  ? `${policy.target.platform} · ${policy.target.monetized ? "monetized" : "non-commercial"} · ${policy.target.visibility ?? "private"}`
-                  : ""}
-              </span>
-            </h2>
-            <div className="rg__verdict">
-              <Verdict
-                detail={{ ...detail, renders: [render, ...renders.filter((r) => r.id !== render.id)] }}
-                size="lg"
-              />
-            </div>
-            {policy ? (
-              <>
-                {policy.deny.length ? (
-                  <>
-                    <h3 className="sec-h">
-                      <span>Deny · verbatim</span>
-                    </h3>
-                    <ul className="reasons reasons--deny">
-                      {policy.deny.map((d) => (
-                        <li key={d} className="mono">
-                          {d}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
+          <Defer tier={1} id="rg:video" phClass="panel rg__video" minHeight={320}>
+            <section className="panel rg__video">
+              <h2 className="sec-h">
+                <span>Render · {render.format}</span>
+                <span>{checks && typeof checks.duration_s === "number" ? `${checks.duration_s} s` : ""}</span>
+              </h2>
+              <div className={`rg__frame${render.format === "landscape" ? " wide" : ""}`}>
+                {video ? (
+                  <video src={video} controls preload="metadata" poster={renderFile(render, "thumb.png") ?? undefined}>
+                    <track
+                      kind="captions"
+                      src={renderFile(render, "captions.vtt") ?? undefined}
+                      srcLang="en"
+                      label="English"
+                    />
+                  </video>
                 ) : (
-                  <p className="sum-p">No deny reason.</p>
+                  <p className="sum-p">No file URL for this render.</p>
                 )}
-                {policy.warn.length ? (
-                  <>
-                    <h3 className="sec-h">
-                      <span>Warnings</span>
-                    </h3>
-                    <ul className="reasons reasons--warn">
-                      {policy.warn.map((d) => (
-                        <li key={d} className="mono">
-                          {d}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : null}
-                <h3 className="sec-h">
-                  <span>Checks run · {policy.checks_run.length}</span>
-                </h3>
-                <ul className="checks-run">
-                  {policy.checks_run.map((c) => (
-                    <li key={c} className="mono">
-                      {c}
+              </div>
+              <ul className="links">
+                {[
+                  ["video.mp4", "Video"],
+                  ["captions.srt", "Captions · SRT"],
+                  ["captions.vtt", "Captions · VTT"],
+                  ["thumb.png", "Thumbnail"],
+                  ["manifest.json", "Manifest · JSON"],
+                ].map(([f, l]) => {
+                  const href = renderFile(render, f as string);
+                  return href ? (
+                    <li key={f}>
+                      <a href={href} target="_blank" rel="noreferrer">
+                        {l}
+                      </a>
                     </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="sum-p">This render carries no policy verdict.</p>
-            )}
-          </section>
+                  ) : null;
+                })}
+              </ul>
+            </section>
+          </Defer>
 
-          <section className="panel rg__checks">
-            <h2 className="sec-h">
-              <span>Post-render checks · ffprobe · ebur128</span>
-            </h2>
-            <table className="tbl tbl--checks">
-              <thead>
-                <tr>
-                  <th>Check</th>
-                  <th className="num">Value</th>
-                  <th className="num">Target</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.key}>
-                    <td>{r.label}</td>
-                    <td className="num">{r.value}</td>
-                    <td className="num">{r.target ?? "recorded"}</td>
-                    <td>
-                      {r.ok === null ? (
-                        <span className="label">recorded</span>
-                      ) : (
-                        <StatusChip status={r.ok ? "go" : "blocked"} size={13} label={r.ok ? "PASS" : "FAIL"} />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          <section className="panel rg__manifest">
-            <h2 className="sec-h">
-              <span>Provenance manifest</span>
-              <span>{m ? m.build.composition : ""}</span>
-            </h2>
-            {manifest.isLoading ? (
-              <Loading what="the manifest" />
-            ) : manifest.isError || !m ? (
-              <p className="sum-p">The manifest did not load from {renderFile(render, "manifest.json")}.</p>
-            ) : (
-              <div className="mf">
-                <dl className="mf__kv">
-                  <div>
-                    <dt>Subject</dt>
-                    <dd className="mono">
-                      {m.subject.file} · sha256 {m.subject.sha256.slice(0, 16)}…
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Build</dt>
-                    <dd className="mono">
-                      {m.build.composition} · {m.build.renderer} · git {m.build.git_sha.slice(0, 10)} · props{" "}
-                      {m.build.props_sha256.slice(0, 12)}…
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Data</dt>
-                    <dd>
-                      {m.data.models.join(", ")} · licence class <b>{m.data.license_class}</b>
-                    </dd>
-                  </div>
-                </dl>
-                <h3 className="sec-h">
-                  <span>Sources · {m.data.sources.length}</span>
-                </h3>
-                <ul className="mf__list">
-                  {m.data.sources.map((s) => (
-                    <li key={s.id}>
-                      <b className="mono">{s.id}</b> {s.license} · {s.license_class} · snapshot {s.snapshot}
-                      {s.attribution ? <span className="mf__sub">{s.attribution}</span> : null}
-                    </li>
-                  ))}
-                </ul>
-                <h3 className="sec-h">
-                  <span>Audio · {m.audio.length} assets</span>
-                </h3>
-                <ul className="mf__list">
-                  {m.audio.map((a) => (
-                    <li key={a.sha256}>
-                      <b>{a.kind}</b> {a.scene_id ? `· ${a.scene_id} ` : ""}· {a.provider} {a.model_id} · plan{" "}
-                      {a.plan_tier} · c2pa {a.c2pa}
-                    </li>
-                  ))}
-                </ul>
-                <dl className="mf__kv">
-                  <div>
-                    <dt>Captions</dt>
-                    <dd>
-                      {m.captions.burned_in ? "burned in" : "not burned in"} · sidecar {m.captions.sidecar.join(", ")} ·
-                      max {m.captions.max_cps} cps
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Fonts</dt>
-                    <dd>{m.fonts.map((f) => `${f.family} (${f.license})`).join(" · ")}</dd>
-                  </div>
-                  <div>
-                    <dt>Disclosure</dt>
-                    <dd>
-                      AI voice {m.disclosure.ai_voice ? "yes" : "no"} · AI music {m.disclosure.ai_music ? "yes" : "no"}{" "}
-                      · on frame {m.disclosure.on_frame ? "yes" : "no"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>LLM</dt>
-                    <dd className="mono">
-                      {m.llm ? `${m.llm.engine} · ${m.llm.session_id ?? "no session id"}` : "none"}
-                    </dd>
-                  </div>
-                </dl>
-                <details className="mf__facts">
-                  <summary>Facts cited · {m.data.facts_cited.length}</summary>
-                  <ul>
-                    {m.data.facts_cited.map((f) => (
-                      <li key={f} className="mono">
-                        {f}
+          <Defer tier={2} id="rg:gate" phClass="panel rg__gate" minHeight={220}>
+            <section className="panel rg__gate">
+              <h2 className="sec-h">
+                <span>Policy gate · OPA</span>
+                <span>
+                  {policy?.target
+                    ? `${policy.target.platform} · ${policy.target.monetized ? "monetized" : "non-commercial"} · ${policy.target.visibility ?? "private"}`
+                    : ""}
+                </span>
+              </h2>
+              <div className="rg__verdict">
+                <Verdict
+                  detail={{ ...detail, renders: [render, ...renders.filter((r) => r.id !== render.id)] }}
+                  size="lg"
+                />
+              </div>
+              {policy ? (
+                <>
+                  {policy.deny.length ? (
+                    <>
+                      <h3 className="sec-h">
+                        <span>Deny · verbatim</span>
+                      </h3>
+                      <ul className="reasons reasons--deny">
+                        {policy.deny.map((d) => (
+                          <li key={d} className="mono">
+                            {d}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <p className="sum-p">No deny reason.</p>
+                  )}
+                  {policy.warn.length ? (
+                    <>
+                      <h3 className="sec-h">
+                        <span>Warnings</span>
+                      </h3>
+                      <ul className="reasons reasons--warn">
+                        {policy.warn.map((d) => (
+                          <li key={d} className="mono">
+                            {d}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  <h3 className="sec-h">
+                    <span>Checks run · {policy.checks_run.length}</span>
+                  </h3>
+                  <ul className="checks-run">
+                    {policy.checks_run.map((c) => (
+                      <li key={c} className="mono">
+                        {c}
                       </li>
                     ))}
                   </ul>
-                </details>
-              </div>
-            )}
-          </section>
+                </>
+              ) : (
+                <p className="sum-p">This render carries no policy verdict.</p>
+              )}
+            </section>
+          </Defer>
+
+          <Defer tier={3} id="rg:checks" phClass="panel rg__checks" minHeight={200}>
+            <section className="panel rg__checks">
+              <h2 className="sec-h">
+                <span>Post-render checks · ffprobe · ebur128</span>
+              </h2>
+              <table className="tbl tbl--checks">
+                <thead>
+                  <tr>
+                    <th>Check</th>
+                    <th className="num">Value</th>
+                    <th className="num">Target</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.key}>
+                      <td>{r.label}</td>
+                      <td className="num">{r.value}</td>
+                      <td className="num">{r.target ?? "recorded"}</td>
+                      <td>
+                        {r.ok === null ? (
+                          <span className="label">recorded</span>
+                        ) : (
+                          <StatusChip status={r.ok ? "go" : "blocked"} size={13} label={r.ok ? "PASS" : "FAIL"} />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          </Defer>
+
+          <Defer tier={4} id="rg:manifest" phClass="panel rg__manifest" minHeight={200}>
+            <section className="panel rg__manifest">
+              <h2 className="sec-h">
+                <span>Provenance manifest</span>
+                <span>{m ? m.build.composition : ""}</span>
+              </h2>
+              {manifest.isLoading ? (
+                <Loading what="the manifest" />
+              ) : manifest.isError || !m ? (
+                <p className="sum-p">The manifest did not load from {renderFile(render, "manifest.json")}.</p>
+              ) : (
+                <div className="mf">
+                  <dl className="mf__kv">
+                    <div>
+                      <dt>Subject</dt>
+                      <dd className="mono">
+                        {m.subject.file} · sha256 {m.subject.sha256.slice(0, 16)}…
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Build</dt>
+                      <dd className="mono">
+                        {m.build.composition} · {m.build.renderer} · git {m.build.git_sha.slice(0, 10)} · props{" "}
+                        {m.build.props_sha256.slice(0, 12)}…
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Data</dt>
+                      <dd>
+                        {m.data.models.join(", ")} · licence class <b>{m.data.license_class}</b>
+                      </dd>
+                    </div>
+                  </dl>
+                  <h3 className="sec-h">
+                    <span>Sources · {m.data.sources.length}</span>
+                  </h3>
+                  <ul className="mf__list">
+                    {m.data.sources.map((s) => (
+                      <li key={s.id}>
+                        <b className="mono">{s.id}</b> {s.license} · {s.license_class} · snapshot {s.snapshot}
+                        {s.attribution ? <span className="mf__sub">{s.attribution}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                  <h3 className="sec-h">
+                    <span>Audio · {m.audio.length} assets</span>
+                  </h3>
+                  <ul className="mf__list">
+                    {m.audio.map((a) => (
+                      <li key={a.sha256}>
+                        <b>{a.kind}</b> {a.scene_id ? `· ${a.scene_id} ` : ""}· {a.provider} {a.model_id} · plan{" "}
+                        {a.plan_tier} · c2pa {a.c2pa}
+                      </li>
+                    ))}
+                  </ul>
+                  <dl className="mf__kv">
+                    <div>
+                      <dt>Captions</dt>
+                      <dd>
+                        {m.captions.burned_in ? "burned in" : "not burned in"} · sidecar {m.captions.sidecar.join(", ")}{" "}
+                        · max {m.captions.max_cps} cps
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Fonts</dt>
+                      <dd>{m.fonts.map((f) => `${f.family} (${f.license})`).join(" · ")}</dd>
+                    </div>
+                    <div>
+                      <dt>Disclosure</dt>
+                      <dd>
+                        AI voice {m.disclosure.ai_voice ? "yes" : "no"} · AI music{" "}
+                        {m.disclosure.ai_music ? "yes" : "no"} · on frame {m.disclosure.on_frame ? "yes" : "no"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>LLM</dt>
+                      <dd className="mono">
+                        {m.llm ? `${m.llm.engine} · ${m.llm.session_id ?? "no session id"}` : "none"}
+                      </dd>
+                    </div>
+                  </dl>
+                  <details className="mf__facts">
+                    <summary>Facts cited · {m.data.facts_cited.length}</summary>
+                    <ul>
+                      {m.data.facts_cited.map((f) => (
+                        <li key={f} className="mono">
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+              )}
+            </section>
+          </Defer>
         </div>
       )}
     </div>

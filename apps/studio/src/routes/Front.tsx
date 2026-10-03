@@ -6,14 +6,17 @@
  */
 import type { PlayerRef } from "@remotion/player";
 import type { CellStatus, EraAdjustedProps, HeatmapCell, Mode, Source, Sport, UseCase } from "@statreel/schemas";
-import { useMutation, useQueries } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, errorText, type ProjectDetail, type ProjectWithJobs, qk } from "../api";
+import { api, errorText, type ProjectDetail } from "../api";
+import { Defer } from "../components/arrive";
 import { useCreateProject } from "../components/createProject";
 import { Arrow, Field, FormatIcon, LicChip, StatusChip } from "../components/glyphs";
 import { Ident, identVar } from "../components/idents";
-import { type PlayerMeta, Programme, Slate } from "../components/Programme";
+import { Programme } from "../components/LazyProgramme";
+import type { PlayerMeta } from "../components/Programme";
+import { Slate } from "../components/Slate";
 import { Ticker } from "../components/Ticker";
 import { artStyle, useReducedMotion, useWipe } from "../components/ui";
 import { latestRender, renderPolicy, useHeatmap, useManifest, useProjects, useSources } from "../data";
@@ -32,22 +35,7 @@ import {
   verdictCounts,
 } from "../onair";
 import type { FrontSearch } from "../router";
-
-// ------------------------------------------------------------------ programme source
-
-/** Newest project that has props (details of the five newest projects are read). */
-export function useProgramme(projects: ProjectWithJobs[] | undefined) {
-  const newest = useMemo(
-    () => [...(projects ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5),
-    [projects],
-  );
-  const details = useQueries({
-    queries: newest.map((p) => ({ queryKey: qk.project(p.id), queryFn: () => api.project(p.id) })),
-  });
-  const loading = details.some((d) => d.isLoading);
-  const found = details.map((d) => d.data).find((d): d is ProjectDetail => !!d?.props);
-  return { detail: found ?? null, loading: !!projects && loading };
-}
+import { useProgramme } from "./useProgramme";
 
 // ------------------------------------------------------------------ dust
 
@@ -425,21 +413,25 @@ export function FrontPage() {
       </section>
 
       {/* 02 · THE REEL */}
-      <Reel
-        usecases={usecases}
-        cells={cells}
-        onOpen={(u) => go({ format: u.id }, identVar(u.id))}
-        loading={hm.isLoading}
-        error={hm.isError}
-      />
+      <Defer tier={1} id="front:reel" anchor="reel" phClass="scene reel" minHeight="70vh">
+        <Reel
+          usecases={usecases}
+          cells={cells}
+          onOpen={(u) => go({ format: u.id }, identVar(u.id))}
+          loading={hm.isLoading}
+          error={hm.isError}
+        />
+      </Defer>
 
       {/* 03 · THE GATE */}
-      <GateBand
-        sources={sources}
-        policy={policy}
-        detail={detail}
-        manifestSources={manifest.data?.data.sources ?? null}
-      />
+      <Defer tier={2} id="front:gate" visible anchor="gate" phClass="scene gate" minHeight="60vh">
+        <GateBand
+          sources={sources}
+          policy={policy}
+          detail={detail}
+          manifestSources={manifest.data?.data.sources ?? null}
+        />
+      </Defer>
 
       {openUc ? (
         <Stage
