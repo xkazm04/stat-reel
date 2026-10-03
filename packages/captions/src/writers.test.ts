@@ -30,4 +30,36 @@ describe("sidecar writers", () => {
     expect(toSrt([])).toBe("");
     expect(toVtt([])).toBe("WEBVTT\n");
   });
+
+  describe("text hazards", () => {
+    const one = (lines: string[]): Cue[] => [{ start_s: 0, end_s: 2, lines, words: [] }];
+    const T = "00:00:00,000 --> 00:00:02,000";
+    const V = "00:00:00.000 --> 00:00:02.000";
+
+    it("VTT escapes & < >", () => {
+      expect(toVtt(one(["<5 points & A&B >"]))).toBe(`WEBVTT\n\n${V}\n&lt;5 points &amp; A&amp;B &gt;\n`);
+    });
+
+    it("SRT leaves & < > alone", () => {
+      expect(toSrt(one(["<5 points & A&B"]))).toBe(`1\n${T}\n<5 points & A&B\n`);
+    });
+
+    it("neutralises --> to an arrow in both formats (never --&gt; in VTT)", () => {
+      expect(toSrt(one(["a --> b"]))).toBe(`1\n${T}\na \u2192 b\n`);
+      expect(toVtt(one(["a --> b"]))).toBe(`WEBVTT\n\n${V}\na \u2192 b\n`);
+    });
+
+    it("collapses blank lines and embedded newlines inside a cue", () => {
+      const c = one(["first", "", "  ", "second\n\nthird\r\nfourth"]);
+      expect(toSrt(c)).toBe(`1\n${T}\nfirst\nsecond\nthird\nfourth\n`);
+      expect(toVtt(c)).toBe(`WEBVTT\n\n${V}\nfirst\nsecond\nthird\nfourth\n`);
+    });
+
+    it("drops a cue with no text and keeps SRT numbering contiguous", () => {
+      const c = [...one([""]), { start_s: 3, end_s: 4, lines: ["ok"], words: [] }];
+      expect(toSrt(c)).toBe("1\n00:00:03,000 --> 00:00:04,000\nok\n");
+      expect(toVtt(one([" "]))).toBe("WEBVTT\n");
+      expect(toSrt(one([""]))).toBe("");
+    });
+  });
 });
