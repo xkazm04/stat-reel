@@ -7,10 +7,10 @@
  */
 import type { PlayerRef } from "@remotion/player";
 import type { EraAdjustedProps } from "@statreel/schemas";
-import { type PointerEvent, type RefObject, useMemo } from "react";
+import { type PointerEvent, type RefObject, useEffect, useMemo, useRef } from "react";
 import type { PlayerMeta } from "../components/Programme";
 import { type CompositionState, rulerTicks, type SceneSpan, spanAt } from "../studio-logic";
-import { usePlayerFrame } from "./Monitor";
+import { type FrameClock, useClockSelect } from "./playerClock";
 
 export function Tracks({
   props,
@@ -19,6 +19,7 @@ export function Tracks({
   playerRef,
   meta,
   state,
+  clock,
   onScene,
 }: {
   props: EraAdjustedProps | null;
@@ -29,10 +30,28 @@ export function Tracks({
   meta: PlayerMeta | null;
   /** what the player can say; "not-built" must not read as a load in progress */
   state: CompositionState;
+  /** the frame clock: the needle is written to the DOM, only a cut or a caption change re-renders */
+  clock: FrameClock;
   onScene: (sceneId: string) => void;
 }) {
-  const frame = usePlayerFrame(playerRef, meta);
   const timing = props?.timing;
+  const fps = meta?.fps ?? 0;
+  const ready = !!props && duration > 0 && spans.length > 0;
+  // scene and caption under the playhead: selected from the clock, so a render per cut, not per frame
+  const cur = useClockSelect(clock, (f) => (fps ? (spanAt(spans, f / fps)?.id ?? null) : null));
+  const capNow = useClockSelect(clock, (f) => {
+    if (!fps || !timing) return -1;
+    const t = f / fps;
+    return timing.cues.find((c) => t >= c.start_s && t < c.end_s)?.start_s ?? -1;
+  });
+  const grid = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = grid.current;
+    if (!ready || !el || !fps || !(duration > 0)) return;
+    const write = () => el.style.setProperty("--tl-t", (clock.get() / fps / duration).toFixed(5));
+    write();
+    return clock.subscribe(write);
+  }, [clock, fps, duration, ready]);
   const voice = useMemo(() => {
     if (!timing) return [];
     const by = new Map<string, { start: number; end: number; words: number }>();
@@ -48,7 +67,7 @@ export function Tracks({
     return [...by.entries()].map(([id, v]) => ({ id, ...v }));
   }, [timing]);
 
-  if (!props || !(duration > 0) || !spans.length)
+  if (!props || !ready)
     return (
       <section className="tl" aria-label="Tracks">
         <p className="tl-none">
@@ -68,7 +87,6 @@ export function Tracks({
 
   const dur = duration;
   const pc = (s: number) => `${((Math.max(0, Math.min(dur, s)) / dur) * 100).toFixed(3)}%`;
-  const t = meta ? frame / meta.fps : 0;
   const ticks = rulerTicks(dur);
   const seekFrom = (e: PointerEvent<HTMLDivElement>) => {
     if (!meta || (e.target as HTMLElement).closest("button")) return;
@@ -87,7 +105,6 @@ export function Tracks({
     window.addEventListener("pointermove", mv);
     window.addEventListener("pointerup", up);
   };
-  const cur = spanAt(spans, t)?.id;
   const maxCps = (timing?.cues ?? []).reduce((m, c) => {
     const chars = c.lines.join(" ").length;
     const d = c.end_s - c.start_s;
@@ -97,7 +114,7 @@ export function Tracks({
 
   return (
     <section className="tl" aria-label="Tracks">
-      <div className="tl-grid" style={{ ["--tl-t" as string]: (t / dur).toFixed(5) }}>
+      <div className="tl-grid" ref={grid}>
         <span className="tl-head" aria-hidden="true" />
         <span className="tl-l">Time</span>
         <div className="tl-ruler" onPointerDown={seekFrom}>
@@ -167,7 +184,7 @@ export function Tracks({
               {timing.cues.map((c) => (
                 <span
                   key={`${c.start_s}`}
-                  className={`tl-b tl-b--cap${t >= c.start_s && t < c.end_s ? " now" : ""}`}
+                  className={`tl-b tl-b--cap${capNow === c.start_s ? " now" : ""}`}
                   style={{ left: pc(c.start_s), width: pc(c.end_s - c.start_s) }}
                 />
               ))}

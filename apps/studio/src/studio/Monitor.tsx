@@ -1,52 +1,88 @@
 /**
  * Centre: the programme monitor (Remotion Player of EraAdjustedSlope with the project's props),
  * a 9:16 / 16:9 preview toggle, the scrubber with timecode, and the safe-zone overlay toggle
- * (props.show_safe_zone). Frame state lives in the player; readers subscribe (usePlayerFrame).
+ * (props.show_safe_zone). The frame lives in the player; leaves read it from the clock (playerClock.ts), never from state here.
  */
 import type { PlayerRef } from "@remotion/player";
 import type { EraAdjustedProps, Format } from "@statreel/schemas";
-import { type RefObject, useEffect, useState } from "react";
+import { memo, type RefObject, useCallback, useEffect, useMemo, useState } from "react";
 import { Programme } from "../components/LazyProgramme";
 import type { PlayerMeta } from "../components/Programme";
 import { Slate } from "../components/Slate";
 import { timecode } from "../logic";
 import type { CompositionState } from "../studio-logic";
+import { type FrameClock, useClockSelect } from "./playerClock";
 
-export function usePlayerFrame(ref: RefObject<PlayerRef | null>, meta: PlayerMeta | null): number {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    const p = ref.current;
-    if (!p || !meta) return;
-    const h = (e: { detail: { frame: number } }) => setFrame(e.detail.frame);
-    p.addEventListener("frameupdate", h);
-    p.addEventListener("seeked", h);
-    setFrame(p.getCurrentFrame());
-    return () => {
-      p.removeEventListener("frameupdate", h);
-      p.removeEventListener("seeked", h);
-    };
-  }, [ref, meta]);
-  return frame;
-}
-
-function usePlaying(ref: RefObject<PlayerRef | null>, meta: PlayerMeta | null): boolean {
+/** play/pause state (changes on a click, not per frame) plus a refused play, reported not swallowed. */
+function usePlayback(ref: RefObject<PlayerRef | null>, meta: PlayerMeta | null) {
   const [on, setOn] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
   useEffect(() => {
     const p = ref.current;
     if (!p || !meta) return;
-    const play = () => setOn(true);
+    const play = () => {
+      setOn(true);
+      setRefused(null);
+    };
     const pause = () => setOn(false);
+    const error = (e: { detail: { error: Error } }) => setRefused(e.detail.error.message);
     p.addEventListener("play", play);
     p.addEventListener("pause", pause);
     p.addEventListener("ended", pause);
+    p.addEventListener("error", error);
     return () => {
       p.removeEventListener("play", play);
       p.removeEventListener("pause", pause);
       p.removeEventListener("ended", pause);
+      p.removeEventListener("error", error);
     };
   }, [ref, meta]);
-  return on;
+  return { playing: on, refused, setRefused };
 }
+
+/** Timecode readout: the only monitor text that follows the frame, so only it re-renders per frame. */
+const Timecode = memo(function Timecode({ clock, fps, total }: { clock: FrameClock; fps: number; total: number }) {
+  const frame = useClockSelect(clock, (f) => f);
+  return (
+    <span className="tc num">
+      {timecode(frame, fps)} <small>/ {timecode(Math.max(0, total - 1), fps)}</small>
+    </span>
+  );
+});
+
+/** Scrub input; its value follows the clock, and aria-valuetext reads the position as a timecode. */
+const Scrubber = memo(function Scrubber({
+  clock,
+  fps,
+  total,
+  disabled,
+  onSeek,
+}: {
+  clock: FrameClock;
+  fps: number;
+  total: number;
+  disabled: boolean;
+  onSeek: (frame: number) => void;
+}) {
+  const frame = useClockSelect(clock, (f) => f);
+  const max = Math.max(0, total - 1);
+  const at = Math.min(frame, max);
+  return (
+    <label className="scrub">
+      <span className="sr-only">Scrub</span>
+      <input
+        type="range"
+        min={0}
+        max={max}
+        step={1}
+        value={at}
+        aria-valuetext={`${timecode(at, fps)} of ${timecode(max, fps)}`}
+        onChange={(e) => onSeek(Number(e.target.value))}
+        disabled={disabled}
+      />
+    </label>
+  );
+});
 
 export function Monitor({
   props,
@@ -55,6 +91,7 @@ export function Monitor({
   meta,
   onMeta,
   state,
+  clock,
 }: {
   props: EraAdjustedProps | null;
   compositionName: string | null | undefined;
@@ -63,12 +100,23 @@ export function Monitor({
   onMeta: (m: PlayerMeta | null) => void;
   /** what the player can say; "not-built" is stated plainly instead of a dead transport */
   state: CompositionState;
+  /** the frame clock (usePlayerClock in the parent): the frame never enters this component's state */
+  clock: FrameClock;
 }) {
   const [format, setFormat] = useState<Format>(props?.format ?? "vertical");
   const [safe, setSafe] = useState<boolean>(props?.show_safe_zone ?? false);
   const [muted, setMuted] = useState(true);
-  const frame = usePlayerFrame(playerRef, meta);
-  const playing = usePlaying(playerRef, meta);
+  const { playing, refused, setRefused } = usePlayback(playerRef, meta);
+  // one element for the life of the monitor, so the memoised Programme is not handed a new slate per render
+  const slate = useMemo(
+    () => (
+      <Slate
+        title="No props yet"
+        lines={<p>Draft with Claude (right) to store props; the composition plays them here.</p>}
+      />
+    ),
+    [],
+  );
   // follow the stored format when props change
   useEffect(() => {
     if (props?.format) setFormat(props.format);
@@ -89,10 +137,21 @@ export function Monitor({
     if (p.isPlaying()) p.pause();
     else {
       if (p.getCurrentFrame() >= total - 1) p.seekTo(0);
-      p.play();
+      // a browser can refuse play() (autoplay policy, suspended audio): the promise rejects or the
+      // player emits "error"; either way the owner sees it instead of a button that does nothing
+      const refuse = (err: unknown) => setRefused(err instanceof Error ? err.message : String(err));
+      try {
+        const r = p.play() as unknown;
+        if (r && typeof (r as Promise<unknown>).catch === "function") (r as Promise<unknown>).catch(refuse);
+      } catch (err) {
+        refuse(err);
+      }
     }
   };
-  const seek = (f: number) => playerRef.current?.seekTo(Math.max(0, Math.min(total - 1, Math.round(f))));
+  const seek = useCallback(
+    (f: number) => playerRef.current?.seekTo(Math.max(0, Math.min(total - 1, Math.round(f)))),
+    [playerRef, total],
+  );
 
   return (
     <section className="pgm" aria-label="Programme monitor">
@@ -110,12 +169,7 @@ export function Monitor({
               onMeta={onMeta}
               muted
               compositionName={compositionName}
-              slate={
-                <Slate
-                  title="No props yet"
-                  lines={<p>Draft with Claude (right) to store props; the composition plays them here.</p>}
-                />
-              }
+              slate={slate}
             />
           </div>
         </div>
@@ -132,21 +186,8 @@ export function Monitor({
         <button type="button" className="tbtn tbtn--play" onClick={toggle} disabled={!has}>
           {playing ? "Pause" : "Play"}
         </button>
-        <span className="tc num">
-          {timecode(frame, fps)} <small>/ {timecode(Math.max(0, total - 1), fps)}</small>
-        </span>
-        <label className="scrub">
-          <span className="sr-only">Scrub</span>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, total - 1)}
-            step={1}
-            value={Math.min(frame, Math.max(0, total - 1))}
-            onChange={(e) => seek(Number(e.target.value))}
-            disabled={!has}
-          />
-        </label>
+        <Timecode clock={clock} fps={fps} total={total} />
+        <Scrubber clock={clock} fps={fps} total={total} disabled={!has} onSeek={seek} />
         <div className="seg seg--sm" role="group" aria-label="Preview format">
           <button type="button" aria-pressed={format === "vertical"} onClick={() => setFormat("vertical")}>
             9:16
@@ -167,6 +208,11 @@ export function Monitor({
         >
           {muted ? "Sound off" : "Sound on"}
         </button>
+        {refused ? (
+          <span className="joberr" role="alert">
+            Playback was refused: {refused}. Press Play to try again.
+          </span>
+        ) : null}
         <span className="attr">
           {props && state === "not-built"
             ? "No player for this use case yet: the composition is not built, so there is nothing to play or scrub."

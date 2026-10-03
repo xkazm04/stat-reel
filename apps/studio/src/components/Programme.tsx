@@ -6,7 +6,7 @@
 import { Player, type PlayerRef } from "@remotion/player";
 import type { EraAdjustedProps, Format } from "@statreel/schemas";
 import type { ReactNode } from "react";
-import { type RefObject, useEffect, useMemo } from "react";
+import { memo, type RefObject, useEffect, useMemo } from "react";
 import { useComposition } from "../composition";
 import { playerProps } from "../data";
 import { hasPlayer } from "../studio-logic";
@@ -14,7 +14,8 @@ import { StatusChip } from "./glyphs";
 
 export type PlayerMeta = { fps: number; durationInFrames: number };
 
-export function Programme({
+/** memo: with stable props it does not re-render while the clock ticks (the frame is not its state). */
+export const Programme = memo(function Programme({
   props,
   format,
   safeZone,
@@ -109,4 +110,4 @@ export function Programme({
       )}
     />
   );
-}
+});

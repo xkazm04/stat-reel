@@ -19,6 +19,7 @@ import { useComposition } from "../composition";
 import { canCancelJob, canSchedule, compositionState, produceBlockReason, sceneSpans } from "../studio-logic";
 import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
+import { usePlayerClock } from "./playerClock";
 import { PropsPanel } from "./PropsPanel";
 import { JobError, JobLine, lastJobOf, PublicationStatus, produceJob, useStudio, Verdict } from "./shared";
 import { Tracks } from "./Tracks";
@@ -31,6 +32,7 @@ export function ControlRoom() {
   const playerRef = useRef<PlayerRef>(null);
   const [meta, setMeta] = useState<PlayerMeta | null>(null);
   const onMeta = useCallback((m: PlayerMeta | null) => setMeta(m), []);
+  const clock = usePlayerClock(playerRef, meta);
   const [script, setScript] = useState<{ open: boolean; at: string | null }>({ open: false, at: null });
   const pid = detail?.project.id ?? "";
 
@@ -180,6 +182,7 @@ export function ControlRoom() {
             meta={meta}
             onMeta={onMeta}
             state={cstate}
+            clock={clock}
           />
         </Defer>
         <Defer tier={3} id="room:copilot" phClass="copilot panel-col" minHeight={300}>
@@ -193,6 +196,7 @@ export function ControlRoom() {
             playerRef={playerRef}
             meta={meta}
             state={cstate}
+            clock={clock}
             onScene={(id) => {
               seekScene(id);
               openScript(id);
