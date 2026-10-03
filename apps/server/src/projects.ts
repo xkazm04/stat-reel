@@ -12,6 +12,53 @@ import type { Warehouse } from "./warehouse";
 
 export type NewProject = { title: string; use_case_id: string; sport: string; format: string; mode: string; topic?: string | null };
 export const SCHEMA_VERSION = "era-adjusted@1";
+
+/** Why a stored props row no longer reads as valid props (never thrown on read, see `readPropsRow`). */
+export type PropsInvalid = { written_by: string; current: string; issues: string[] };
+/**
+ * A stored props row, read back through `EraAdjustedPropsSchema`. `props` is the parsed value when the
+ * row validates. When it does not, `invalid` says why and `props` throws a `StalePropsError` naming the
+ * version and the first issue: a caller that needs props cannot get unvalidated data by accident, and
+ * a caller that only lists versions (the studio's history) is not hurt. The getter is not enumerable,
+ * so JSON.stringify / spread of an invalid row carry `invalid` and no props.
+ */
+export type PropsRow = { version: number; created_by: string; created_at: string; schema_version: string; props: EraAdjustedProps; invalid?: PropsInvalid };
+
+export class StalePropsError extends Error {
+  constructor(readonly version: number, readonly invalid: PropsInvalid) {
+    super(`props v${version} are not usable: ${invalid.issues[0] ?? "invalid"}${invalid.issues.length > 1 ? ` (+${invalid.issues.length - 1} more)` : ""}`);
+    this.name = "StalePropsError";
+  }
+}
+
+type PropsDbRow = typeof projectProps.$inferSelect;
+
+/** Parse one stored row. Never throws: malformed JSON and schema failures both become `invalid`. */
+export function readPropsRow(r: PropsDbRow): PropsRow {
+  const base = { version: r.version, created_by: r.created_by, created_at: r.created_at, schema_version: r.schema_version };
+  const issues: string[] = [];
+  let raw: unknown;
+  try {
+    raw = JSON.parse(r.props_json);
+  } catch (e) {
+    issues.push(`props_json is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!issues.length) {
+    const parsed = EraAdjustedPropsSchema.safeParse(raw);
+    if (parsed.success) return { ...base, props: parsed.data };
+    issues.push(...parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`));
+  }
+  if (r.schema_version !== SCHEMA_VERSION) issues.unshift(`props written by ${r.schema_version}, this build reads ${SCHEMA_VERSION}`);
+  const invalid: PropsInvalid = { written_by: r.schema_version, current: SCHEMA_VERSION, issues };
+  const row = { ...base, invalid } as PropsRow;
+  Object.defineProperty(row, "props", {
+    enumerable: false,
+    get: (): EraAdjustedProps => {
+      throw new StalePropsError(r.version, invalid);
+    },
+  });
+  return row;
+}
 /** Narrator speech rate MEASURED on rendered TTS (voice "Daniel", 2026-09-29: 99-127 wpm, figures slow it). */
 export const NARRATOR_WPM = { min: 115, max: 128 };
 /** Fixed time the audio stage adds around speech: 0.35 s per scene gap + 1.2 s tail. */
@@ -42,14 +89,14 @@ export class ProjectService {
     if (cur && ORDER.indexOf(to) > ORDER.indexOf(cur.status as ProjectStatus)) this.db.update(projects).set({ status: to }).where(eq(projects.id, id)).run();
   }
 
-  latestProps(id: string): { version: number; props: EraAdjustedProps; created_by: string } | undefined {
+  /** The newest props version, validated on read (see `PropsRow`); never throws. */
+  latestProps(id: string): PropsRow | undefined {
     const r = this.db.select().from(projectProps).where(eq(projectProps.project_id, id)).orderBy(desc(projectProps.version)).get();
-    return r ? { version: r.version, props: JSON.parse(r.props_json), created_by: r.created_by } : undefined;
+    return r ? readPropsRow(r) : undefined;
   }
 
-  propsHistory(id: string) {
-    return this.db.select().from(projectProps).where(eq(projectProps.project_id, id)).orderBy(desc(projectProps.version)).all()
-      .map((r) => ({ version: r.version, created_by: r.created_by, created_at: r.created_at, props: JSON.parse(r.props_json) }));
+  propsHistory(id: string): PropsRow[] {
+    return this.db.select().from(projectProps).where(eq(projectProps.project_id, id)).orderBy(desc(projectProps.version)).all().map(readPropsRow);
   }
 
   async setProps(id: string, input: unknown, by: "llm" | "user"): Promise<{ version: number | null; errors: string[] }> {
@@ -69,8 +116,15 @@ export class ProjectService {
   attachTiming(id: string, timing: EraAdjustedProps["timing"]): number {
     const cur = this.latestProps(id);
     if (!cur) throw new Error(`project ${id} has no props`);
+    // cur.props throws StalePropsError (version + first issue) for a row that no longer validates;
+    // the merged result is validated again so an unvalidated timing block is never stored
+    const merged = EraAdjustedPropsSchema.safeParse({ ...cur.props, timing });
+    if (!merged.success) {
+      const first = merged.error.issues[0];
+      throw new Error(`timing for props v${cur.version} is not valid: ${first ? `${first.path.join(".") || "(root)"}: ${first.message}` : "invalid"}`);
+    }
     const version = cur.version + 1;
-    this.db.insert(projectProps).values({ project_id: id, version, props_json: JSON.stringify({ ...cur.props, timing }), schema_version: SCHEMA_VERSION, created_by: "system", created_at: now() }).run();
+    this.db.insert(projectProps).values({ project_id: id, version, props_json: JSON.stringify(merged.data), schema_version: SCHEMA_VERSION, created_by: "system", created_at: now() }).run();
     return version;
   }
 

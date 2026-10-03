@@ -7,6 +7,8 @@
 import { z } from "zod";
 import { canonicalJson, sha256Hex } from "./sha256";
 
+/** The plan format this build computes and reads. A stored plan of another version must be recomputed. */
+export const TIMING_PLAN_VERSION = 1;
 export const DATA_RACE_FPS = 30;
 /** The fixed ending, in frames (spec D.8 rule 5): winner spotlight, like & subscribe, Powered by StatReel. */
 export const ENDING_FRAMES = { spotlight: 60, like: 60, powered: 90 } as const;
@@ -15,7 +17,14 @@ export const ENDING_TOTAL_FRAMES = ENDING_FRAMES.spotlight + ENDING_FRAMES.like 
 export const DATA_RACE_DURATION_S = { min: 30, max: 90 } as const;
 
 export const TimingPlanSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(TIMING_PLAN_VERSION, {
+    errorMap: (_issue, ctx) => ({
+      message:
+        ctx.data === undefined
+          ? `timing plan has no version (expects ${TIMING_PLAN_VERSION}) - recompute the plan`
+          : `timing plan version ${JSON.stringify(ctx.data)} is not supported by this build (expects ${TIMING_PLAN_VERSION}) - recompute the plan`,
+    }),
+  }),
   fps: z.literal(DATA_RACE_FPS),
   /** Frame boundaries. hook = [0, hook_end), timeline = [hook_end, timeline_end), then the fixed ending. */
   sections: z.object({

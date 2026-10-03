@@ -501,3 +501,18 @@ describe("render props and schema export", () => {
     expect(canonicalJson({ b: 1, a: [2, { d: 1, c: 2 }] })).toBe('{"a":[2,{"c":2,"d":1}],"b":1}');
   });
 });
+
+describe("timing plan version", () => {
+  const msg = (plan: unknown) => TimingPlanSchema.safeParse(plan).error?.issues.filter((i) => i.path.join(".") === "version").map((i) => i.message);
+  it("names the stored version, the supported one and the fix", () => {
+    expect(msg({ ...makePlan(), version: 2 })).toEqual(["timing plan version 2 is not supported by this build (expects 1) - recompute the plan"]);
+    expect(msg({ ...makePlan(), version: "1" })).toEqual(['timing plan version "1" is not supported by this build (expects 1) - recompute the plan']);
+  });
+  it("says so when the version is missing", () => {
+    const { version: _v, ...noVersion } = makePlan();
+    expect(msg(noVersion)).toEqual(["timing plan has no version (expects 1) - recompute the plan"]);
+  });
+  it("accepts the current version", () => {
+    expect(msg(makePlan())).toBeUndefined();
+  });
+});
