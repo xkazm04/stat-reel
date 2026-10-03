@@ -70,7 +70,16 @@
       `<div class="row" style="top:${i * 80}px"><span style="width:260px">${name}</span><div class="bar" style="width:${(n / max) * 480}px"></div><span class="num">${n}</span></div>`).join("");
   }
 
-  window.statreel = { duration: DURATION, seek, dataClock };
+  // 7) OPTIONAL: declare what the frame draws and check.mjs recomputes it from data/f1_race_results.json.
+  //    {period: season | {season, round}, metric: wins|podiums|points_awarded|points_current_system,
+  //     scope: "cumulative" (from `from`, default 1950) | "season", top: [{name, value}]}. A mismatch fails the variant.
+  function frameFacts(t) {
+    const st = states[Math.floor(index(t))];
+    return { period: { season: st.race.season, round: st.race.round }, metric: "wins", scope: "cumulative", from: 1990,
+      top: st.top.map(([name, value]) => ({ name, value })) };
+  }
+
+  window.statreel = { duration: DURATION, seek, dataClock, frameFacts };
   seek(0);
 
   // 6) self-play when opened normally; the harness drives it with ?capture=1

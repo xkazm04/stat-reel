@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { assessLongevity, checkImages, FORMATS, longevitySamples, resolveFacts, stabilityProbe, validateDesign } from "./lib.mjs";
+import { assessClockLabels, assessFrameFacts, assessLongevity, checkImages, FORMATS, longevitySamples, resolveFacts, stabilityProbe, validateDesign } from "./lib.mjs";
 
 /** Owner rule (2026-10-01): nothing on screen is small. Every readable text is >= 28 px in the artboard. */
 export const MIN_TEXT_PX = 28;
@@ -123,6 +123,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
   page.on("console", (m) => m.type() === "error" && pageErrors.push(m.text()));
   page.on("request", (r) => /^https?:/.test(r.url()) && pageErrors.push(`network request: ${r.url()}`));
   let longevity = null;
+  let truth = null;
   await page.addInitScript(CANVAS_PROBE);
   try {
     const url = pathToFileURL(html);
@@ -138,11 +139,22 @@ export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
       const shot = async () => createHash("sha256").update(await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h }, type: "png" })).digest("hex");
       const samples = [];
       for (const t of longevitySamples(meta.duration_s)) {
-        const clock = await page.evaluate(async (tt) => { await window.statreel.seek(tt); return Number(window.statreel.dataClock(tt)); }, t);
-        samples.push({ t, clock, hash: await shot() });
+        // one pass per sample frame: clock, optional frameFacts, and the frame's visible text (MEASURE_TEXT)
+        const clock = await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); return Number(window.statreel.dataClock(tt)); }, t);
+        const hash = await shot();
+        const texts = (await page.evaluate(MEASURE_TEXT, LINE_TO_EM)).map(({ text, px }) => ({ text, px }));
+        const declared = await page.evaluate((tt) => (typeof window.statreel.frameFacts === "function" ? window.statreel.frameFacts(tt) ?? null : null), t);
+        samples.push({ t, clock, hash, texts, declared });
       }
       longevity = { ...assessLongevity(samples, meta.timeline), samples: samples.map(({ t, clock }) => ({ t, clock })) };
       for (const p of longevity.problems) errors.push(`longevity: ${p}`);
+      // truth probes: the printed season and the declared standings must match the clock and the staged data
+      const labels = assessClockLabels(samples, { unit: meta.timeline.unit });
+      for (const p of labels.problems.slice(0, 3)) errors.push(`clock label: ${p}`);
+      const declaredFrames = samples.filter((s) => s.declared);
+      const factProblems = declaredFrames.flatMap((s) => assessFrameFacts(s.declared, data.tables, { t: s.t, clock: s.clock }).problems);
+      for (const p of factProblems.slice(0, 3)) errors.push(`frameFacts: ${p}`);
+      truth = { labels: { checked: labels.checked, unlabelled: labels.unlabelled, skipped: labels.skipped ?? null }, frameFacts: declaredFrames.length ? `${declaredFrames.length} frames recomputed` : "not declared" };
       const seen = new Map();
       let mismatches = 0;
       for (const t of stabilityProbe(meta.duration_s)) {
@@ -166,7 +178,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
     if (own) await browser.close();
   }
   for (const e of [...new Set(pageErrors)].slice(0, 5)) errors.push(`page error: ${e.slice(0, 200)}`);
-  return { ok: errors.length === 0, errors, meta, longevity, facts };
+  return { ok: errors.length === 0, errors, meta, longevity, facts, truth };
 }
 
 export async function main(variantArg, dataDir) {
@@ -177,7 +189,7 @@ export async function main(variantArg, dataDir) {
   const r = await inspect(path.resolve(variantArg), dataDir);
   if (r.ok) {
     const l = r.longevity;
-    console.log(`PASS ${variantArg}: ${r.meta.duration_s}s, clock ${l.clock_from}->${l.clock_to}, ${r.facts.cited} facts resolved, seek-stable`);
+    console.log(`PASS ${variantArg}: ${r.meta.duration_s}s, clock ${l.clock_from}->${l.clock_to}, ${r.facts.cited} facts resolved, seek-stable, ${r.truth?.labels.checked ?? 0} clock labels checked`);
   } else {
     console.log(`FAIL ${variantArg}:`);
     for (const e of r.errors) console.log(`  - ${e}`);

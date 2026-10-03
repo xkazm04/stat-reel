@@ -190,6 +190,117 @@ export function assessLongevity(samples, timeline) {
   };
 }
 
+// ---- truth probes: the picture must say what the data clock says (loop tl-001) -------------------
+
+const YEAR_RANGE = /(?<!\d)(?:19[5-9]\d|20[0-2]\d)\s*[-–—]\s*(?:19[5-9]\d|20[0-2]\d)(?!\d)/g;
+const YEAR_TOKEN = /(?<![\d.,])(19[5-9]\d|20[0-2]\d)(?![\d])/g;
+const ROUND_TOKEN = /(?<![A-Za-z])(?:R|Rd|Round)\s*(\d{1,2})(?!\d)/gi;
+const CLOCK_EPS = 1e-6;
+
+/** Year and round tokens visible in one frame's text (a year range such as "1950-2026" is a title, not a clock). */
+export function clockTokens(texts) {
+  const years = [];
+  const rounds = [];
+  for (const t of texts ?? []) {
+    const text = typeof t === "string" ? t : String(t?.text ?? "");
+    const px = typeof t === "object" && typeof t?.px === "number" ? t.px : null;
+    const plain = text.replace(YEAR_RANGE, " ");
+    for (const m of plain.matchAll(YEAR_TOKEN)) years.push({ year: Number(m[1]), px, text });
+    for (const m of plain.matchAll(ROUND_TOKEN)) rounds.push(Number(m[1]));
+  }
+  return { years, rounds };
+}
+
+/**
+ * Does the season printed on each sampled frame agree with `dataClock(t)`? Samples are
+ * [{t, clock, texts}] where texts are strings or {text, px}. A season clock reads as
+ * floor(clock) (1987.94 is still 1987; the skeleton's season + (round-1)/rounds), with 1e-6 slack
+ * for float noise and NO other tolerance: the failure this catches is a label one season ahead.
+ * When text sizes are known, the label is the year in the largest year-bearing text (the clock is
+ * the largest element on screen; axis ticks and annotations may print other years); without sizes
+ * any visible year may match. A frame with no year is "unlabelled", never a failure. Only
+ * `unit: "season"` has a year-valued clock, other units return `skipped`.
+ */
+export function assessClockLabels(samples, { unit = "season" } = {}) {
+  if (unit !== "season") return { ok: true, problems: [], checked: 0, unlabelled: 0, skipped: `unit ${unit}: no year-valued clock to compare` };
+  const problems = [];
+  let checked = 0;
+  let unlabelled = 0;
+  for (const s of samples ?? []) {
+    if (typeof s.clock !== "number" || Number.isNaN(s.clock)) continue;
+    const { years } = clockTokens(s.texts);
+    if (!years.length) { unlabelled++; continue; }
+    checked++;
+    const sized = years.filter((y) => y.px !== null);
+    const top = sized.length ? Math.max(...sized.map((y) => y.px)) : null;
+    const label = top === null ? years : sized.filter((y) => y.px >= top - 1);
+    const expected = Math.floor(s.clock + CLOCK_EPS);
+    if (!label.some((y) => y.year === expected)) {
+      const shown = [...new Set(label.map((y) => y.year))].join("/");
+      problems.push(`t=${Number(s.t).toFixed(1)}s label "${shown}" but dataClock=${s.clock.toFixed(2)} (season ${expected}): the printed season and the data must come from the same step`);
+    }
+  }
+  return { ok: problems.length === 0, problems, checked, unlabelled };
+}
+
+const FRAME_FACT_METRICS = ["wins", "podiums", "points_awarded", "points_current_system"];
+
+/**
+ * Optional contract `window.statreel.frameFacts(t)` -> {period, metric, scope, top:[{name, value}]}:
+ * the standings the frame draws. `period` is a season or {season, round}; `metric` one of
+ * wins|podiums|points_awarded|points_current_system (default wins); `scope` "cumulative" (default,
+ * career totals through the period, counted from `from` when the design's window starts later) or "season". Recomputed from the staged f1_race_results
+ * (Indianapolis 500 excluded). Not declared -> `declared: false` and no failure. `ctx.clock` also
+ * pins period.season to floor(dataClock).
+ */
+export function assessFrameFacts(declared, tables, ctx = {}) {
+  if (declared === undefined || declared === null) return { ok: true, declared: false, problems: [], note: "not declared" };
+  const problems = [];
+  const t = ctx.t === undefined ? "" : `t=${Number(ctx.t).toFixed(1)}s `;
+  const period = typeof declared.period === "number" ? { season: declared.period } : declared.period;
+  const metric = declared.metric ?? "wins";
+  const scope = declared.scope ?? "cumulative";
+  if (!period || typeof period.season !== "number") problems.push(`${t}frameFacts.period must be a season or {season, round}`);
+  if (!FRAME_FACT_METRICS.includes(metric)) problems.push(`${t}frameFacts.metric must be one of ${FRAME_FACT_METRICS.join(", ")}`);
+  if (!["cumulative", "season"].includes(scope)) problems.push(`${t}frameFacts.scope must be cumulative or season`);
+  if (!Array.isArray(declared.top) || !declared.top.length) problems.push(`${t}frameFacts.top must list {name, value} entries`);
+  const results = tables?.f1_race_results;
+  if (!Array.isArray(results)) problems.push(`${t}f1_race_results is not staged, frameFacts cannot be checked`);
+  if (problems.length) return { ok: false, declared: true, problems };
+  if (typeof ctx.clock === "number" && period.season !== Math.floor(ctx.clock + CLOCK_EPS))
+    problems.push(`${t}frameFacts.period season ${period.season} but dataClock=${ctx.clock.toFixed(2)}`);
+  const upTo = period.round ?? Infinity;
+  const totals = new Map();
+  const seen = new Set();
+  for (const r of results) {
+    if (r.is_indianapolis) continue;
+    if (r.season > period.season || (r.season === period.season && r.round > upTo)) continue;
+    if (scope === "season" && r.season !== period.season) continue;
+    if (r.season < (declared.from ?? 0)) continue;
+    let add = 0;
+    if (metric === "wins") add = r.position_number === 1 ? 1 : 0;
+    else if (metric === "podiums") add = r.position_number >= 1 && r.position_number <= 3 ? 1 : 0;
+    else add = Number(r[metric]) || 0;
+    if (metric === "wins" || metric === "podiums") { // a take-over entry must not count a race twice
+      const k = `${r.race_id}|${r.display_name}`;
+      if (add && seen.has(k)) continue;
+      if (add) seen.add(k);
+    }
+    totals.set(r.display_name, (totals.get(r.display_name) ?? 0) + add);
+  }
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  for (const e of declared.top) {
+    const want = totals.get(e.name);
+    if (want === undefined) problems.push(`${t}frameFacts: "${e.name}" has no ${metric} in the staged data through ${period.season}${period.round ? ` R${period.round}` : ""}`);
+    else if (typeof e.value !== "number" || !near(want, e.value)) problems.push(`${t}frameFacts: "${e.name}" drawn as ${e.value} but the staged data gives ${want} (${scope} ${metric} through ${period.season}${period.round ? ` R${period.round}` : ""})`);
+  }
+  const k = declared.top.length;
+  const best = [...totals.values()].sort((a, b) => b - a).slice(0, k);
+  const drawn = declared.top.map((e) => e.value).sort((a, b) => b - a);
+  if (!problems.length && best.some((v, i) => !near(v, drawn[i]))) problems.push(`${t}frameFacts: the drawn top ${k} (${drawn.join(", ")}) is not the staged top ${k} (${best.join(", ")}): a leader is missing or mis-valued`);
+  return { ok: problems.length === 0, declared: true, problems };
+}
+
 // ---- mass loops (cheap seats, many rounds) -------------------------------------------------
 
 /**

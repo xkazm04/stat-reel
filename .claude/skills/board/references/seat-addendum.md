@@ -20,8 +20,12 @@ brief.
 
 **Mistakes that got designs rejected or flagged before:**
 
-- **The year label ran ahead of the data.** "1988 · round 16/16" was printed over the 1987 bars. The
-  printed season and round, `dataClock(t)` and the values drawn must come from the same data step.
+- **The year label ran ahead of the data.** "1988 · round 16/16" was printed over the 1987 bars.
+  `check.mjs` fails any sampled frame whose printed season is not `floor(dataClock(t))` (the clock is
+  the largest year-bearing text). Optionally declare `window.statreel.frameFacts(t)` ->
+  `{period, metric, scope, from, top: [{name, value}]}` (see `data/skeleton.html`): `check.mjs` then
+  recomputes the standings from `data/f1_race_results.json` and fails a drawn value that is wrong or
+  a leader that is missing. Not declared = not checked.
 - **Facts that do not exist.** Every entry in `facts` must be a real `fact_key` from `data/*.json`
   plus one of that row's columns (`<fact_key>#<column>`). Copy keys from the rows you used; never
   type them from memory.
