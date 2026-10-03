@@ -26,14 +26,23 @@ export type StyleEntry = {
   id: string;
   name: string;
   notes: string | null;
-  /** from the owner's decisions: accepted when accepts >= style rejects (and > 0) */
+  /**
+   * from the owner's decisions: accepted when accepts > style rejects, rejected when style rejects >
+   * accepts, open on a tie (1:1 is no verdict) or when nothing is decided
+   */
   verdict: StyleVerdict;
-  /** the verdict unless the owner locked or retired the style */
+  /** precedence: the owner's explicit lock / retire, else the derived verdict */
   status: StyleStatus;
   owner_note: string | null;
   hero_item_id: string | null;
   accepts: number;
+  /** reject_style + reject_both, kept for existing consumers */
   style_rejects: number;
+  /** the two kinds of style reject, counted apart (additive) */
+  reject_style: number;
+  reject_both: number;
+  /** the newest decision on the style is a reject yet the verdict is not "rejected": one click from flipping */
+  at_risk?: true;
   pending: number;
   total: number;
   /** board item ids carrying this style, newest first */
@@ -55,25 +64,29 @@ export class StyleLibrary {
       if (!i.style?.id || i.status === "archived") continue;
       const e = by.get(i.style.id) ?? {
         id: i.style.id, name: i.style.name, notes: i.style.notes ?? null, verdict: "open", status: "open", owner_note: null,
-        hero_item_id: null, accepts: 0, style_rejects: 0, pending: 0, total: 0, item_ids: [], cases: [], updated_at: null,
+        hero_item_id: null, accepts: 0, style_rejects: 0, reject_style: 0, reject_both: 0, pending: 0, total: 0, item_ids: [], cases: [], updated_at: null,
       } satisfies StyleEntry;
       e.total++;
       e.item_ids.push(i.id);
       if (!e.cases.includes(caseKey(i))) e.cases.push(caseKey(i));
       if (i.decision === "accept") e.accepts++;
-      else if (i.decision === "reject_style" || i.decision === "reject_both") e.style_rejects++;
+      else if (i.decision === "reject_style") { e.reject_style++; e.style_rejects++; }
+      else if (i.decision === "reject_both") { e.reject_both++; e.style_rejects++; }
       else if (!i.decision) e.pending++;
       by.set(i.style.id, e);
     }
     for (const e of by.values()) {
-      e.verdict = e.accepts > 0 && e.accepts >= e.style_rejects ? "accepted" : e.style_rejects > e.accepts ? "rejected" : "open";
+      e.verdict = e.accepts > e.style_rejects ? "accepted" : e.style_rejects > e.accepts ? "rejected" : "open";
+      const newest = items.filter((i) => i.style?.id === e.id && i.status !== "archived" && i.decided_at)
+        .reduce<BoardItem | null>((m, i) => (!m || (i.decided_at as string) > (m.decided_at as string) ? i : m), null);
+      if (e.verdict !== "rejected" && (newest?.decision === "reject_style" || newest?.decision === "reject_both")) e.at_risk = true;
       const o = overrides.get(e.id);
       e.status = (o?.status as StyleOverride | null) ?? e.verdict;
       e.owner_note = o?.note ?? null;
       e.updated_at = o?.updated_at ?? null;
       e.hero_item_id = o?.hero_item_id && e.item_ids.includes(o.hero_item_id) ? o.hero_item_id : null;
       if (!e.hero_item_id) {
-        const accepted = items.find((i) => i.style?.id === e.id && i.decision === "accept");
+        const accepted = items.find((i) => i.style?.id === e.id && i.decision === "accept" && i.status !== "archived");
         e.hero_item_id = accepted?.id ?? e.item_ids[0] ?? null;
       }
     }
@@ -248,7 +261,9 @@ export class CaseIdeas {
 
   decide(id: string, decision: CaseDecision, note?: string): CaseIdea {
     if (!CASE_DECISIONS.includes(decision)) throw new Error(`decision must be one of ${CASE_DECISIONS.join(", ")}`);
-    if (!this.get(id)) throw new Error(`unknown case idea ${id}`);
+    const cur = this.get(id);
+    if (!cur) throw new Error(`unknown case idea ${id}`);
+    if (cur.status === "archived") throw new Error(`case idea ${id} is archived; it cannot be decided`);
     this.db.update(caseIdeas).set({ status: decision === "accept" ? "accepted" : "rejected", decision, note: note?.trim() || null, decided_at: now() })
       .where(eq(caseIdeas.id, id)).run();
     return this.get(id)!;
@@ -263,11 +278,16 @@ export class CaseIdeas {
     return this.get(id)!;
   }
 
+  /**
+   * Archiving never overwrites the owner's decision note (the ledger survives the edit). There is no
+   * archive_reason column, so the reason lands in `note` only when the idea has none.
+   */
   archive(ids: string[], reason: string): number {
     let n = 0;
     for (const id of ids) {
-      if (!this.get(id)) continue;
-      this.db.update(caseIdeas).set({ status: "archived", note: reason }).where(eq(caseIdeas.id, id)).run();
+      const cur = this.get(id);
+      if (!cur) continue;
+      this.db.update(caseIdeas).set({ status: "archived", note: cur.note ?? reason }).where(eq(caseIdeas.id, id)).run();
       n++;
     }
     return n;
