@@ -10,6 +10,7 @@ import { StatusChip } from "../components/glyphs";
 import { Empty, Loading } from "../components/ui";
 import { latestRender, renderChecks, renderFile, renderPolicy, useManifest } from "../data";
 import { checkRows, fileUrl, relTime } from "../logic";
+import { hasCaptionSidecar, hasChecks, isNewerRender } from "./render-gate";
 import { JobError, JobLine, lastJobOf, produceJob, useStudio, Verdict } from "./shared";
 
 export function RenderGatePage() {
@@ -26,6 +27,8 @@ export function RenderGatePage() {
   const rows = checks ? checkRows(checks, render?.format ?? detail.project.format, usecase?.duration_s) : [];
   const video = fileUrl(render?.url ?? null);
   const m = manifest.data;
+  const newer = isNewerRender(renders, pick);
+  const captionsVtt = hasCaptionSidecar(m, "captions.vtt");
 
   return (
     <div className="rg">
@@ -50,6 +53,14 @@ export function RenderGatePage() {
           </label>
         ) : null}
         <JobError job={lastJobOf(detail, ["audio", "render"])} />
+        {newer ? (
+          <span className="rg__newer" role="status">
+            <span className="label">A newer render is available.</span>
+            <button type="button" className="btn btn--sm" onClick={() => setPick(null)}>
+              Newer render available - view it
+            </button>
+          </span>
+        ) : null}
       </div>
 
       {!render ? (
@@ -70,13 +81,17 @@ export function RenderGatePage() {
               </h2>
               <div className={`rg__frame${render.format === "landscape" ? " wide" : ""}`}>
                 {video ? (
+                  // biome-ignore lint/a11y/useMediaCaption: the captions track is added once the manifest names a sidecar
                   <video src={video} controls preload="metadata" poster={renderFile(render, "thumb.png") ?? undefined}>
-                    <track
-                      kind="captions"
-                      src={renderFile(render, "captions.vtt") ?? undefined}
-                      srcLang="en"
-                      label="English"
-                    />
+                    {/* only when the manifest names the sidecar: narration-free renders write none (404) */}
+                    {captionsVtt ? (
+                      <track
+                        kind="captions"
+                        src={renderFile(render, "captions.vtt") ?? undefined}
+                        srcLang="en"
+                        label="English"
+                      />
+                    ) : null}
                   </video>
                 ) : (
                   <p className="sum-p">No file URL for this render.</p>
@@ -173,32 +188,38 @@ export function RenderGatePage() {
               <h2 className="sec-h">
                 <span>Post-render checks · ffprobe · ebur128</span>
               </h2>
-              <table className="tbl tbl--checks">
-                <thead>
-                  <tr>
-                    <th>Check</th>
-                    <th className="num">Value</th>
-                    <th className="num">Target</th>
-                    <th>Result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.key}>
-                      <td>{r.label}</td>
-                      <td className="num">{r.value}</td>
-                      <td className="num">{r.target ?? "recorded"}</td>
-                      <td>
-                        {r.ok === null ? (
-                          <span className="label">recorded</span>
-                        ) : (
-                          <StatusChip status={r.ok ? "go" : "blocked"} size={13} label={r.ok ? "PASS" : "FAIL"} />
-                        )}
-                      </td>
+              {!hasChecks(checks) ? (
+                <p className="sum-p" data-testid="checks-empty">
+                  No post-render checks were recorded for this render.
+                </p>
+              ) : (
+                <table className="tbl tbl--checks">
+                  <thead>
+                    <tr>
+                      <th>Check</th>
+                      <th className="num">Value</th>
+                      <th className="num">Target</th>
+                      <th>Result</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.key}>
+                        <td>{r.label}</td>
+                        <td className="num">{r.value}</td>
+                        <td className="num">{r.target ?? "recorded"}</td>
+                        <td>
+                          {r.ok === null ? (
+                            <span className="label">recorded</span>
+                          ) : (
+                            <StatusChip status={r.ok ? "go" : "blocked"} size={13} label={r.ok ? "PASS" : "FAIL"} />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </section>
           </Defer>
 
@@ -211,7 +232,17 @@ export function RenderGatePage() {
               {manifest.isLoading ? (
                 <Loading what="the manifest" />
               ) : manifest.isError || !m ? (
-                <p className="sum-p">The manifest did not load from {renderFile(render, "manifest.json")}.</p>
+                <div className="rg__retry" role="alert">
+                  <p className="sum-p">The manifest did not load from {renderFile(render, "manifest.json")}.</p>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => void manifest.refetch()}
+                    disabled={manifest.isFetching}
+                  >
+                    {manifest.isFetching ? "Retrying" : "Retry"}
+                  </button>
+                </div>
               ) : (
                 <div className="mf">
                   <dl className="mf__kv">
