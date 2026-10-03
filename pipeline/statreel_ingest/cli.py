@@ -8,6 +8,7 @@ import sys
 from .client import EthicalClient
 from .config import Paths, owner_contact
 from .registry import Registry
+from .throttle import BackedOff
 
 INGESTERS = {"f1db": "statreel_ingest.sources.f1db"}
 
@@ -22,7 +23,7 @@ def cmd_ingest(args: argparse.Namespace, paths: Paths) -> int:
 
     module = importlib.import_module(INGESTERS[args.source])
     client = EthicalClient(registry, args.source, contact=owner_contact(paths.repo), cache_dir=paths.http_cache,
-                           log_path=paths.raw / args.source / "fetch_log.jsonl")
+                           log_path=paths.raw / args.source / "fetch_log.jsonl", state_dir=paths.http_state)
     try:
         res = module.ingest(client, paths.raw)
     finally:
@@ -67,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
     except PermissionError as refused:  # ethics layer: avoid verdict, unregistered host, robots
         print(f"refused: {refused}", file=sys.stderr)
         return 3
+    except BackedOff as stop:  # 429/503: the retry time is persisted; do not hammer
+        print(f"stopped: {stop}", file=sys.stderr)
+        return 4
 
 
 if __name__ == "__main__":
