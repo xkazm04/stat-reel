@@ -12,6 +12,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { EventsProvider } from "./events";
+import { installFreshness } from "./freshness";
 import { queryClient } from "./queryClient";
 import { router } from "./router";
 import { dropStaleTheme } from "./theme";
@@ -19,6 +20,7 @@ import { dropStaleTheme } from "./theme";
 const root = document.getElementById("root");
 if (!root) throw new Error("#root missing");
 dropStaleTheme();
+installFreshness(queryClient);
 
 createRoot(root).render(
   <StrictMode>
