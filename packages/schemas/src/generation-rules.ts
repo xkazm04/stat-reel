@@ -238,7 +238,9 @@ function rule4(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): vo
   const hook = str(p.hook);
   if (/[\r\n]/.test(title)) add("title-multiline", "title", "title must be a single line (no newline)");
   if (title.length > DATA_RACE_LIMITS.titleMaxChars)
-    add("title-length", "title", `title is ${title.length} chars; the limit is ${DATA_RACE_LIMITS.titleMaxChars}`);
+    add("title-length", "title", `title is ${title.length} chars; the limit is ${DATA_RACE_LIMITS.titleMaxChars}: shorten it`);
+  if (hook.length > DATA_RACE_LIMITS.hookMaxChars)
+    add("hook-length", "hook", `hook is ${hook.length} chars; the limit is ${DATA_RACE_LIMITS.hookMaxChars} (96 px, 3 lines): shorten the question`);
   if (!hook.trim().endsWith("?")) add("hook-question", "hook", 'hook must end with "?"');
 
   const winner = winnerOf(p, plan);
@@ -256,7 +258,7 @@ function rule4(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): vo
     const t = str((raw as Loose | undefined)?.title);
     if (/[\r\n]/.test(t)) add("event-title-multiline", `events[${i}].title`, "event title must be a single line");
     if (t.length > DATA_RACE_LIMITS.eventTitleMaxChars)
-      add("event-title-length", `events[${i}].title`, `event title is ${t.length} chars; the limit is ${DATA_RACE_LIMITS.eventTitleMaxChars}`);
+      add("event-title-length", `events[${i}].title`, `event title is ${t.length} chars; the limit is ${DATA_RACE_LIMITS.eventTitleMaxChars} (the card clips it): shorten it`);
   });
 }
 

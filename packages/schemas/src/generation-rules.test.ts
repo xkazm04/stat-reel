@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   DATA_RACE_LIMITS,
@@ -272,12 +274,71 @@ describe("rule 4: non-revealing titles", () => {
     expect(codes(withHook("Watch the trees grow."))).toContain("hook-question");
     expect(codes(withHook("Which tree ends first? "))).not.toContain("hook-question");
   });
-  it("limits event titles to one line of 42 characters", () => {
+  it("limits event titles to one line of 36 characters", () => {
     const r = run((p) => {
-      ((p.events as Record<string, unknown>[])[0] as Record<string, unknown>).title = "x".repeat(43);
+      ((p.events as Record<string, unknown>[])[0] as Record<string, unknown>).title = "x".repeat(DATA_RACE_LIMITS.eventTitleMaxChars + 1);
       return undefined;
     });
     expect(codes(r)).toContain("event-title-length");
+    expect(r.violations.find((v) => v.code === "event-title-length")?.message).toMatch(/limit is 36.*shorten/);
+  });
+  it("limits the hook to 3 lines at 96 px (60 characters) with an actionable message", () => {
+    const over = `${"w".repeat(DATA_RACE_LIMITS.hookMaxChars)}?`;
+    const r = withHook(over);
+    expect(codes(r)).toContain("hook-length");
+    expect(r.violations.find((v) => v.code === "hook-length")?.message).toMatch(/limit is 60.*shorten/);
+    expect(codes(withHook(`${"w".repeat(DATA_RACE_LIMITS.hookMaxChars - 1)}?`))).not.toContain("hook-length");
+  });
+});
+
+describe("rule 0: text limits derived from the frame geometry", () => {
+  const messages = (r: ReturnType<typeof run>, path: string) => r.violations.filter((v) => v.code === "schema" && v.path === path).map((v) => v.message);
+  it("rejects an over-long title, hook, event title and fact text at the schema with a shorten-it message", () => {
+    const r = run((p) => {
+      p.title = "t".repeat(DATA_RACE_LIMITS.titleMaxChars + 1);
+      p.hook = `${"h".repeat(DATA_RACE_LIMITS.hookMaxChars)}?`;
+      const ev = (p.events as Record<string, unknown>[])[0] as Record<string, unknown>;
+      ev.title = "e".repeat(DATA_RACE_LIMITS.eventTitleMaxChars + 1);
+      ((ev.facts as Record<string, unknown>[])[0] as Record<string, unknown>).text = "f".repeat(DATA_RACE_LIMITS.factTextMaxChars + 1);
+      return undefined;
+    });
+    expect(messages(r, "title").join()).toMatch(/at most 42 characters, shorten/);
+    expect(messages(r, "hook").join()).toMatch(/at most 60 characters, shorten/);
+    expect(messages(r, "events.0.title").join()).toMatch(/at most 36 characters, shorten/);
+    expect(messages(r, "events.0.facts.0.text").join()).toMatch(/at most 48 characters, shorten/);
+  });
+  it("accepts text exactly at each limit", () => {
+    const r = run((p) => {
+      p.title = "t".repeat(DATA_RACE_LIMITS.titleMaxChars);
+      p.hook = `${"h".repeat(DATA_RACE_LIMITS.hookMaxChars - 1)}?`;
+      const ev = (p.events as Record<string, unknown>[])[0] as Record<string, unknown>;
+      ev.title = "e".repeat(DATA_RACE_LIMITS.eventTitleMaxChars);
+      ((ev.facts as Record<string, unknown>[])[0] as Record<string, unknown>).text = "f".repeat(DATA_RACE_LIMITS.factTextMaxChars);
+      return undefined;
+    });
+    expect(codes(r)).not.toContain("schema");
+  });
+  it("every DataRace props fixture in the repo still validates", () => {
+    const roots = [path.resolve(__dirname, "../../compositions/fixtures"), path.resolve(__dirname, "../../../e2e/fixtures")];
+    const found: string[] = [];
+    const walk = (d: string): void => {
+      if (!existsSync(d)) return;
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const f = path.join(d, e.name);
+        if (e.isDirectory()) walk(f);
+        else if (/props\.json$/.test(e.name)) found.push(f);
+      }
+    };
+    for (const r of roots) walk(r);
+    expect(found.length).toBeGreaterThan(0);
+    for (const f of found) {
+      const j = JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown>;
+      if (!("timing_plan_sha256" in j)) continue; // e2e variant stubs are partial props, not renderable
+      // variant files carry authoring metadata beside the props (schema/note/variant/style)
+      const { schema: _s, note: _n, variant: _v, style: _y, ...props } = j;
+      const res = DataRacePropsSchema.safeParse(props);
+      expect(res.success, `${f}: ${res.success ? "" : res.error.message}`).toBe(true);
+    }
   });
 });
 
