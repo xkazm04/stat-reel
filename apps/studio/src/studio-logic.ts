@@ -88,3 +88,7 @@ export function spanLabel(start: number, end: number): string {
 /** Scheduling in the Calendar is offered only when the latest render's gate allows. */
 export const canSchedule = (policy: { allow?: boolean } | null | undefined, busy: boolean): boolean =>
   !!policy?.allow && !busy;
+
+/** A produce job can be stopped only while it is queued or running (JobRunner.cancel is a no-op after). */
+export const canCancelJob = (job: { status: string } | null | undefined): boolean =>
+  !!job && (job.status === "queued" || job.status === "running");

@@ -1922,3 +1922,19 @@ button.tl-b {
 [data-theme="photofinish"] .checks-run li {
   border-radius: var(--radius-sm);
 }
+
+/* --- compose-stage (lot C): busy affordance on Produce / Cancel, no-player reason, clock leaves --- */
+[data-theme="photofinish"] .stagebar__produce .btn[aria-busy="true"] {
+  cursor: progress;
+  animation: stagebar-busy 1.4s ease-in-out infinite;
+}
+@keyframes stagebar-busy {
+  50% {
+    opacity: 0.65;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="photofinish"] .stagebar__produce .btn[aria-busy="true"] {
+    animation: none;
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSchedule, cps, draftSpans, peakCueCps, rulerTicks, sceneSpans, spanAt, spanLabel } from "./studio-logic";
+import { canCancelJob, canSchedule, cps, draftSpans, peakCueCps, rulerTicks, sceneSpans, spanAt, spanLabel } from "./studio-logic";
 
 const scenes = [
   { id: "hook", kind: "hook" },
@@ -63,5 +63,14 @@ describe("cps and labels", () => {
     expect(canSchedule({ allow: true }, true)).toBe(false);
     expect(canSchedule({ allow: false }, false)).toBe(false);
     expect(canSchedule(null, false)).toBe(false);
+  });
+});
+
+describe("canCancelJob", () => {
+  it("offers Cancel only while the job is queued or running", () => {
+    expect(canCancelJob({ status: "queued" })).toBe(true);
+    expect(canCancelJob({ status: "running" })).toBe(true);
+    for (const st of ["succeeded", "failed", "cancelled", "refused"]) expect(canCancelJob({ status: st })).toBe(false);
+    expect(canCancelJob(null)).toBe(false);
   });
 });

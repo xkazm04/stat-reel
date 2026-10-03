@@ -15,7 +15,7 @@ import { Arrow } from "../components/glyphs";
 import type { PlayerMeta } from "../components/Programme";
 import { latestRender, renderPolicy } from "../data";
 import { nextAction } from "../logic";
-import { canSchedule, sceneSpans } from "../studio-logic";
+import { canCancelJob, canSchedule, sceneSpans } from "../studio-logic";
 import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
 import { PropsPanel } from "./PropsPanel";
@@ -38,6 +38,9 @@ export function ControlRoom() {
       api.produce(pid, { platform: "youtube", monetized: detail?.project.mode === "monetized", ai_disclosure: true }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: qk.project(pid) }),
   });
+
+  // stop the running audio/render job; job.* SSE events (events.ts) refresh the project, so no manual invalidate
+  const cancel = useMutation({ mutationFn: (jobId: string) => api.cancelJob(jobId) });
 
   const props = detail?.props?.props ?? null;
   const duration = props?.timing?.duration_s ?? (meta ? meta.durationInFrames / meta.fps : 0);
@@ -88,11 +91,25 @@ export function ControlRoom() {
             data-testid="produce"
             onClick={() => produce.mutate()}
             disabled={!canProduce || produce.isPending}
+            aria-busy={!!running || produce.isPending}
           >
             {running ? "Producing" : render ? "Produce again" : "Produce"}
           </button>
+          {running && canCancelJob(running) ? (
+            <button
+              type="button"
+              className="btn btn--sm"
+              data-testid="produce-cancel"
+              onClick={() => cancel.mutate(running.id)}
+              disabled={cancel.isPending}
+              aria-busy={cancel.isPending}
+            >
+              {cancel.isPending ? "Cancelling" : "Cancel"}
+            </button>
+          ) : null}
           {running ? <JobLine job={running} projectId={pid} /> : null}
           {!props || !detail.script ? <span className="stagebar__hint">needs props and a script first</span> : null}
+          {cancel.isError ? <span className="joberr">{errorText(cancel.error)}</span> : null}
           {produce.isError ? <span className="joberr">{errorText(produce.error)}</span> : null}
         </div>
         <div className="stagebar__gate">
