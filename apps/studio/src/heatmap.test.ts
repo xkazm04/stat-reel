@@ -1,6 +1,6 @@
 import type { HeatmapCell } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
-import { cellFixes, cellHint, focusKey, gridMove, insetFor, neighbours, parseFocus, sportCounts } from "./heatmap";
+import { blockedBreakdown, blockedCause, blockedLegend, cellFixes, cellHint, focusKey, gridMove, insetFor, neighbours, parseFocus, sportCounts } from "./heatmap";
 
 const cell = (o: Partial<HeatmapCell> & Pick<HeatmapCell, "usecase" | "sport" | "status">): HeatmapCell => ({
   mode: "monetized",
@@ -51,6 +51,39 @@ describe("heatmap helpers", () => {
     expect(cellHint(cell({ usecase: "x", sport: "F1", status: "blocked", kinds: [{ kind: "hist", best: null, tested: false, sources: [] }] }))).toBe(
       "no source",
     );
+  });
+
+  it("names the cause of every blocked cell", () => {
+    const k = (o: Partial<HeatmapCell["kinds"][number]>): HeatmapCell["kinds"][number] => ({
+      kind: "hist",
+      best: null,
+      tested: false,
+      sources: [],
+      ...o,
+    });
+    const b = (kinds: HeatmapCell["kinds"], o: Partial<HeatmapCell> = {}) =>
+      cell({ usecase: "x", sport: "NBA", status: "blocked", kinds, ...o });
+    expect(blockedCause(nbaBlocked)).toBe("not-tested");
+    expect(blockedCause(b([k({ tested: true, sources: [{ id: "a", license_class: "legal", status: "fail" }] })]))).toBe("failing-test");
+    expect(blockedCause(b([k({})]))).toBe("no-source");
+    // declared, but only a non-commercial source: monetized can never clear it, non-commercial can
+    const nc = [k({ sources: [{ id: "nc", license_class: "non_commercial", status: "declared" }] })];
+    expect(blockedCause(b(nc))).toBe("licence");
+    expect(blockedCause(b(nc, { mode: "non_commercial" }))).toBe("not-tested");
+    // the server's reason wins, even when the kinds look like a plain to-do
+    expect(blockedCause(b(nbaBlocked.kinds, { reason: "not applicable: Race is a F1 format" }))).toBe("not-applicable");
+    // fallback: no kind lacks a pass (all kinds have best) and nothing else explains it
+    expect(blockedCause(b([k({ best: "legal", tested: true })]))).toBe("not-applicable");
+    expect(cellHint(b([k({})], { reason: "not applicable: x" }))).toBe("n/a here");
+  });
+
+  it("counts blocked causes for the legend, per mode", () => {
+    const na = cell({ usecase: "n", sport: "NHL", status: "blocked", reason: "not applicable: x", kinds: [] });
+    const other = cell({ usecase: "n", sport: "NHL", status: "blocked", mode: "non_commercial", kinds: [] });
+    const counts = blockedBreakdown([nbaBlocked, nhlBlocked, na, other, f1Go], "monetized");
+    expect(counts).toMatchObject({ "not-tested": 1, "no-source": 1, "not-applicable": 1, "failing-test": 0 });
+    expect(blockedLegend(counts)).toBe("3 blocked · 1 not tested · 1 no source · 1 n/a");
+    expect(blockedLegend(blockedBreakdown([f1Go], "monetized"))).toBe("");
   });
 
   it("parses focus keys against known use cases and sports", () => {
