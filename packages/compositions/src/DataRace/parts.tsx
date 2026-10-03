@@ -8,6 +8,7 @@ import type { DataRaceProps } from "@statreel/schemas";
 import type { CSSProperties, ReactElement } from "react";
 import { Img } from "remotion";
 import { CHIP, type RowChip } from "./chips";
+import { relativeLuminance } from "./contrast";
 import { type CardState, type RaceRow, niceTicks } from "./state";
 
 type Entity = DataRaceProps["entities"][number];
@@ -43,13 +44,7 @@ const T = videoTheme;
 
 /** Black or white ink, whichever contrasts more with `hex`. */
 export function onColor(hex: string): string {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const lin = (c: number) => {
-    const v = c / 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  };
-  const lum = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-  return lum > 0.35 ? "#12161a" : "#ffffff";
+  return relativeLuminance(hex) > 0.35 ? "#12161a" : "#ffffff";
 }
 
 export function formatValue(v: number, f: ValueFormat | undefined): string {
@@ -158,14 +153,21 @@ export function nameFontSize(name: string, width: number): number {
   return Math.max(28, Math.min(36, Math.floor(width / (Math.max(1, name.length) * 0.46))));
 }
 
-export function BarRow({ entity, row, axisMax, format }: { entity: Entity; row: RaceRow; axisMax: number; format: ValueFormat | undefined }): ReactElement | null {
+/**
+ * One bar row. `dim` (0..1, default 1) multiplies the row opacity and `scale` (default 1) enlarges
+ * the entity mark (logo, name, bar) from its left edge; the value label follows the scaled bar end
+ * at its own size. The ending spotlight uses both: others dim to 20 %, the winner scales ~8 %.
+ */
+export function BarRow({ entity, row, axisMax, format, dim = 1, scale = 1 }: { entity: Entity; row: RaceRow; axisMax: number; format: ValueFormat | undefined; dim?: number; scale?: number }): ReactElement | null {
   if (row.presence <= 0.001) return null;
   const w = Math.max(6, Math.min(1, row.value / axisMax) * L.barMaxW);
   const top = L.barsTop + row.pos * L.rowH;
   const text = formatValue(row.value, format);
-  const label = valueLabelLayout(w, text, 30, row.chip ? chipWidth(row.chip) : 0);
+  const shift = (L.barX - L.marginX + w) * (scale - 1);
+  const label = valueLabelLayout(w + shift, text, 30, row.chip ? chipWidth(row.chip) : 0);
   return (
-    <div data-row={entity.id} style={{ position: "absolute", left: L.marginX, top, width: L.width - 2 * L.marginX, height: L.rowH, opacity: row.presence }}>
+    <div data-row={entity.id} style={{ position: "absolute", left: L.marginX, top, width: L.width - 2 * L.marginX, height: L.rowH, opacity: row.presence * dim }}>
+      <div data-mark="" style={{ position: "absolute", inset: 0, transform: scale === 1 ? undefined : `scale(${scale.toFixed(3)})`, transformOrigin: "0% 50%" }}>
       <div style={{ position: "absolute", left: 0, top: (L.rowH - L.tile) / 2 }}>
         <LogoTile entity={entity} size={L.tile} />
       </div>
@@ -175,6 +177,7 @@ export function BarRow({ entity, row, axisMax, format }: { entity: Entity; row: 
         {entity.name}
       </div>
       <div style={{ position: "absolute", left: L.barX - L.marginX, top: (L.rowH - L.barH) / 2, width: w, height: L.barH, borderRadius: 10, background: entity.color }} />
+      </div>
       <div
         data-value=""
         style={{ position: "absolute", left: label.left, top: (L.rowH - 44) / 2, width: label.width, height: 44, display: "flex", alignItems: "center", justifyContent: label.plate ? "flex-end" : "flex-start", fontFamily: T.fonts.data, fontWeight: 700, fontSize: 30, color: T.ink, whiteSpace: "nowrap", background: label.plate ? T.surface : undefined, borderRadius: 8, ...TNUM }}

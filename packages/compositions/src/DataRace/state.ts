@@ -214,7 +214,8 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
 
   // scene opacities
   let chartOpacity = clamp01((frame - 24) / 36);
-  if (phase !== "timeline") chartOpacity = 1 - clamp01(phaseFrame / 14);
+  // the spotlight keeps the chart (others dim, winner scales) and fades it with the scene at its end
+  if (phase === "spotlight") chartOpacity = clamp01((ENDING_FRAMES.spotlight - phaseFrame) / 8);
   if (phase === "like" || phase === "powered") chartOpacity = 0;
   const hookOpacity = frame < s.hook_end ? 1 - clamp01((frame - 36) / (s.hook_end - 36)) : 0;
 

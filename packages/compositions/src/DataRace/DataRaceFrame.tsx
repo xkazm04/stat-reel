@@ -6,7 +6,7 @@
 import { videoTheme } from "@statreel/design-tokens";
 import { DATA_RACE_LIMITS } from "@statreel/schemas";
 import type { ReactElement } from "react";
-import { LikeSubscribe, PoweredBy, WinnerSpotlight } from "./ending";
+import { LikeSubscribe, PoweredBy, WinnerSpotlight, spotlightDim, spotlightScale } from "./ending";
 import { AxisTicks, BarRow, EventStack, L, LogoTile, TNUM } from "./parts";
 import { type DataRaceRenderProps, dataRaceState } from "./state";
 
@@ -78,7 +78,10 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
           <div style={{ opacity: st.chartOpacity }}>
             {st.rows.map((row) => {
               const entity = byId.get(row.id);
-              return entity ? <BarRow key={row.id} entity={entity} row={row} axisMax={st.axisMax} format={props.value_format} /> : null;
+              const win = row.id === st.winnerId;
+              return entity ? (
+                <BarRow key={row.id} entity={entity} row={row} axisMax={st.axisMax} format={props.value_format} dim={win ? 1 : spotlightDim(st.phaseFrame)} scale={win ? spotlightScale(st.phaseFrame) : 1} />
+              ) : null;
             })}
           </div>
           <WinnerSpotlight props={props} winnerId={st.winnerId} f={st.phaseFrame} />

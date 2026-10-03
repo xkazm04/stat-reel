@@ -20,6 +20,8 @@ import { renderTimingMd } from "../timing/index";
 import { DataRaceFrame } from "./DataRaceFrame";
 import { buildSampleDataRace } from "./fixture";
 import { CHIP, raceChips } from "./chips";
+import { contrastRatio } from "./contrast";
+import { SPOTLIGHT_DIM, SPOTLIGHT_SCALE } from "./ending";
 import { LABEL_RIGHT, L, formatValue, textWidth, valueLabelLayout } from "./parts";
 import { CARD, type DataRaceRenderProps, axisMaxFor, dataRaceState, niceTicks, orderedEvents, phaseAt } from "./state";
 
@@ -341,6 +343,53 @@ describe("ending: spotlight (60) -> like & subscribe (60) -> Powered by StatReel
     for (const f of props.spotlight.facts) expect(html).toContain(f.value_text);
   });
 
+  it("the spotlight dims the other rows to ~20 % and scales the winner ~8 % instead of covering them", () => {
+    const f = s.timeline_end + 30;
+    const html = markup(f);
+    const winner = plan.orders.at(-1)?.[0] as string;
+    const rows = [...html.matchAll(/data-row="([^"]+)" style="[^"]*?opacity:([\d.]+)/g)];
+    expect(rows).toHaveLength(props.entities.length);
+    for (const [, id, op] of rows) {
+      if (id === winner) expect(Number(op)).toBe(1);
+      else expect(Number(op)).toBeCloseTo(SPOTLIGHT_DIM, 5);
+    }
+    expect(html).toContain(`scale(${(1 + SPOTLIGHT_SCALE).toFixed(3)})`);
+    // the overlay is not an opaque cover: no full-screen fill of the sheet colour
+    const spot = html.slice(html.indexOf('data-ending="spotlight"'));
+    expect(spot.slice(0, spot.indexOf(">"))).not.toContain("inset:0");
+    expect(spot.slice(0, spot.indexOf(">"))).not.toContain(`background:${videoTheme.background}`);
+    // the dim ramps in from fully visible (no pop from nothing) and the scene fades out with the ending
+    expect(markup(s.timeline_end).match(/data-row="[^"]+" style="[^"]*?opacity:1[";]/g)?.length).toBe(props.entities.length);
+    expect(dataRaceState(props, s.spotlight_end - 1).chartOpacity).toBeLessThan(0.2);
+  });
+
+  it("like & subscribe has exactly one animated element: the ringing bell", () => {
+    const frames = [s.spotlight_end + 2, s.spotlight_end + 12, s.spotlight_end + 30, s.like_end - 20];
+    for (const f of frames) {
+      const html = markup(f);
+      const like = html.slice(html.indexOf('data-ending="like-subscribe"'));
+      expect((like.match(/transform:/g) ?? []).length, `frame ${f}`).toBe(1);
+      expect(like).toContain("data-bell");
+      expect(like).toMatch(/data-bell="" style="[^"]*transform:rotate\(/);
+    }
+    const angle = (f: number) => Number(/rotate\((-?[\d.]+)deg/.exec(markup(f))?.[1]);
+    expect(new Set(frames.map(angle)).size).toBeGreaterThan(1);
+  });
+
+  it("winner value and the wordmark are >= 4.5:1 on the sheet; the entity colour stays on a non-text swatch", () => {
+    const spot = markup(s.timeline_end + 40);
+    const value = /data-winner-value="" style="[^"]*?color:(#[0-9a-f]{6})/i.exec(spot)?.[1] as string;
+    expect(contrastRatio(value, videoTheme.background)).toBeGreaterThanOrEqual(4.5);
+    const winner = props.entities.find((e) => e.id === plan.orders.at(-1)?.[0]);
+    expect(spot).toContain(`data-winner-swatch="" style="width:14px;height:76px;border-radius:7px;background:${winner?.color}"`);
+    const word = /data-wordmark="" style="color:(#[0-9a-f]{6})/i.exec(markup(s.total - 1))?.[1] as string;
+    expect(contrastRatio(word, videoTheme.background)).toBeGreaterThanOrEqual(4.5);
+    // the SUBSCRIBE label sits on accentInk
+    expect(contrastRatio(videoTheme.background, videoTheme.accentInk)).toBeGreaterThanOrEqual(4.5);
+    // no entity colour is ever used as a text colour on the sheet
+    for (const e of props.entities) expect(spot).not.toContain(`color:${e.color}`);
+  });
+
   it("Powered by uses the Frame Stat geometry: frame, 12 holes, window, 4 bars", () => {
     const html = markup(s.total - 1);
     expect(html).toContain('data-logo="frame-stat"');
@@ -402,13 +451,13 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
-        "chipNew": "252deb411d0403a1",
-        "chipUp": "009cf38e2847473d",
-        "hook0": "e98284f4ea227527",
-        "like": "a3864ee6bfbc7a30",
-        "mid45": "257f034817829855",
-        "poweredEnd": "5cbbd46a858efedd",
-        "spotlight": "a3ea6e4f65cef402",
+        "chipNew": "e7f009bcbea5357b",
+        "chipUp": "e4ec681320b7f2e7",
+        "hook0": "25d60bf9f1671ef6",
+        "like": "4fd9eeef8ee716e2",
+        "mid45": "a8b954c1dcf5227c",
+        "poweredEnd": "8688d428ce072a85",
+        "spotlight": "d9224485bb67226b",
       }
     `);
   });

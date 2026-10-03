@@ -7,18 +7,13 @@
 import { FRAME_STAT_VIEWBOX, frameStatRects, videoTheme } from "@statreel/design-tokens";
 import { ENDING_FRAMES, type DataRaceProps } from "@statreel/schemas";
 import type { CSSProperties, ReactElement } from "react";
-import { LogoTile, TNUM, formatValue } from "./parts";
+import { L, LogoTile, TNUM, formatValue } from "./parts";
 
 const T = videoTheme;
 const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
 const smooth = (x: number): number => {
   const c = clamp01(x);
   return c * c * (3 - 2 * c);
-};
-const easeOutBack = (x: number): number => {
-  const c = clamp01(x);
-  const k = 1.70158;
-  return 1 + (k + 1) * (c - 1) ** 3 + k * (c - 1) ** 2;
 };
 
 /** x of each sprocket hole of the drifting film strip */
@@ -31,25 +26,45 @@ const fill: CSSProperties = { position: "absolute", inset: 0, display: "flex", f
 const sceneOpacity = (f: number, len: number, fadeOut: boolean): number =>
   Math.min(clamp01(f / 8), fadeOut ? clamp01((len - f) / 8) : 1);
 
+/** The spotlight dims every row but the winner's to this opacity (art direction: others ~20 %). */
+export const SPOTLIGHT_DIM = 0.2;
+/** ... and enlarges the winner's mark by this much (~8 %). */
+export const SPOTLIGHT_SCALE = 0.08;
+
+/** Opacity of a non-winner row `f` frames into the spotlight: 1 -> 0.2 over 8 frames. */
+export const spotlightDim = (f: number): number => SPOTLIGHT_DIM + (1 - SPOTLIGHT_DIM) * (1 - smooth(f / 8));
+/** Scale of the winner's row `f` frames into the spotlight: 1 -> 1.08 over 10 frames. */
+export const spotlightScale = (f: number): number => 1 + SPOTLIGHT_SCALE * smooth(f / 10);
+
+/**
+ * Winner spotlight. It does NOT cover the race: the chart stays on screen (DataRaceFrame dims the
+ * other rows to 20 % and scales the winner's), and this overlay adds the winner card below the rows.
+ * The value is set in ink; the entity colour stays on a non-text swatch (a yellow entity colour is
+ * ~2:1 on the sheet, see contrast.ts).
+ */
 export function WinnerSpotlight({ props, winnerId, f }: { props: DataRaceProps; winnerId: string; f: number }): ReactElement | null {
   const e = props.entities.find((x) => x.id === winnerId);
   if (!e) return null;
   const last = e.values[e.values.length - 1] ?? 0;
-  const op = sceneOpacity(f, ENDING_FRAMES.spotlight, true);
-  const pop = easeOutBack(f / 16);
+  const op = Math.min(smooth((f - 6) / 12), clamp01((ENDING_FRAMES.spotlight - f) / 8));
+  const top = L.barsTop + L.rowH * props.entities.length + 40;
   return (
-    <div data-ending="spotlight" style={{ ...fill, opacity: op }}>
-      <div style={{ position: "absolute", left: 0, top: 0, right: 0, height: 20, background: e.color }} />
-      <div style={{ fontFamily: T.fonts.data, fontWeight: 700, fontSize: 34, letterSpacing: 6, color: T.inkDim, marginBottom: 36 }}>NO. 1 AT THE END</div>
-      <div style={{ transform: `scale(${0.7 + 0.3 * pop})` }}>
-        <LogoTile entity={e} size={360} radius={64} />
+    <div data-ending="spotlight" style={{ position: "absolute", left: L.marginX, top, width: L.width - 2 * L.marginX, opacity: op }}>
+      <div style={{ height: 44, display: "flex", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 700, fontSize: 34, letterSpacing: 6, color: T.inkDim }}>NO. 1 AT THE END</div>
+      <div style={{ marginTop: 14, height: 120, display: "flex", alignItems: "center", gap: 24 }}>
+        <LogoTile entity={e} size={120} radius={26} />
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 88, lineHeight: 1, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.name}</div>
+          <div style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 30, lineHeight: "34px", color: T.inkDim, whiteSpace: "nowrap" }}>{props.unit_label}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div data-winner-swatch="" style={{ width: 14, height: 76, borderRadius: 7, background: e.color }} />
+          <div data-winner-value="" style={{ fontFamily: T.fonts.data, fontWeight: 700, fontSize: 84, lineHeight: 1, color: T.ink, whiteSpace: "nowrap", ...TNUM }}>
+            {formatValue(last, props.value_format)}
+          </div>
+        </div>
       </div>
-      <div style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 132, lineHeight: 1.05, color: T.ink, marginTop: 40, opacity: smooth((f - 6) / 12) }}>{e.name}</div>
-      <div style={{ fontFamily: T.fonts.data, fontWeight: 700, fontSize: 84, color: e.color, marginTop: 4, opacity: smooth((f - 10) / 12), ...TNUM }}>
-        {formatValue(last, props.value_format)}
-      </div>
-      <div style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 30, color: T.inkDim, opacity: smooth((f - 10) / 12) }}>{props.unit_label}</div>
-      <div style={{ marginTop: 44, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", opacity: smooth((f - 16) / 14) }}>
+      <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 14 }}>
         {props.spotlight.facts.map((s) => (
           <div key={s.ref} style={{ display: "flex", alignItems: "baseline", gap: 18 }}>
             <span style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 32, color: T.inkDim }}>{s.label}</span>
@@ -80,25 +95,30 @@ function Bell({ size, color }: { size: number; color: string }): ReactElement {
   );
 }
 
+/**
+ * Like & subscribe. ONE motion cue (art direction): the bell rings. Everything else is static, so
+ * the viewer reads the ask once. The button is `accentInk` so its sheet-coloured label is >= 4.5:1.
+ */
 export function LikeSubscribe({ f }: { f: number }): ReactElement {
   const op = sceneOpacity(f, ENDING_FRAMES.like, true);
-  const thumb = easeOutBack(f / 16);
-  const button = easeOutBack((f - 10) / 16);
-  const pulse = 1 + 0.035 * Math.sin(Math.max(0, f - 28) * 0.45) * clamp01((f - 26) / 6);
+  const t = Math.max(0, f - 6);
+  const ring = 22 * Math.exp(-t / 16) * Math.sin(t * 0.85);
   return (
     <div data-ending="like-subscribe" style={{ ...fill, opacity: op }}>
-      <div style={{ transform: `scale(${thumb})`, display: "flex", alignItems: "center", gap: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
         <ThumbUp size={170} />
         <div style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 190, lineHeight: 1, color: T.ink }}>LIKE</div>
       </div>
-      <div style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 80, color: T.inkDim, margin: "26px 0", opacity: smooth((f - 6) / 10) }}>&amp;</div>
+      <div style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 80, color: T.inkDim, margin: "26px 0" }}>&amp;</div>
       <div
-        style={{ transform: `scale(${button * pulse})`, display: "flex", alignItems: "center", gap: 28, background: T.accent, color: T.background, padding: "28px 64px", borderRadius: 999, fontFamily: T.fonts.display, fontWeight: 800, fontSize: 112, lineHeight: 1 }}
+        style={{ display: "flex", alignItems: "center", gap: 28, background: T.accentInk, color: T.background, padding: "28px 64px", borderRadius: 999, fontFamily: T.fonts.display, fontWeight: 800, fontSize: 112, lineHeight: 1 }}
       >
-        <Bell size={104} color={T.background} />
+        <div data-bell="" style={{ display: "flex", transform: `rotate(${ring.toFixed(2)}deg)`, transformOrigin: "50% 12%" }}>
+          <Bell size={104} color={T.background} />
+        </div>
         SUBSCRIBE
       </div>
-      <div style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 36, color: T.inkDim, marginTop: 48, opacity: smooth((f - 24) / 14) }}>for the next race</div>
+      <div style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 36, color: T.inkDim, marginTop: 48 }}>for the next race</div>
     </div>
   );
 }
@@ -145,7 +165,7 @@ export function PoweredBy({ f, bars }: { f: number; bars: readonly [string, stri
         <FrameStatMark t={t} width={520} bars={bars} />
       </div>
       <div style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 160, lineHeight: 1, marginTop: 20, color: T.ink, opacity: word, transform: `translateY(${(1 - word) * 20}px)`, position: "relative" }}>
-        Stat<span style={{ color: T.accent }}>Reel</span>
+        Stat<span data-wordmark="" style={{ color: T.accentInk }}>Reel</span>
       </div>
       <div style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 36, color: T.inkDim, marginTop: 16, opacity: smooth((t - 0.6) / 0.4), position: "relative" }}>data in, short video out</div>
       <div style={{ width: 400, height: 12, borderRadius: 6, marginTop: 44, display: "flex", overflow: "hidden", position: "relative", opacity: smooth((t - 0.6) / 0.4) }}>
