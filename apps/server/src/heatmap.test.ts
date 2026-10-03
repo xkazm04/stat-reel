@@ -75,3 +75,28 @@ describe("heatmap (DESIGN §7)", () => {
     }
   });
 });
+
+describe("heatmap evidence freshness", () => {
+  const fresh = { evaluated_at: "2026-10-01T00:00:00", max_staleness_days: 35 };
+  const live = (extra: Partial<Capability>): Capability => ({ ...cap("F1", "live", "f1db", "legal"), ...extra });
+  const caps = (liveExtra: Partial<Capability>) => [cap("F1", "hist", "f1db", "legal"), cap("F1", "bio", "f1db", "legal"), live(liveExtra)];
+  const seasonSoFar = (cells: ReturnType<typeof computeHeatmap>) => cells.find((c) => c.sport === "F1" && c.mode === "monetized" && c.kinds.some((k) => k.kind === "live"))!;
+
+  it("a live pass inside its window still counts", () => {
+    const cells = computeHeatmap({ usecases, sources, capabilities: caps(fresh), implemented: new Set(), now: new Date("2026-10-20T00:00:00Z") });
+    expect(seasonSoFar(cells).status).not.toBe("blocked");
+  });
+
+  it("a live pass evaluated beyond its window is not data-ready and says since when", () => {
+    const cells = computeHeatmap({ usecases, sources, capabilities: caps(fresh), implemented: new Set(), now: new Date("2026-12-01T00:00:00Z") });
+    const c = seasonSoFar(cells);
+    expect(c.status).toBe("blocked");
+    expect(c.reason).toContain("evidence stale since 2026-11-05");
+    expect(c.kinds.find((k) => k.kind === "live")!.sources[0]!.status).toBe("stale");
+  });
+
+  it("capabilities without a window or timestamp are judged as before", () => {
+    const cells = computeHeatmap({ usecases, sources, capabilities: caps({}), implemented: new Set(), now: new Date("2030-01-01T00:00:00Z") });
+    expect(seasonSoFar(cells).status).not.toBe("blocked");
+  });
+});
