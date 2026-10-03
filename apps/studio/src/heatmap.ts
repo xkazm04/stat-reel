@@ -5,7 +5,7 @@
  * No React, no DOM (unit-tested in heatmap.test.ts).
  */
 import type { CellStatus, HeatmapCell, LicenseClass, Mode, Sport } from "@statreel/schemas";
-import { allowedIn, decisionAid, failingKinds, SPORTS } from "./logic";
+import { allowedIn, decisionAid, failingKinds, relTime, SPORTS } from "./logic";
 import { bestCells } from "./display";
 
 /**
@@ -113,6 +113,12 @@ export function sportCounts(cells: HeatmapCell[], mode: Mode, sport: string): Re
   return out;
 }
 
+/** "snapshot 3 h ago" from the newest trend snapshot (the cell data is a snapshot, not live). */
+export function snapshotAge(trend: { at: string }[], now = Date.now()): string {
+  const at = trend.at(-1)?.at;
+  return at ? `snapshot ${relTime(at, now)}` : "no snapshot yet";
+}
+
 export type FixCandidate = { id: string; status: string; action: string };
 export type CellFix = {
   kind: string;
@@ -123,7 +129,7 @@ export type CellFix = {
   flipsThisCell: boolean;
   /** the status the cell would become if this were its only fix */
   becomes: CellStatus;
-  /** legal sources already on the registry for this kind in this cell that do not pass yet */
+  /** sources already on the registry for this kind in this cell whose licence class is allowed in the cell's mode and that do not pass yet */
   candidates: FixCandidate[];
   /** ASK/BLOCKED cells in this mode that this same kind x sport alone would flip (this one included) */
   flipsInGrid: number;
@@ -137,7 +143,8 @@ const ACTION: Record<string, string> = {
 
 /**
  * What would clear one cell in its mode: one entry per failing kind (none for Go / Data ready).
- * Candidates are legal sources the registry already declares; finding a new one is the owner's call.
+ * Candidates are sources the registry already declares whose class clears THIS mode (legal only when
+ * monetized; legal or non-commercial in non-commercial mode); finding a new one is the owner's call.
  */
 export function cellFixes(cells: HeatmapCell[], cell: HeatmapCell): CellFix[] {
   const failing = failingKinds(cell);
@@ -153,7 +160,7 @@ export function cellFixes(cells: HeatmapCell[], cell: HeatmapCell): CellFix[] {
       flipsThisCell: failing.length === 1,
       becomes: cell.composition_implemented ? "go" : "data-ready",
       candidates: (k?.sources ?? [])
-        .filter((s) => s.license_class === "legal" && s.status !== "pass")
+        .filter((s) => allowedIn(cell.mode, s.license_class) && s.status !== "pass")
         .map((s) => ({ id: s.id, status: s.status, action: ACTION[s.status] ?? `resolve "${s.status}"` })),
       flipsInGrid: entry?.flips.length ?? 0,
     };

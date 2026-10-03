@@ -1,6 +1,6 @@
 import type { HeatmapCell } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
-import { blockedBreakdown, blockedCause, blockedLegend, cellFixes, cellHint, focusKey, gridMove, insetFor, neighbours, parseFocus, sportCounts } from "./heatmap";
+import { blockedBreakdown, blockedCause, blockedLegend, cellFixes, cellHint, focusKey, gridMove, insetFor, neighbours, parseFocus, snapshotAge, sportCounts } from "./heatmap";
 
 const cell = (o: Partial<HeatmapCell> & Pick<HeatmapCell, "usecase" | "sport" | "status">): HeatmapCell => ({
   mode: "monetized",
@@ -113,8 +113,21 @@ describe("heatmap helpers", () => {
     expect(fixes[0]?.candidates).toEqual([{ id: "balldontlie", status: "declared", action: "test it" }]);
     // two failing kinds: neither alone flips the cell
     expect(cellFixes([nbaBlocked, nhlBlocked], nhlBlocked).every((f) => !f.flipsThisCell)).toBe(true);
+    // mode-aware candidates: a non-commercial source clears non_commercial mode only
+    const ncOf = (mode: "monetized" | "non_commercial") => ({ ...nbaBlocked, mode });
+    expect(cellFixes([ncOf("monetized")], ncOf("monetized"))[0]?.candidates.map((c) => c.id)).toEqual(["balldontlie"]);
+    expect(cellFixes([ncOf("non_commercial")], ncOf("non_commercial"))[0]?.candidates.map((c) => c.id)).toEqual([
+      "balldontlie",
+      "nba-api",
+    ]);
     // a Go cell needs nothing
     expect(cellFixes([f1Go], f1Go)).toEqual([]);
+  });
+
+  it("states the snapshot age from the newest trend entry", () => {
+    const now = Date.parse("2026-10-03T12:00:00Z");
+    expect(snapshotAge([{ at: "2026-10-03T01:00:00Z" }, { at: "2026-10-03T09:00:00Z" }], now)).toBe("snapshot 3 h ago");
+    expect(snapshotAge([], now)).toBe("no snapshot yet");
   });
 
   it("lists neighbours without the cell itself", () => {

@@ -20,7 +20,7 @@ import { identVar } from "../components/idents";
 import { takeLayerOrigin, visibleRect, type Rect } from "../components/layerTransition";
 import { artStyle, Loading, useReducedMotion } from "../components/ui";
 import { useHeatmap, useProjects, useSources } from "../data";
-import { cellFixes, focusKey, neighbours } from "../heatmap";
+import { cellFixes, focusKey, neighbours, snapshotAge } from "../heatmap";
 import { type Capability, cellOf, MODE_LABEL, SPORTS, STAGE_LABEL } from "../logic";
 import { formatLabel, kindLong, LICENCE_WORD, neverFetchedFor, pad2, STATUS_AIR, STATUS_WORD } from "../display";
 import type { HeatmapSearch } from "../router";
@@ -235,6 +235,7 @@ export function HeatmapCellLayer() {
           usecases={usecases}
           sources={src.data?.sources ?? []}
           caps={src.data?.capabilities ?? []}
+          snapshot={snapshotAge(hm.data?.trend ?? [])}
           projects={pr.data?.projects ?? []}
           onClose={close}
           onMode={setMode}
@@ -258,6 +259,8 @@ type BodyProps = {
   usecases: UseCase[];
   sources: Source[];
   caps: Capability[];
+  /** "snapshot 3 h ago": the grid is a computed snapshot, never "today" */
+  snapshot: string;
   projects: ProjectWithJobs[];
   onClose: () => void;
   onMode: (m: Mode) => void;
@@ -314,7 +317,7 @@ function CellBody(p: BodyProps) {
         <div className={`hl-status st--${cell.status}`}>
           <StatusChip status={cell.status} size={20} />
           <small>
-            {STATUS_AIR[cell.status]} · {MODE_LABEL[mode]} · today
+            {STATUS_AIR[cell.status]} · {MODE_LABEL[mode]} · {p.snapshot}
           </small>
         </div>
         <div className="hl-why">
@@ -514,7 +517,7 @@ function MakeNext({ uc, sport, mode, cell, cells, usecases, onCell }: BodyProps)
               <p className="hl-fix__c">
                 {f.candidates.length ? (
                   <>
-                    Legal candidates on the registry:{" "}
+                    {mode === "monetized" ? "Legal" : "Legal or non-commercial"} candidates on the registry:{" "}
                     {f.candidates.map((c, i) => (
                       <span key={c.id}>
                         {i ? ", " : ""}
@@ -523,7 +526,7 @@ function MakeNext({ uc, sport, mode, cell, cells, usecases, onCell }: BodyProps)
                     ))}
                   </>
                 ) : (
-                  "No legal source on the registry for this yet: adding one is the owner's call (a new registry entry)."
+                  `No ${mode === "monetized" ? "legal" : "legal or non-commercial"} source on the registry for this yet: adding one is the owner's call (a new registry entry).`
                 )}
               </p>
             </li>
