@@ -1,0 +1,734 @@
+{
+  "projectName": "statreel",
+  "projectPath": "C:/Users/mkdol/dolla/StatReel",
+  "provenance": {
+    "gitCommit": "1f7574c8b63edc7918cddee76072feec920141aa",
+    "gitCommitCount": 83,
+    "generator": "perfect-init (hand scan; Personas bridge offline)"
+  },
+  "version": "2.0.0",
+  "groups": [
+    {
+      "name": "Studio UI",
+      "domain": "studio",
+      "contexts": [
+        {
+          "name": "Studio Shell & Data Layer",
+          "category": "ui",
+          "description": "App shell of the React studio: entry, TanStack router, typed API client, query hooks, the shared SSE event provider, theme, nav, wordmark and the shared status/stage logic every screen uses.",
+          "filePaths": [
+            "apps/studio/index.html",
+            "apps/studio/package.json",
+            "apps/studio/src/api.ts",
+            "apps/studio/src/components/FrameStatMark.tsx",
+            "apps/studio/src/components/Nav.tsx",
+            "apps/studio/src/components/Wordmark.tsx",
+            "apps/studio/src/components/glyphs.tsx",
+            "apps/studio/src/components/idents.tsx",
+            "apps/studio/src/components/ui.tsx",
+            "apps/studio/src/data.ts",
+            "apps/studio/src/events.ts",
+            "apps/studio/src/logic.test.ts",
+            "apps/studio/src/logic.ts",
+            "apps/studio/src/main.tsx",
+            "apps/studio/src/queryClient.ts",
+            "apps/studio/src/router.tsx",
+            "apps/studio/src/styles/base.css",
+            "apps/studio/src/styles/pages.css",
+            "apps/studio/src/theme.test.ts",
+            "apps/studio/src/theme.ts",
+            "apps/studio/src/vite-env.d.ts",
+            "apps/studio/src/wordmark.test.ts",
+            "apps/studio/vite.config.ts"
+          ],
+          "entryPoints": [
+            "apps/studio/src/main.tsx",
+            "apps/studio/src/router.tsx"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Front & Rundown",
+          "category": "ui",
+          "description": "Photo Finish front page and race-sheet rundown: lane art, licence finish line, programme strip, project slate, arrive/finish transitions, project creation and the Projects/Studio index routes.",
+          "filePaths": [
+            "apps/studio/src/arrive.test.ts",
+            "apps/studio/src/components/LaneArt.tsx",
+            "apps/studio/src/components/LazyProgramme.tsx",
+            "apps/studio/src/components/Programme.tsx",
+            "apps/studio/src/components/Slate.tsx",
+            "apps/studio/src/components/arrive.tsx",
+            "apps/studio/src/components/createProject.ts",
+            "apps/studio/src/components/finish.tsx",
+            "apps/studio/src/components/layerTransition.ts",
+            "apps/studio/src/display.test.ts",
+            "apps/studio/src/display.ts",
+            "apps/studio/src/finishline.test.ts",
+            "apps/studio/src/finishline.ts",
+            "apps/studio/src/frontpf.test.ts",
+            "apps/studio/src/frontpf.ts",
+            "apps/studio/src/routes/FrontPhotoFinish.tsx",
+            "apps/studio/src/routes/Projects.tsx",
+            "apps/studio/src/routes/StudioIndex.tsx",
+            "apps/studio/src/routes/useProgramme.ts",
+            "apps/studio/src/rundown.test.ts",
+            "apps/studio/src/rundown.ts",
+            "apps/studio/src/styles/arrive.css",
+            "apps/studio/src/styles/front-pf.css",
+            "apps/studio/src/styles/photofinish.css"
+          ],
+          "entryPoints": [
+            "apps/studio/src/routes/FrontPhotoFinish.tsx"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Heatmap UI",
+          "category": "ui",
+          "description": "Heatmap screens: feasibility grid + cell layer (use case x sport x mode) and the topics view (topic x video ordinal, recency colours).",
+          "filePaths": [
+            "apps/studio/src/components/HeatmapViews.tsx",
+            "apps/studio/src/heatmap.test.ts",
+            "apps/studio/src/heatmap.ts",
+            "apps/studio/src/routes/Heatmap.tsx",
+            "apps/studio/src/routes/HeatmapCell.tsx",
+            "apps/studio/src/routes/HeatmapFeasibility.tsx",
+            "apps/studio/src/routes/HeatmapTopics.tsx",
+            "apps/studio/src/styles/heatmap.css",
+            "apps/studio/src/topicHeatmap.test.ts",
+            "apps/studio/src/topicHeatmap.ts"
+          ],
+          "entryPoints": [
+            "apps/studio/src/routes/Heatmap.tsx"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Compose & Render Gate UI",
+          "category": "ui",
+          "description": "The compose studio (control room, monitor/player, props panel, tracks ruler, co-pilot chat, script modal) and the Render & Gate page.",
+          "filePaths": [
+            "apps/studio/src/composition.ts",
+            "apps/studio/src/studio-logic.test.ts",
+            "apps/studio/src/studio-logic.ts",
+            "apps/studio/src/studio/ControlRoom.tsx",
+            "apps/studio/src/studio/Copilot.tsx",
+            "apps/studio/src/studio/Monitor.tsx",
+            "apps/studio/src/studio/PropsPanel.tsx",
+            "apps/studio/src/studio/RenderGatePage.tsx",
+            "apps/studio/src/studio/ScriptModal.tsx",
+            "apps/studio/src/studio/StudioLayout.tsx",
+            "apps/studio/src/studio/Tracks.tsx",
+            "apps/studio/src/studio/shared.tsx",
+            "apps/studio/src/styles/studio.css"
+          ],
+          "entryPoints": [
+            "apps/studio/src/studio/StudioLayout.tsx"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Board UI",
+          "category": "ui",
+          "description": "Design Board: wall / matrix / light-table variants, cases and styles libraries, accept/reject decisions and undo.",
+          "filePaths": [
+            "apps/studio/src/board/BoardPage.tsx",
+            "apps/studio/src/board/CasesView.tsx",
+            "apps/studio/src/board/LightTableVariant.tsx",
+            "apps/studio/src/board/MatrixVariant.tsx",
+            "apps/studio/src/board/StylesView.tsx",
+            "apps/studio/src/board/WallVariant.tsx",
+            "apps/studio/src/board/board.css",
+            "apps/studio/src/board/board.test.ts",
+            "apps/studio/src/board/board.ts",
+            "apps/studio/src/board/library.test.ts",
+            "apps/studio/src/board/library.ts",
+            "apps/studio/src/board/shared.tsx",
+            "apps/studio/src/board/undo.css",
+            "apps/studio/src/board/undo.tsx"
+          ],
+          "entryPoints": [
+            "apps/studio/src/board/BoardPage.tsx"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Calendar, Metrics & Sources UI",
+          "category": "ui",
+          "description": "Calendar scheduling screen, cross-channel metrics screen and the sources desk.",
+          "filePaths": [
+            "apps/studio/src/calendar.test.ts",
+            "apps/studio/src/calendar.ts",
+            "apps/studio/src/routes/Calendar.tsx",
+            "apps/studio/src/routes/Metrics.tsx",
+            "apps/studio/src/routes/Sources.tsx",
+            "apps/studio/src/styles/calendar.css"
+          ],
+          "entryPoints": [
+            "apps/studio/src/routes/Calendar.tsx"
+          ],
+          "apiRoutes": []
+        }
+      ]
+    },
+    {
+      "name": "Server",
+      "domain": "server",
+      "contexts": [
+        {
+          "name": "Server Core & Jobs",
+          "category": "api",
+          "description": "Hono app wiring, SQLite schema, config, in-process event bus/SSE, the single-slot persistent job runner and process helpers.",
+          "filePaths": [
+            "apps/server/package.json",
+            "apps/server/src/app.ts",
+            "apps/server/src/config.ts",
+            "apps/server/src/db.ts",
+            "apps/server/src/events.ts",
+            "apps/server/src/jobs.test.ts",
+            "apps/server/src/jobs.ts",
+            "apps/server/src/main.ts",
+            "apps/server/src/proc.ts",
+            "apps/server/src/registry.ts",
+            "apps/server/src/serve.ts",
+            "apps/server/src/undo.test.ts",
+            "apps/server/tsconfig.json"
+          ],
+          "entryPoints": [
+            "apps/server/src/serve.ts",
+            "apps/server/src/app.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Projects & Produce Pipeline",
+          "category": "api",
+          "description": "Projects, versioned props and scripts checked against warehouse facts; the produce pipeline (audio -> render -> master -> checks -> manifest -> gate -> publish) and the render worker; read-only warehouse access.",
+          "filePaths": [
+            "apps/server/src/pipeline.ts",
+            "apps/server/src/projects.test.ts",
+            "apps/server/src/projects.ts",
+            "apps/server/src/render-worker.mjs",
+            "apps/server/src/warehouse.test.ts",
+            "apps/server/src/warehouse.ts"
+          ],
+          "entryPoints": [
+            "apps/server/src/pipeline.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "LLM Co-pilot & Tools",
+          "category": "logic",
+          "description": "LLM sessions (one at a time, persisted, resumable), the StatReel tool surface shared by MCP and replay, the MCP server, and the prompts/LLM package.",
+          "filePaths": [
+            "apps/server/src/llm-service.ts",
+            "apps/server/src/mcp.ts",
+            "apps/server/src/tools.ts",
+            "packages/llm/package.json",
+            "packages/llm/prompts/era-adjusted-rankings.md",
+            "packages/llm/prompts/generation/_rules.md",
+            "packages/llm/prompts/generation/generate-video.md",
+            "packages/llm/prompts/generation/visual-options.md",
+            "packages/llm/src/index.ts",
+            "packages/llm/src/llm.test.ts",
+            "packages/llm/tsconfig.json"
+          ],
+          "entryPoints": [
+            "apps/server/src/llm-service.ts",
+            "apps/server/src/mcp.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Generation Queue & Worker",
+          "category": "logic",
+          "description": "Background generation queue (ADR 010): queue, lease, Claude runner, worker process, relay, MCP generation tools, finalize validation, board undo guard.",
+          "filePaths": [
+            "apps/server/src/generation-guard.test.ts",
+            "apps/server/src/generation-guard.ts",
+            "apps/server/src/generation/assets.test.ts",
+            "apps/server/src/generation/assets.ts",
+            "apps/server/src/generation/callbacks.ts",
+            "apps/server/src/generation/claude-args.test.ts",
+            "apps/server/src/generation/claude.live.test.ts",
+            "apps/server/src/generation/claude.ts",
+            "apps/server/src/generation/config.test.ts",
+            "apps/server/src/generation/config.ts",
+            "apps/server/src/generation/engine.ts",
+            "apps/server/src/generation/fake.ts",
+            "apps/server/src/generation/lease.ts",
+            "apps/server/src/generation/mcp-tools.ts",
+            "apps/server/src/generation/paths.ts",
+            "apps/server/src/generation/prepare.ts",
+            "apps/server/src/generation/prompt.ts",
+            "apps/server/src/generation/queue.test.ts",
+            "apps/server/src/generation/queue.ts",
+            "apps/server/src/generation/refs.test.ts",
+            "apps/server/src/generation/refs.ts",
+            "apps/server/src/generation/relay.test.ts",
+            "apps/server/src/generation/relay.ts",
+            "apps/server/src/generation/routes.test.ts",
+            "apps/server/src/generation/routes.ts",
+            "apps/server/src/generation/testing.ts",
+            "apps/server/src/generation/validator.ts",
+            "apps/server/src/generation/worker-main.ts",
+            "apps/server/src/generation/worker-process.test.ts",
+            "apps/server/src/generation/worker.ts"
+          ],
+          "entryPoints": [
+            "apps/server/src/generation/worker-main.ts",
+            "apps/server/src/generation/routes.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Board, Library & Calendar Services",
+          "category": "api",
+          "description": "Server side of the Board (items + owner decisions), the styles/cases libraries, and the calendar scheduler that publishes due items privately.",
+          "filePaths": [
+            "apps/server/src/board.test.ts",
+            "apps/server/src/board.ts",
+            "apps/server/src/calendar.test.ts",
+            "apps/server/src/calendar.ts",
+            "apps/server/src/library.test.ts",
+            "apps/server/src/library.ts"
+          ],
+          "entryPoints": [
+            "apps/server/src/board.ts",
+            "apps/server/src/calendar.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Heatmap, Topics & Metrics Services",
+          "category": "api",
+          "description": "Feasibility heatmap computation and snapshots, the controlled topics list + videos ledger (with idempotent migration), and cross-channel metrics.",
+          "filePaths": [
+            "apps/server/src/heatmap-service.ts",
+            "apps/server/src/heatmap.test.ts",
+            "apps/server/src/heatmap.ts",
+            "apps/server/src/metrics.test.ts",
+            "apps/server/src/metrics.ts",
+            "apps/server/src/topics-migrate.ts",
+            "apps/server/src/topics.test.ts",
+            "apps/server/src/topics.ts"
+          ],
+          "entryPoints": [
+            "apps/server/src/heatmap-service.ts",
+            "apps/server/src/topics.ts"
+          ],
+          "apiRoutes": []
+        }
+      ]
+    },
+    {
+      "name": "Video Engine",
+      "domain": "video",
+      "contexts": [
+        {
+          "name": "Compositions & Timing",
+          "category": "lib",
+          "description": "Remotion compositions (DataRace bar-chart race, EraAdjusted slope), audio tracks, safe zones, fonts, layout, seek stability and the timing plan (change density -> time warp).",
+          "filePaths": [
+            "packages/compositions/fixtures/data-race-props.schema.json",
+            "packages/compositions/fixtures/sample-data-race.TIMING.md",
+            "packages/compositions/fixtures/sample-data-race.assets.json",
+            "packages/compositions/fixtures/sample-data-race.props.json",
+            "packages/compositions/fixtures/sample-data-race.timing-plan.json",
+            "packages/compositions/package.json",
+            "packages/compositions/scripts/smoke.mjs",
+            "packages/compositions/src/AudioTracks.tsx",
+            "packages/compositions/src/DataRace/DataRace.test.tsx",
+            "packages/compositions/src/DataRace/DataRace.tsx",
+            "packages/compositions/src/DataRace/DataRaceFrame.tsx",
+            "packages/compositions/src/DataRace/ending.tsx",
+            "packages/compositions/src/DataRace/fixture.ts",
+            "packages/compositions/src/DataRace/index.ts",
+            "packages/compositions/src/DataRace/parts.tsx",
+            "packages/compositions/src/DataRace/state.ts",
+            "packages/compositions/src/DataRace/write-fixtures.test.ts",
+            "packages/compositions/src/EraAdjustedFrame.tsx",
+            "packages/compositions/src/EraAdjustedSlope.tsx",
+            "packages/compositions/src/Root.tsx",
+            "packages/compositions/src/SafeZoneOverlay.tsx",
+            "packages/compositions/src/assets.d.ts",
+            "packages/compositions/src/compositions.test.tsx",
+            "packages/compositions/src/compositions.ts",
+            "packages/compositions/src/entry.ts",
+            "packages/compositions/src/fonts.ts",
+            "packages/compositions/src/index.ts",
+            "packages/compositions/src/layout.ts",
+            "packages/compositions/src/react-dom-server.d.ts",
+            "packages/compositions/src/seek-stability.test.ts",
+            "packages/compositions/src/timing.ts",
+            "packages/compositions/src/timing/index.ts",
+            "packages/compositions/src/timing/markdown.ts",
+            "packages/compositions/src/timing/plan.ts",
+            "packages/compositions/src/timing/timing.test.ts",
+            "packages/compositions/tsconfig.json"
+          ],
+          "entryPoints": [
+            "packages/compositions/src/Root.tsx",
+            "packages/compositions/src/DataRace/DataRace.tsx"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Viz Primitives",
+          "category": "lib",
+          "description": "Reusable chart primitives: slopegraph + layout, callouts, scales, deterministic rng, text measurement.",
+          "filePaths": [
+            "packages/viz/package.json",
+            "packages/viz/src/Callout.tsx",
+            "packages/viz/src/Slopegraph.tsx",
+            "packages/viz/src/index.ts",
+            "packages/viz/src/rng.ts",
+            "packages/viz/src/scales.ts",
+            "packages/viz/src/slopegraph-layout.ts",
+            "packages/viz/src/text.ts",
+            "packages/viz/src/types.ts",
+            "packages/viz/src/viz.test.tsx",
+            "packages/viz/tsconfig.json"
+          ],
+          "entryPoints": [
+            "packages/viz/src/index.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Design Tokens & Brand",
+          "category": "lib",
+          "description": "Design tokens CSS, Photo Finish theme, the Frame Stat logo and the video palette.",
+          "filePaths": [
+            "fonts/barlow-condensed/BarlowCondensed-500.woff2",
+            "fonts/barlow-condensed/BarlowCondensed-600.woff2",
+            "fonts/barlow-condensed/BarlowCondensed-700.woff2",
+            "fonts/barlow-condensed/BarlowCondensed-800.woff2",
+            "fonts/barlow-condensed/OFL.txt",
+            "fonts/fonts.manifest.json",
+            "fonts/inter/Inter-Variable.woff2",
+            "fonts/inter/OFL.txt",
+            "fonts/jetbrains-mono/JetBrainsMono-Variable.woff2",
+            "fonts/jetbrains-mono/OFL.txt",
+            "packages/design-tokens/package.json",
+            "packages/design-tokens/src/index.ts",
+            "packages/design-tokens/src/logo.test.ts",
+            "packages/design-tokens/src/logo.ts",
+            "packages/design-tokens/src/shared.css",
+            "packages/design-tokens/src/theme-photofinish.css",
+            "packages/design-tokens/src/tokens.css",
+            "packages/design-tokens/src/video-theme.test.ts"
+          ],
+          "entryPoints": [
+            "packages/design-tokens/src/index.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Captions",
+          "category": "lib",
+          "description": "Caption cues, word alignment, burned-in captions, safe geometry and SRT/VTT writers.",
+          "filePaths": [
+            "packages/captions/package.json",
+            "packages/captions/src/BurnedCaptions.tsx",
+            "packages/captions/src/align.test.ts",
+            "packages/captions/src/align.ts",
+            "packages/captions/src/burned.test.tsx",
+            "packages/captions/src/cues.test.ts",
+            "packages/captions/src/cues.ts",
+            "packages/captions/src/geometry.ts",
+            "packages/captions/src/index.ts",
+            "packages/captions/src/text.ts",
+            "packages/captions/src/writers.test.ts",
+            "packages/captions/src/writers.ts",
+            "packages/captions/tsconfig.json"
+          ],
+          "entryPoints": [
+            "packages/captions/src/index.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Audio & Music",
+          "category": "lib",
+          "description": "ElevenLabs client with budget + plan tier, cache, generation, music, mix and loudness normalisation.",
+          "filePaths": [
+            "packages/audio/API-NOTES.md",
+            "packages/audio/package.json",
+            "packages/audio/src/budget.test.ts",
+            "packages/audio/src/budget.ts",
+            "packages/audio/src/cache.test.ts",
+            "packages/audio/src/cache.ts",
+            "packages/audio/src/client.test.ts",
+            "packages/audio/src/client.ts",
+            "packages/audio/src/errors.ts",
+            "packages/audio/src/generate.test.ts",
+            "packages/audio/src/generate.ts",
+            "packages/audio/src/index.ts",
+            "packages/audio/src/loudness.test.ts",
+            "packages/audio/src/loudness.ts",
+            "packages/audio/src/mix.test.ts",
+            "packages/audio/src/mix.ts",
+            "packages/audio/src/music.test.ts",
+            "packages/audio/src/music.ts",
+            "packages/audio/src/plan-tier.test.ts",
+            "packages/audio/src/plan-tier.ts",
+            "packages/audio/tsconfig.json"
+          ],
+          "entryPoints": [
+            "packages/audio/src/index.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Schemas & Contracts",
+          "category": "lib",
+          "description": "Shared zod schemas: DataRace props, timing plan, generation output + rules, pipeline stages, topics, fixtures and hashing.",
+          "filePaths": [
+            "packages/schemas/package.json",
+            "packages/schemas/src/data-race.ts",
+            "packages/schemas/src/fixtures.ts",
+            "packages/schemas/src/generation-rules.test.ts",
+            "packages/schemas/src/generation-rules.ts",
+            "packages/schemas/src/generation.ts",
+            "packages/schemas/src/index.ts",
+            "packages/schemas/src/pipeline.test.ts",
+            "packages/schemas/src/pipeline.ts",
+            "packages/schemas/src/schemas.test.ts",
+            "packages/schemas/src/sha256.ts",
+            "packages/schemas/src/timing-plan.ts",
+            "packages/schemas/src/topics.test.ts",
+            "packages/schemas/src/topics.ts",
+            "packages/schemas/tsconfig.json"
+          ],
+          "entryPoints": [
+            "packages/schemas/src/index.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Publishing & Policy",
+          "category": "lib",
+          "description": "YouTube publishing (OAuth, private-only), publish metrics, and the OPA publish policy.",
+          "filePaths": [
+            "packages/publish/API-NOTES.md",
+            "packages/publish/SETUP.md",
+            "packages/publish/package.json",
+            "packages/publish/src/index.ts",
+            "packages/publish/src/metrics.test.ts",
+            "packages/publish/src/metrics.ts",
+            "packages/publish/src/oauth.test.ts",
+            "packages/publish/src/oauth.ts",
+            "packages/publish/src/policy.test.ts",
+            "packages/publish/src/policy.ts",
+            "packages/publish/src/youtube.test.ts",
+            "packages/publish/src/youtube.ts",
+            "packages/publish/tsconfig.json",
+            "policy/publish.rego",
+            "policy/publish_test.rego"
+          ],
+          "entryPoints": [
+            "packages/publish/src/index.ts",
+            "policy/publish.rego"
+          ],
+          "apiRoutes": []
+        }
+      ]
+    },
+    {
+      "name": "Data Pipeline",
+      "domain": "data",
+      "contexts": [
+        {
+          "name": "Ingest & Ethics Layer",
+          "category": "data",
+          "description": "Python ingest: source registry verdicts, robots.txt, throttled cached HTTP client, snapshots, lineage, capability tests, the f1db source and use-case registry.",
+          "filePaths": [
+            "data/registry/sources.yaml",
+            "data/registry/usecases/career-form-curves.yaml",
+            "data/registry/usecases/career-wins-race.yaml",
+            "data/registry/usecases/constructor-dynasties.yaml",
+            "data/registry/usecases/dominance-streams.yaml",
+            "data/registry/usecases/era-adjusted-rankings.yaml",
+            "data/registry/usecases/grid-to-victory.yaml",
+            "data/registry/usecases/league-table-race.yaml",
+            "data/registry/usecases/record-handovers.yaml",
+            "data/registry/usecases/season-points-fight.yaml",
+            "data/registry/usecases/season-so-far.yaml",
+            "data/registry/usecases/winner-age-drift.yaml",
+            "pipeline/.python-version",
+            "pipeline/capabilities.yaml",
+            "pipeline/pyproject.toml",
+            "pipeline/statreel_ingest/__init__.py",
+            "pipeline/statreel_ingest/__main__.py",
+            "pipeline/statreel_ingest/capabilities.py",
+            "pipeline/statreel_ingest/cli.py",
+            "pipeline/statreel_ingest/client.py",
+            "pipeline/statreel_ingest/config.py",
+            "pipeline/statreel_ingest/lineage.py",
+            "pipeline/statreel_ingest/registry.py",
+            "pipeline/statreel_ingest/snapshot.py",
+            "pipeline/statreel_ingest/sources/__init__.py",
+            "pipeline/statreel_ingest/sources/f1db.py",
+            "pipeline/statreel_ingest/throttle.py",
+            "pipeline/statreel_ingest/transform.py",
+            "pipeline/tests/conftest.py",
+            "pipeline/tests/fixtures/f1db-mini/README.md",
+            "pipeline/tests/fixtures/f1db-mini/f1db-constructors.csv",
+            "pipeline/tests/fixtures/f1db-mini/f1db-drivers.csv",
+            "pipeline/tests/fixtures/f1db-mini/f1db-races-race-results.csv",
+            "pipeline/tests/fixtures/f1db-mini/f1db-races.csv",
+            "pipeline/tests/fixtures/f1db-mini/f1db-seasons-driver-standings.csv",
+            "pipeline/tests/fixtures/f1db-mini/f1db-seasons.csv",
+            "pipeline/tests/fixtures/make_f1db_mini.py",
+            "pipeline/tests/test_capabilities.py",
+            "pipeline/tests/test_client.py",
+            "pipeline/tests/test_f1db.py",
+            "pipeline/tests/test_lane1_e2e.py",
+            "pipeline/tests/test_lineage.py",
+            "pipeline/tests/test_registry.py",
+            "pipeline/tests/test_snapshot.py",
+            "pipeline/tests/test_throttle.py"
+          ],
+          "entryPoints": [
+            "pipeline/statreel_ingest/cli.py"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Warehouse Transform (dbt)",
+          "category": "data",
+          "description": "dbt models over DuckDB: staging, core, marts and the read-only llm.* views the LLM may query.",
+          "filePaths": [
+            "pipeline/dbt/dbt_project.yml",
+            "pipeline/dbt/macros/generate_schema_name.sql",
+            "pipeline/dbt/models/core/_core__models.yml",
+            "pipeline/dbt/models/core/matches.sql",
+            "pipeline/dbt/models/core/player_match_results.sql",
+            "pipeline/dbt/models/core/player_season_stats.sql",
+            "pipeline/dbt/models/core/players.sql",
+            "pipeline/dbt/models/core/seasons.sql",
+            "pipeline/dbt/models/core/teams.sql",
+            "pipeline/dbt/models/llm/_llm__models.yml",
+            "pipeline/dbt/models/llm/f1_constructor_seasons.sql",
+            "pipeline/dbt/models/llm/f1_driver_bios.sql",
+            "pipeline/dbt/models/llm/f1_driver_era_adjusted.sql",
+            "pipeline/dbt/models/llm/f1_driver_seasons.sql",
+            "pipeline/dbt/models/llm/f1_race_results.sql",
+            "pipeline/dbt/models/llm/f1_seasons.sql",
+            "pipeline/dbt/models/marts/_marts__models.yml",
+            "pipeline/dbt/models/marts/mart_era_adjusted.sql",
+            "pipeline/dbt/models/staging/f1db/_f1db__models.yml",
+            "pipeline/dbt/models/staging/f1db/_f1db__sources.yml",
+            "pipeline/dbt/models/staging/f1db/stg_f1db__constructors.sql",
+            "pipeline/dbt/models/staging/f1db/stg_f1db__drivers.sql",
+            "pipeline/dbt/models/staging/f1db/stg_f1db__race_results.sql",
+            "pipeline/dbt/models/staging/f1db/stg_f1db__races.sql",
+            "pipeline/dbt/models/staging/f1db/stg_f1db__season_driver_standings.sql",
+            "pipeline/dbt/profiles.yml",
+            "pipeline/dbt/tests/generic/unique_combination.sql"
+          ],
+          "entryPoints": [
+            "pipeline/dbt/dbt_project.yml"
+          ],
+          "apiRoutes": []
+        }
+      ]
+    },
+    {
+      "name": "Tooling",
+      "domain": "tooling",
+      "contexts": [
+        {
+          "name": "E2E & Dev Tooling",
+          "category": "test",
+          "description": "Playwright e2e (M1 + generation, replay and live), fixtures, setup/secrets scripts, justfile and workspace config.",
+          "filePaths": [
+            "biome.json",
+            "e2e/fixtures/generation/visual_options/out/assets.json",
+            "e2e/fixtures/generation/visual_options/out/timing-plan.json",
+            "e2e/fixtures/generation/visual_options/out/variants/v1.md",
+            "e2e/fixtures/generation/visual_options/out/variants/v1.props.json",
+            "e2e/fixtures/generation/visual_options/out/variants/v2.md",
+            "e2e/fixtures/generation/visual_options/out/variants/v2.props.json",
+            "e2e/fixtures/generation/visual_options/out/variants/v3.md",
+            "e2e/fixtures/generation/visual_options/out/variants/v3.props.json",
+            "e2e/fixtures/llm/33718c2ee96e23f826002afd.jsonl",
+            "e2e/generation.spec.ts",
+            "e2e/global-setup.ts",
+            "e2e/m1.spec.ts",
+            "justfile",
+            "package.json",
+            "playwright.config.ts",
+            "pnpm-workspace.yaml",
+            "scripts/secrets-set.mjs",
+            "scripts/setup-tools.mjs",
+            "scripts/stage-contest-data.py",
+            "tsconfig.base.json",
+            "tsconfig.json",
+            "vitest.config.ts"
+          ],
+          "entryPoints": [
+            "e2e/m1.spec.ts"
+          ],
+          "apiRoutes": []
+        },
+        {
+          "name": "Board Skill Harness",
+          "category": "config",
+          "description": "The project-owned /board skill: loop/case briefs, the seat skeleton and the harness scripts that measure longevity of design cut-outs.",
+          "filePaths": [
+            ".claude/skills/board/SKILL.md",
+            ".claude/skills/board/references/case-brief.md",
+            ".claude/skills/board/references/loop-brief.md",
+            ".claude/skills/board/references/seat-addendum.md",
+            ".claude/skills/board/references/seat-skeleton.html",
+            ".claude/skills/board/scripts/board.mjs",
+            ".claude/skills/board/scripts/check-cases.mjs",
+            ".claude/skills/board/scripts/check-design.mjs",
+            ".claude/skills/board/scripts/lib.mjs",
+            ".claude/skills/board/tests/test_lib.mjs"
+          ],
+          "entryPoints": [
+            ".claude/skills/board/SKILL.md"
+          ],
+          "apiRoutes": []
+        }
+      ]
+    }
+  ],
+  "ungrouped": [],
+  "index": [
+    "Studio UI › Studio Shell & Data Layer [ui] — 23 files",
+    "Studio UI › Front & Rundown [ui] — 24 files",
+    "Studio UI › Heatmap UI [ui] — 10 files",
+    "Studio UI › Compose & Render Gate UI [ui] — 13 files",
+    "Studio UI › Board UI [ui] — 14 files",
+    "Studio UI › Calendar, Metrics & Sources UI [ui] — 6 files",
+    "Server › Server Core & Jobs [api] — 13 files",
+    "Server › Projects & Produce Pipeline [api] — 6 files",
+    "Server › LLM Co-pilot & Tools [logic] — 11 files",
+    "Server › Generation Queue & Worker [logic] — 30 files",
+    "Server › Board, Library & Calendar Services [api] — 6 files",
+    "Server › Heatmap, Topics & Metrics Services [api] — 8 files",
+    "Video Engine › Compositions & Timing [lib] — 36 files",
+    "Video Engine › Viz Primitives [lib] — 11 files",
+    "Video Engine › Design Tokens & Brand [lib] — 18 files",
+    "Video Engine › Captions [lib] — 13 files",
+    "Video Engine › Audio & Music [lib] — 21 files",
+    "Video Engine › Schemas & Contracts [lib] — 15 files",
+    "Video Engine › Publishing & Policy [lib] — 15 files",
+    "Data Pipeline › Ingest & Ethics Layer [data] — 45 files",
+    "Data Pipeline › Warehouse Transform (dbt) [data] — 27 files",
+    "Tooling › E2E & Dev Tooling [test] — 23 files",
+    "Tooling › Board Skill Harness [config] — 10 files"
+  ],
+  "summary": {
+    "totalGroups": 5,
+    "totalContexts": 23,
+    "totalFiles": 398
+  },
+  "instructions": "Context map for StatReel. Each group is a domain; each context is a feature with its files (filePaths) + a category. Read this to learn which files belong to which feature BEFORE editing. When you change a context's files, update them here.",
+  "generatedAt": "2026-10-03T20:47:38.625Z"
+}

@@ -44,6 +44,7 @@ pipeline/dbt/dbt_packages/
 /.claude/skills/consult
 /.claude/skills/research
 /.claude/skills/uat
+/.claude/skills/perfect
 /.claude/rules/ai-registry-access.md
 /.claude/rules/ai-registry-software-engineering.md
 /.claude/rules/ai-registry-media-generation.md
