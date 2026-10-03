@@ -219,7 +219,7 @@ export function HeatmapFeasibility() {
 
         {hm.isError ? (
           <div className="hm-state">
-            <Failure error={hm.error} what="The heatmap" />
+            <Failure error={hm.error} what="The heatmap" onRetry={() => void hm.refetch()} retrying={hm.isFetching} />
           </div>
         ) : hm.isLoading ? (
           <div className="hm-state">

@@ -1105,3 +1105,20 @@ kbd {
     display: none;
   }
 }
+
+/* shell-failure-cure: a Failure's Retry button sits under its lines; the route error's action row */
+.failure__retry {
+  justify-self: start;
+  margin-top: 4px;
+}
+.failure__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.failure:focus {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}

@@ -7,7 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Defer } from "../components/arrive";
 import { StatusChip } from "../components/glyphs";
-import { Empty, Loading } from "../components/ui";
+import { Empty, Failure, Loading } from "../components/ui";
 import { latestRender, renderChecks, renderFile, renderPolicy, useManifest } from "../data";
 import { checkRows, fileUrl, relTime } from "../logic";
 import { hasCaptionSidecar, hasChecks, isNewerRender } from "./render-gate";
@@ -232,17 +232,12 @@ export function RenderGatePage() {
               {manifest.isLoading ? (
                 <Loading what="the manifest" />
               ) : manifest.isError || !m ? (
-                <div className="rg__retry" role="alert">
-                  <p className="sum-p">The manifest did not load from {renderFile(render, "manifest.json")}.</p>
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    onClick={() => void manifest.refetch()}
-                    disabled={manifest.isFetching}
-                  >
-                    {manifest.isFetching ? "Retrying" : "Retry"}
-                  </button>
-                </div>
+                <Failure
+                  error={manifest.error ?? `no manifest at ${renderFile(render, "manifest.json")}`}
+                  what="The manifest"
+                  onRetry={() => void manifest.refetch()}
+                  retrying={manifest.isFetching}
+                />
               ) : (
                 <div className="mf">
                   <dl className="mf__kv">

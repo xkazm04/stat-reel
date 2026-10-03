@@ -15,7 +15,7 @@ export function StudioIndex() {
   if (pr.isError)
     return (
       <main id="main" className="page">
-        <Failure error={pr.error} what="The rundown" />
+        <Failure error={pr.error} what="The rundown" onRetry={() => void pr.refetch()} retrying={pr.isFetching} />
       </main>
     );
   const newest = [...(pr.data?.projects ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];

@@ -71,7 +71,7 @@ export function ProjectsPage() {
       </header>
 
       {pr.isError ? (
-        <Failure error={pr.error} what="The rundown" />
+        <Failure error={pr.error} what="The rundown" onRetry={() => void pr.refetch()} retrying={pr.isFetching} />
       ) : pr.isLoading ? (
         <Loading what="the rundown" />
       ) : !projects.length ? (

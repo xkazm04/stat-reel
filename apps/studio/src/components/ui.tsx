@@ -30,12 +30,31 @@ export function Empty({
   );
 }
 
-export function Failure({ error, what }: { error: unknown; what: string }) {
+/**
+ * A failed load. With `onRetry` the owner can re-run it in place (async-ui-states: a failure is
+ * never a dead end); `retrying` shows the in-flight refetch as a busy button.
+ */
+export function Failure({
+  error,
+  what,
+  onRetry,
+  retrying = false,
+}: {
+  error: unknown;
+  what: string;
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
   return (
     <div className="failure" role="alert">
       <b>{what} did not load</b>
       <span className="mono">{errorText(error)}</span>
       <span>Is the API running on 127.0.0.1:8787? (`pnpm dev` starts both.)</span>
+      {onRetry ? (
+        <button type="button" className="btn btn--sm failure__retry" onClick={onRetry} disabled={retrying} aria-busy={retrying}>
+          {retrying ? "Retrying" : "Retry"}
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -96,10 +96,7 @@ export function HeatmapTopics() {
 
         {q.isError ? (
           <div className="hm-state">
-            <Failure error={q.error} what="The topic heatmap" />
-            <button type="button" className="btn btn--sm" onClick={() => void q.refetch()} disabled={q.isFetching}>
-              {q.isFetching ? "Retrying" : "Retry"}
-            </button>
+            <Failure error={q.error} what="The topic heatmap" onRetry={() => void q.refetch()} retrying={q.isFetching} />
           </div>
         ) : q.isLoading || !data ? (
           <div className="hm-state">
