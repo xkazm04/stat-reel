@@ -49,3 +49,7 @@ test-all:
     pnpm test
     .tools/opa test policy
     {{uv}} pytest pipeline/tests
+
+# the one offline gate: typecheck, vitest, script tests, pytest, OPA, dbt parse - runs ALL steps, prints PASS/FAIL, `just check --only opa,dbt-parse`
+check *args:
+    node scripts/check.mjs {{args}}

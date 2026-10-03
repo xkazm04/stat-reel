@@ -98,6 +98,8 @@ flowchart LR
 
 **Single-slot job runner:** jobs (`ingest`, `transform`, `audio`, `render`, `publish`, `metrics`) persisted in SQLite; one render and one LLM session at a time (mutex per kind); cancellable (AbortSignal → child process kill); resumable after restart; progress streamed over SSE.
 
+**Hardening (2026-10-04):** a localhost guard wraps `app.fetch` (Host must be 127.0.0.1/localhost on the server or studio port; mutating requests need an allowed Origin, or `application/json` when there is no Origin, as for the CLI/MCP and the worker; `nosniff` on every response; extra origins via `STATREEL_ALLOWED_ORIGINS`, studio port via `STATREEL_STUDIO_PORT`/`E2E_STUDIO_PORT`). SIGINT/SIGTERM shut down gracefully: running jobs go back to `queued` (crash-equivalent, so `tsx watch` restarts resume them), the DB is WAL-checkpointed and closed. Owner/timeout cancels record their cause. Lanes are FIFO across kinds; terminal job rows older than `STATREEL_JOB_RETENTION_DAYS` (30) are pruned at startup.
+
 ---
 
 ## 4. Repository layout
@@ -184,6 +186,8 @@ Single source of truth for what may be fetched and how. Ingestion refuses any ho
 - Conditional requests (ETag / If-Modified-Since); never re-fetch unchanged resources.
 - Every fetch logged to `data/raw/<source>/<snapshot>/fetch_log.jsonl` (url, status, bytes, duration).
 - **Terms monitoring:** monthly job fetches each `terms_url` once, stores SHA-256; hash change → flag source `needs_review` in heatmap and block new ingests until owner re-approves.
+- Politeness state (throttle timestamps, robots.txt) persists per host under `data/cache/http/_state`, shared across processes; 429/503 with `Retry-After` stops the run (exit 4) and records the earliest next fetch; robots `Crawl-delay` applies when stricter. A test fails if any module other than `client.py` imports a network library.
+- Schema contract: each snapshot manifest records per-table columns/types/rows; removed/renamed columns, type changes or a >5 % row drop vs the previous snapshot fail the ingest (exit 5) unless `--accept-drift`.
 - EU context: avoid substantial/repeated extraction from protected databases (Directive 96/9/EC Art. 7); respect TDM opt-outs (DSM Directive Art. 4) — a ToS scraping ban counts as opt-out.
 
 ### 5.3 Raw layer
@@ -291,6 +295,7 @@ labelled empty state (ADR 005's real-data-only rule).
 - Post-render checks (ffprobe + ffmpeg): resolution, fps, duration, codecs, integrated loudness **−14 LUFS ±1**, true peak ≤ **−2 dBTP** (platforms re-encode to lossy), loudness range recorded (`ebur128`), black-frame detect.
 - Output `data/renders/<project>/<run>/`: `video.mp4`, `captions.srt`, `captions.vtt`, `thumb.png` (frame chosen by props), `manifest.json` (§6.8).
 - Single render at a time; progress over SSE.
+- Robustness (2026-10-04): cancel reaches audio, ffmpeg and the worker process tree; renders time out after `STATREEL_RENDER_TIMEOUT_MS` (30 min); failed/cancelled runs leave no partial dir; startup sweeps remove only leftovers older than the render timeout (shared `data/` across dev and e2e servers). An unchanged props + source hash reuses the previous render; Remotion bundles keep the newest 2. Font fallbacks are measured from the worker's `[statreel-fonts]` report.
 
 ### 6.4 Audio (ElevenLabs)
 
@@ -353,6 +358,8 @@ labelled empty state (ADR 005's real-data-only rule).
 - Visual critique loop: after `render_keyframes`, the agent fills a typed yes/no schema (veto fields first: hierarchy, legibility at phone size, data-ink); safe zone and contrast are **measured in code**, not judged. Revisions are patch operations on props, with the gate re-run after each (max 2 iterations by default).
 - Word budget is a range; timing is judged on the rendered audio, and figures and hedges are never cut to fit.
 - A refusal (LLM or audio provider) is a labelled job state, never an empty success.
+- Session caps: `LLM_MAX_TURNS` (40, enforced server-side; the CLI has no turns flag), `LLM_MAX_BUDGET_USD` (3, via `--max-budget-usd`), `LLM_TIMEOUT_MS` (15 min). Tool output is capped at 200 rows / 64 KB with a narrowing hint; errors carry `isError`; MCP and replay share one zod schema per tool. A unit test fails when a prompt edit orphans the replay fixture.
+- Read-only time-series views for the format (2026-10-04): `llm.f1_driver_race_cumulative`, `llm.f1_season_standings_by_round` (race + sprint points, reconciled to official standings outside dropped-score seasons), `llm.f1_race_winners`.
 - System prompt pack per use case in `packages/llm/prompts/` (hook formulas, narration length targets: ~150–165 wpm; 60 s ≈ 150–165 words).
 
 ### 6.7 Publishing & metrics
@@ -365,7 +372,7 @@ labelled empty state (ADR 005's real-data-only rule).
 
 - OAuth: tokens in OS keychain. Google supports loopback redirect (`http://127.0.0.1:<port>`). **Open question:** TikTok/Meta redirect URI rules for local apps (may require HTTPS / registered domain) — investigate at M5; fallback = local HTTPS with mkcert.
 - **Start platform audits in week 1** (owner task) — they gate public publishing.
-- Metrics job (daily, and on demand): `metrics_daily(publication_id, date, views, watch_time_s, avg_view_duration_s, likes, comments, shares, subs_delta)`; normalized across platforms; unavailable fields null.
+- Metrics job (daily, and on demand): `metrics_daily(publication_id, date, views, watch_time_s, avg_view_duration_s, likes, comments, shares, subs_delta)`; normalized across platforms; unavailable fields null. YouTube statistics are lifetime snapshots: a publication's total is its latest snapshot and per-day values are deltas (never a sum of snapshots); group totals carry `measured`/`unmeasured` counts and `lower_bound` when any member is unmeasured.
 
 ### 6.8 Provenance manifest & publish gate
 
@@ -440,6 +447,8 @@ deny contains "AI music used but disclosure flag not set" if {
 
 The gate's result lists every check it ran (`checks_run[]`) as well as its denials. Attribution strings from all sources are auto-appended to the description; gate warns (not denies) if the description was edited to remove them.
 
+Measured-evidence rules (2026-10-04): resolution (1080×1920 or 1920×1080), 30 fps, duration 30–90 s, black frames ≤ 1 s total (threshold chosen in code - owner to confirm) and a measured `font_fallbacks` count are required evidence; missing evidence denies.
+
 ---
 
 ## 7. Lane 3 — Feasibility heatmap (long-term monitor)
@@ -450,7 +459,7 @@ The gate's result lists every check it ran (`checks_run[]`) as well as its denia
   - `Data ready` — data Go, composition not implemented yet.
   - `Ask` — best available source is `non_commercial` (monetized mode) or `paid`.
   - `Blocked` — no source, failing tests, or `needs_review`.
-- Recomputed after every ingest/transform run and every e2e run; snapshot stored in `app.sqlite: heatmap_snapshots(run_id, at, cells_json)` for trend view ("cells turned Go this month").
+- Recomputed after every ingest/transform run and every e2e run; snapshot stored in `app.sqlite: heatmap_snapshots(run_id, at, cells_json)` for trend view ("cells turned Go this month"). A recompute identical to the latest snapshot stores nothing; capability evidence older than its `max_staleness_days` stops counting ("evidence stale since …").
 - Extensible: new sport = registry entries + staging models + capability tests; new use case = one YAML + composition. No heatmap code changes.
 - UI: grid (use cases × sports), mode toggle, per-cell drawer listing sources, licence classes, failing tests, and "create project" action; trend sparkline per row.
 

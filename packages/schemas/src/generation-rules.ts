@@ -142,12 +142,10 @@ function rule2(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): vo
 
   // every card's start_frame comes from the plan
   const byId = new Map(plan.events.map((e) => [e.id, e]));
-  const seen = new Set<string>();
+  // duplicate event ids are the schema's (rule 0), whether or not a plan exists
   arr(p.events).forEach((raw, i) => {
     const e = isObj(raw) ? raw : {};
     const id = str(e.id);
-    if (seen.has(id)) add("event-duplicate", `events[${i}].id`, `duplicate event id '${id}'`);
-    seen.add(id);
     const pe = byId.get(id);
     if (!pe) add("event-not-in-plan", `events[${i}].id`, `event '${id}' is not in the timing plan: pass it to compute_timing_plan`);
     else if (e.start_frame !== pe.frame)
@@ -172,8 +170,7 @@ function rule3(p: Loose, ctx: GenerationRulesContext, out: RuleViolation[]): voi
 
   const colors = new Map<string, string>();
   const missing = new Set(arr(p.missing_logos).map(str));
-  const ids = new Set(entities.map((e) => str(e.id)));
-  for (const m of missing) if (!ids.has(m)) add("missing-logo-unknown", "missing_logos", `missing_logos names unknown entity '${m}'`);
+  // missing_logos naming a non-entity is the schema's (rule 0)
 
   entities.forEach((e, i) => {
     const id = str(e.id) || `#${i}`;
@@ -231,16 +228,15 @@ function winnerOf(p: Loose, plan: TimingPlan | undefined): Loose | undefined {
   return best;
 }
 
-/** Rule 4: non-revealing one-line title and a question hook. */
+/**
+ * Rule 4: non-revealing one-line title and a question hook. Length limits are the schema's (rule 0),
+ * so an overflow is reported once, with the schema's "N characters fit" wording.
+ */
 function rule4(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): void {
   const add = (code: string, path: string, message: string) => out.push({ rule: 4, code, path, message });
   const title = str(p.title);
   const hook = str(p.hook);
   if (/[\r\n]/.test(title)) add("title-multiline", "title", "title must be a single line (no newline)");
-  if (title.length > DATA_RACE_LIMITS.titleMaxChars)
-    add("title-length", "title", `title is ${title.length} chars; the limit is ${DATA_RACE_LIMITS.titleMaxChars}: shorten it`);
-  if (hook.length > DATA_RACE_LIMITS.hookMaxChars)
-    add("hook-length", "hook", `hook is ${hook.length} chars; the limit is ${DATA_RACE_LIMITS.hookMaxChars} (96 px, 3 lines): shorten the question`);
   if (!hook.trim().endsWith("?")) add("hook-question", "hook", 'hook must end with "?"');
 
   const winner = winnerOf(p, plan);
@@ -257,8 +253,6 @@ function rule4(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): vo
   arr(p.events).forEach((raw, i) => {
     const t = str((raw as Loose | undefined)?.title);
     if (/[\r\n]/.test(t)) add("event-title-multiline", `events[${i}].title`, "event title must be a single line");
-    if (t.length > DATA_RACE_LIMITS.eventTitleMaxChars)
-      add("event-title-length", `events[${i}].title`, `event title is ${t.length} chars; the limit is ${DATA_RACE_LIMITS.eventTitleMaxChars} (the card clips it): shorten it`);
   });
 }
 

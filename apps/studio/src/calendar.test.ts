@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   bucketByDay,
+  checkSchedule,
+  mapScheduleError,
+  needsDecision,
+  parseCalendarSearch,
+  slotDrift,
   channelLabel,
   dayKey,
   fromLocalInput,
@@ -113,5 +118,71 @@ describe("labels", () => {
     expect(dayLabel(new Date(2026, 8, 28))).toEqual({ dow: "Mon", date: "28 Sep" });
     expect(weekLabel(new Date(2026, 8, 28))).toBe("28 Sep – 4 Oct 2026");
     expect(dateTimeLabel(new Date(2026, 8, 30, 9, 5).toISOString())).toBe("Wed 30 Sep, 09:05");
+  });
+});
+
+describe("checkSchedule (the one validation door)", () => {
+  const now = new Date(2026, 8, 30, 12, 0);
+  const slots = [{ id: "sl-a", channel_id: "ch-yt", publish_at: new Date(2026, 9, 1, 9, 0).toISOString(), status: "scheduled" }];
+  const base = { channelId: "ch-yt", now, slots };
+  it("blocks an empty time", () => {
+    const c = checkSchedule({ ...base, when: "" });
+    expect(c.at).toBeNull();
+    expect(c.error).toEqual({ field: "when", message: "Pick a date and time." });
+  });
+  it("warns, not blocks, on a past time and exposes min", () => {
+    const c = checkSchedule({ ...base, when: toLocalInput(new Date(2026, 8, 30, 9, 0)) });
+    expect(c.error).toBeNull();
+    expect(c.at).not.toBeNull();
+    expect(c.min).toBe("2026-09-30T12:00");
+    expect(c.warnings.map((w) => w.field)).toEqual(["when"]);
+    expect(c.warnings[0]?.message).toMatch(/has passed/);
+  });
+  it("warns on a same-channel same-minute clash, but not on another channel or the slot being moved", () => {
+    const when = toLocalInput(new Date(2026, 9, 1, 9, 0));
+    expect(checkSchedule({ ...base, when }).warnings[0]?.message).toMatch(/already set for this channel at 09:00/);
+    expect(checkSchedule({ ...base, when, channelId: "ch-tt" }).warnings).toEqual([]);
+    expect(checkSchedule({ ...base, when, ignoreSlotId: "sl-a" }).warnings).toEqual([]);
+  });
+  it("a clean future time has no issue", () => {
+    const c = checkSchedule({ ...base, when: toLocalInput(new Date(2026, 9, 2, 9, 0)) });
+    expect(c.error).toBeNull();
+    expect(c.warnings).toEqual([]);
+  });
+});
+
+describe("mapScheduleError", () => {
+  it("maps the known server errors to a field with a plain message", () => {
+    expect(mapScheduleError("TikTok is not wired yet (Content Posting API - milestone M5)")).toMatchObject({ field: "channel" });
+    expect(mapScheduleError("publish_at is not a date: x").field).toBe("when");
+    const gate = mapScheduleError("the publish gate has not allowed this project's latest render: safe-zone violations");
+    expect(gate.field).toBe("form");
+    expect(gate.message).toMatch(/safe-zone violations/);
+    expect(mapScheduleError("this project is already on the calendar (slot sl-1, scheduled for 2026-10-01T09:00:00Z)").message).toMatch(/slot sl-1/);
+    expect(mapScheduleError("this render is already on the calendar (slot sl-2, published)").field).toBe("form");
+    expect(mapScheduleError("only a scheduled or missed slot can move").field).toBe("form");
+  });
+  it("never prefixes a raw Server label", () => {
+    expect(mapScheduleError("boom").message).toBe("boom");
+  });
+});
+
+describe("drift and missed", () => {
+  it("narrows the drift field and flags slots the owner must decide on", () => {
+    expect(slotDrift({ drift: "superseded_render" })).toBe("superseded_render");
+    expect(slotDrift({ drift: "nope" })).toBeNull();
+    expect(slotDrift({})).toBeNull();
+    expect(needsDecision({ status: "missed" })).toBe(true);
+    expect(needsDecision({ status: "scheduled", drift: "gate_denied" } as { status: string })).toBe(true);
+    expect(needsDecision({ status: "scheduled" })).toBe(false);
+    expect(slotStatus("missed")).toBe("missed");
+  });
+});
+
+describe("parseCalendarSearch", () => {
+  it("keeps a non-empty project id only", () => {
+    expect(parseCalendarSearch({ project: " p-1 " })).toEqual({ project: "p-1" });
+    expect(parseCalendarSearch({ project: "" })).toEqual({});
+    expect(parseCalendarSearch({ project: 5 })).toEqual({});
   });
 });

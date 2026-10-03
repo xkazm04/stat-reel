@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ERA_TEXT_LIMITS,
   EraAdjustedPropsSchema,
   ProvenanceManifestSchema,
   type Script,
@@ -30,6 +31,39 @@ describe("EraAdjustedProps", () => {
 
   it("rejects 'did you know' as a hook shape", () => {
     expect(EraAdjustedPropsSchema.safeParse({ ...sampleEraProps, hook_shape: "did-you-know" }).success).toBe(false);
+  });
+});
+
+describe("EraAdjusted text caps (derived from the frame geometry)", () => {
+  const L = ERA_TEXT_LIMITS;
+  const messageAt = (props: unknown, path: string) =>
+    EraAdjustedPropsSchema.safeParse(props).error?.issues.filter((i) => i.path.join(".") === path).map((i) => i.message).join("|") ?? "";
+  const withRow0Name = (name: string) => ({ ...sampleEraProps, rows: sampleEraProps.rows.map((r, i) => (i === 0 ? { ...r, name } : r)) });
+
+  it("the sample is inside every cap", () => {
+    expect(EraAdjustedPropsSchema.safeParse(sampleEraProps).success).toBe(true);
+  });
+  it.each([
+    ["metric_raw_label", L.metricLabelMaxChars],
+    ["metric_adjusted_label", L.metricLabelMaxChars],
+  ])("%s: %i characters fit, one more says how many", (key, n) => {
+    expect(EraAdjustedPropsSchema.safeParse({ ...sampleEraProps, [key]: "m".repeat(n) }).success).toBe(true);
+    expect(messageAt({ ...sampleEraProps, [key]: "m".repeat(n + 1) }, key)).toMatch(new RegExp(`shorten it - ${n} characters fit`));
+  });
+  it("row names", () => {
+    expect(EraAdjustedPropsSchema.safeParse(withRow0Name("n".repeat(L.rowNameMaxChars))).success).toBe(true);
+    expect(messageAt(withRow0Name("n".repeat(L.rowNameMaxChars + 1)), "rows.0.name")).toMatch(/shorten it - 32 characters fit/);
+  });
+  it("attribution: 27 in a vertical short, 76 in landscape", () => {
+    expect(EraAdjustedPropsSchema.safeParse({ ...sampleEraProps, attribution: "a".repeat(27) }).success).toBe(true);
+    expect(messageAt({ ...sampleEraProps, attribution: "a".repeat(28) }, "attribution")).toMatch(/shorten it - 27 characters fit/);
+    const landscape = {
+      ...sampleEraProps,
+      format: "landscape" as const,
+      scenes: sampleEraProps.scenes.filter((s) => s.kind !== "close"),
+    };
+    expect(EraAdjustedPropsSchema.safeParse({ ...landscape, attribution: "a".repeat(76) }).success).toBe(true);
+    expect(messageAt({ ...landscape, attribution: "a".repeat(77) }, "attribution")).toMatch(/shorten it - 76 characters fit/);
   });
 });
 

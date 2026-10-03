@@ -13,9 +13,17 @@ export const heatmapQuery = { queryKey: qk.heatmap, queryFn: api.heatmap, staleT
 export const heatmapTopicsQuery = (all: boolean) =>
   ({ queryKey: qk.heatmapTopics(all), queryFn: () => api.heatmapTopics(all), staleTime: 5_000 }) as const;
 export const sourcesQuery = { queryKey: qk.sources, queryFn: api.sources, staleTime: 60_000 } as const;
-export const projectsQuery = { queryKey: qk.projects, queryFn: api.projects } as const;
-export const metricsQuery = { queryKey: qk.metrics, queryFn: api.metrics } as const;
-export const calendarQuery = { queryKey: qk.calendar, queryFn: api.calendar } as const;
+/**
+ * staleTime = how long a revisit may show the cache without asking again. SSE and the freshness
+ * listeners (freshness.ts) invalidate regardless of it, so it only bounds the silent case.
+ *  - projects / calendar 15 s: change on every job / slot event, which SSE pushes; a navigation
+ *    back within 15 s needs no round trip, a longer gap re-asks.
+ *  - metrics 60 s: a pull job writes it a few times a day; a minute is invisible to the owner.
+ *  - the default (5 s) stays for project detail, which jobs rewrite constantly.
+ */
+export const projectsQuery = { queryKey: qk.projects, queryFn: api.projects, staleTime: 15_000 } as const;
+export const metricsQuery = { queryKey: qk.metrics, queryFn: api.metrics, staleTime: 60_000 } as const;
+export const calendarQuery = { queryKey: qk.calendar, queryFn: api.calendar, staleTime: 15_000 } as const;
 export const projectQuery = (id: string) => ({ queryKey: qk.project(id), queryFn: () => api.project(id) }) as const;
 
 export const useHeatmap = () => useQuery(heatmapQuery);

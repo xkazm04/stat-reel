@@ -56,7 +56,7 @@ export function nextFullHour(now: Date): Date {
   return d;
 }
 
-export type SlotStatusKey = "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+export type SlotStatusKey = "scheduled" | "publishing" | "published" | "failed" | "cancelled" | "missed";
 /** Every slot status as shape + label (the label is literal text, never colour-only). */
 export const SLOT_META: Record<SlotStatusKey, { label: string; hint: string }> = {
   scheduled: { label: "SCHEDULED", hint: "waits for its time; the server tick publishes it" },
@@ -64,9 +64,24 @@ export const SLOT_META: Record<SlotStatusKey, { label: string; hint: string }> =
   published: { label: "PUBLISHED", hint: "uploaded" },
   failed: { label: "FAILED", hint: "the publish job did not finish" },
   cancelled: { label: "CANCELLED", hint: "taken off the calendar" },
+  missed: { label: "MISSED", hint: "its time passed while the server was not ticking; nothing was published" },
 };
 export const slotStatus = (s: string): SlotStatusKey => (s in SLOT_META ? (s as SlotStatusKey) : "failed");
 export const isUpcoming = (s: string): boolean => s === "scheduled" || s === "publishing";
+
+/** Drift the server reports on a slot (apps/server/src/calendar.ts SlotView). api.ts does not type it yet: narrow here. */
+export type SlotDrift = "superseded_render" | "gate_denied";
+export const slotDrift = (s: unknown): SlotDrift | null => {
+  const d = (s as { drift?: unknown } | null)?.drift;
+  return d === "superseded_render" || d === "gate_denied" ? d : null;
+};
+export const DRIFT_META: Record<SlotDrift, { label: string; hint: string }> = {
+  superseded_render: { label: "RE-RENDERED", hint: "the project was re-rendered after this slot was set; it will not fire until you reschedule it onto the new render" },
+  gate_denied: { label: "GATE DENIED", hint: "the publish gate no longer allows this render; it will not fire" },
+};
+/** A slot the owner has to act on: missed, or held back by drift. */
+export const needsDecision = (s: { status: string }): boolean =>
+  s.status === "missed" || (s.status === "scheduled" && slotDrift(s) !== null);
 
 /** The newest slot (by created_at, then publish_at) of each project. */
 export function latestSlotPerProject<T extends SlotLike>(slots: T[]): Map<string, T> {
@@ -137,4 +152,72 @@ export function relWhen(iso: string, now = Date.now()): string {
   if (a < 45) return "now";
   const v = a < 3600 ? `${Math.round(a / 60)} min` : a < 86400 ? `${Math.round(a / 3600)} h` : `${Math.round(a / 86400)} d`;
   return d > 0 ? `in ${v}` : `${v} ago`;
+}
+
+// ------------------------------------------------------------------ the one validation door
+
+export type FieldKey = "channel" | "when" | "form";
+export type FieldIssue = { field: FieldKey; message: string };
+export type ScheduleCheck = {
+  /** the instant to send, null when the time field is unusable */
+  at: string | null;
+  /** blocks submit */
+  error: FieldIssue | null;
+  /** shown, does not block */
+  warnings: FieldIssue[];
+  /** the value for the input's `min` attribute (now, local, minutes) */
+  min: string;
+};
+
+/**
+ * Validate a schedule / move form in one place (form: one validation door). Empty time blocks; a past time
+ * and a same-channel same-minute clash only warn - the server decides (a slot up to its missed window late
+ * still fires on the next tick, older becomes MISSED). `slots` are the calendar's slots; `ignoreSlotId`
+ * excludes the slot being moved.
+ */
+export function checkSchedule(input: {
+  when: string;
+  channelId: string;
+  now: Date;
+  slots: { id: string; channel_id: string; publish_at: string; status: string; title?: string | null }[];
+  ignoreSlotId?: string;
+}): ScheduleCheck {
+  const min = toLocalInput(input.now);
+  const at = fromLocalInput(input.when);
+  if (!at) return { at: null, error: { field: "when", message: "Pick a date and time." }, warnings: [], min };
+  const warnings: FieldIssue[] = [];
+  if (new Date(at).getTime() < input.now.getTime() - 60_000)
+    warnings.push({ field: "when", message: `That time has passed (earliest ${min.replace("T", " ")}). The server publishes a slot up to an hour late at its next tick; older ones are marked missed.` });
+  const minute = Math.floor(new Date(at).getTime() / 60_000);
+  const clash = input.slots.find(
+    (s) => s.id !== input.ignoreSlotId && s.channel_id === input.channelId && (s.status === "scheduled" || s.status === "publishing")
+      && Math.floor(new Date(s.publish_at).getTime() / 60_000) === minute,
+  );
+  if (clash) warnings.push({ field: "when", message: `Another video is already set for this channel at ${timeLabel(clash.publish_at)}.` });
+  return { at, error: null, warnings, min };
+}
+
+/**
+ * Map a server error text (apps/server/src/calendar.ts) to the field it belongs to and a plain message.
+ * Unknown texts stay on the form, still without a raw "Server" label.
+ */
+export function mapScheduleError(text: string): FieldIssue {
+  if (/not wired yet/i.test(text)) return { field: "channel", message: `${text.replace(/ \(.*\)$/, "")}; pick a wired channel.` };
+  if (/unknown channel/i.test(text)) return { field: "channel", message: "That channel no longer exists; pick another." };
+  if (/not a date/i.test(text)) return { field: "when", message: "That is not a valid date and time." };
+  const on = /already on the calendar \((slot [^)]*)\)/i.exec(text);
+  if (on) return { field: "form", message: `This video is already on the calendar (${on[1]}). Move or cancel that slot instead.` };
+  if (/already on the calendar/i.test(text)) return { field: "form", message: "This video is already on the calendar. Move or cancel that slot instead." };
+  if (/publish gate has not allowed/i.test(text)) {
+    const why = /: (.+)$/.exec(text)?.[1];
+    return { field: "form", message: `The publish gate does not allow this video's latest render${why ? ` (${why})` : ""}. Fix it in Produce first.` };
+  }
+  if (/only a scheduled or missed slot/i.test(text)) return { field: "form", message: "This slot has already moved on (published, failed or cancelled), so it can no longer change." };
+  return { field: "form", message: text };
+}
+
+/** Search params of /calendar: `project` deep-links a ready video (ControlRoom -> Calendar). */
+export type CalendarSearch = { project?: string };
+export function parseCalendarSearch(s: Record<string, unknown>): CalendarSearch {
+  return typeof s.project === "string" && s.project.trim() ? { project: s.project.trim() } : {};
 }

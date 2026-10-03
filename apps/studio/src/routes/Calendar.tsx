@@ -3,12 +3,15 @@
  * /api/calendar (channels, ready = gated renders not on the calendar, slots) and /api/metrics
  * (the stored visibility of a published slot). Schedules a ready video on a wired channel
  * (POST /api/calendar), "Publish now" = the same POST at the current time, reschedules (PATCH)
- * and cancels (DELETE). Server errors are shown verbatim. Uploads are private only.
+ * and cancels (DELETE). Every schedule/move goes through one validation helper (calendar.ts checkSchedule);
+ * known server errors are mapped to the field they belong to (mapScheduleError) and focused with aria-invalid.
+ * "Publish now" and "Cancel slot" confirm first. /calendar?project=<id> deep-links to a ready video.
+ * Uploads are private only.
  */
 import type { Mode } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { type FormEvent, useMemo, useState } from "react";
+import { Link, useSearch } from "@tanstack/react-router";
+import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   api,
   type CalendarSlot,
@@ -21,17 +24,23 @@ import {
 } from "../api";
 import {
   bucketByDay,
+  type CalendarSearch,
   channelLabel,
+  checkSchedule,
+  DRIFT_META,
   dateTimeLabel,
   dayKey,
   dayLabel,
-  fromLocalInput,
+  type FieldIssue,
   isUpcoming,
   latestSlotPerProject,
+  mapScheduleError,
+  needsDecision,
   nextFullHour,
   relWhen,
   SLOT_META,
   type SlotStatusKey,
+  slotDrift,
   slotStatus,
   splitTags,
   timeLabel,
@@ -82,6 +91,13 @@ function SlotMark({ status, size = 14 }: { status: SlotStatusKey; size?: number 
         <path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8" stroke="currentColor" strokeWidth="1.7" />
       </>
     );
+  else if (status === "missed")
+    inner = (
+      <>
+        <path d="M8 1.6L14.6 13.6H1.4z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M8 6v3.6M8 11.4v1" stroke="currentColor" strokeWidth="1.7" />
+      </>
+    );
   else
     inner = (
       <>
@@ -128,6 +144,7 @@ function Visibility({ slot, channel, pubs }: { slot: CalendarSlot; channel: Chan
 
 export function CalendarPage() {
   const cal = useCalendar();
+  const { project: linked } = useSearch({ from: "/calendar" }) as CalendarSearch;
   const met = useMetrics();
   const hm = useHeatmap();
   const [week, setWeek] = useState(0);
@@ -139,8 +156,9 @@ export function CalendarPage() {
   const chById = new Map(channels.map((c) => [c.id, c]));
   const ucName = (id: string) => hm.data?.usecases.find((u) => u.id === id)?.name ?? id;
   const newest = useMemo(() => latestSlotPerProject(slots), [slots]);
-  const upcoming = slots.filter((s) => isUpcoming(s.status));
-  const history = slots.filter((s) => !isUpcoming(s.status)).reverse();
+  const attention = slots.filter(needsDecision);
+  const upcoming = slots.filter((s) => isUpcoming(s.status) && !needsDecision(s));
+  const history = slots.filter((s) => !isUpcoming(s.status) && !needsDecision(s)).reverse();
 
   return (
     <main id="main" className="page cal-page">
@@ -166,7 +184,7 @@ export function CalendarPage() {
       </header>
 
       {cal.isError ? (
-        <Failure error={cal.error} what="The calendar" />
+        <Failure error={cal.error} what="The calendar" onRetry={() => void cal.refetch()} retrying={cal.isFetching} />
       ) : cal.isLoading ? (
         <Loading what="the calendar" />
       ) : (
@@ -208,17 +226,24 @@ export function CalendarPage() {
             </section>
           </Defer>
 
-          <Defer tier={2} id="cal:main" minHeight={320}>
+          <Defer tier={linked ? 0 : 2} id="cal:main" minHeight={320}>
             <div className="cal-main">
               <section className="cal-ready" aria-labelledby="h-ready">
                 <h2 className="sec-h sec-h--page" id="h-ready">
                   <span>Ready to schedule · {ready.length}</span>
                   <span>gated, not on the calendar</span>
                 </h2>
+                {linked && !ready.some((r) => r.project_id === linked) ? (
+                  <p className="cal-note" role="status">
+                    {slots.some((s) => s.project_id === linked && (s.status === "scheduled" || s.status === "publishing"))
+                      ? `${linked} is already on the calendar; find it under Every slot below.`
+                      : `${linked} is not ready to schedule: it needs a render that the publish gate allows.`}
+                  </p>
+                ) : null}
                 {ready.length ? (
                   <ul className="ready-list">
                     {ready.map((r) => (
-                      <ReadyItem key={r.project_id} r={r} wired={wired} ucName={ucName(r.use_case_id)} />
+                      <ReadyItem key={r.project_id} r={r} wired={wired} slots={slots} linked={r.project_id === linked} ucName={ucName(r.use_case_id)} />
                     ))}
                   </ul>
                 ) : (
@@ -245,12 +270,26 @@ export function CalendarPage() {
               </h2>
               {slots.length ? (
                 <>
+                  {attention.length ? <h3 className="slot-group">Needs your decision</h3> : null}
+                  <ul className="slot-list">
+                    {attention.map((s) => (
+                      <SlotRow
+                        key={s.id}
+                        s={s}
+                        slots={slots}
+                        channel={chById.get(s.channel_id)}
+                        pubs={pubs}
+                        testid={newest.get(s.project_id)?.id === s.id}
+                      />
+                    ))}
+                  </ul>
                   {upcoming.length ? <h3 className="slot-group">Upcoming</h3> : null}
                   <ul className="slot-list">
                     {upcoming.map((s) => (
                       <SlotRow
                         key={s.id}
                         s={s}
+                        slots={slots}
                         channel={chById.get(s.channel_id)}
                         pubs={pubs}
                         testid={newest.get(s.project_id)?.id === s.id}
@@ -263,6 +302,7 @@ export function CalendarPage() {
                       <SlotRow
                         key={s.id}
                         s={s}
+                        slots={slots}
                         channel={chById.get(s.channel_id)}
                         pubs={pubs}
                         testid={newest.get(s.project_id)?.id === s.id}
@@ -279,7 +319,8 @@ export function CalendarPage() {
           </Defer>
           <p className="page__foot">
             Times are local ({Intl.DateTimeFormat().resolvedOptions().timeZone}). Scheduled slots can move or be
-            cancelled until the tick picks them up; a failed slot keeps the job's error verbatim.
+            cancelled until the tick picks them up; a failed slot keeps the job's error verbatim. A slot more than an
+            hour late is marked missed instead of publishing, and a re-rendered video waits for you to reschedule it.
           </p>
         </>
       )}
@@ -287,16 +328,104 @@ export function CalendarPage() {
   );
 }
 
+// ------------------------------------------------------------------ confirm
+
+/** Native <dialog> confirm (focus trap, Esc, backdrop) for the two actions that cannot be taken back. */
+function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmLabel,
+  keepLabel,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  confirmLabel: string;
+  keepLabel: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const tid = useId();
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (open && !d.open) d.showModal();
+    else if (!open && d.open) d.close();
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      className="cal-confirm"
+      aria-labelledby={tid}
+      onClose={onClose}
+    >
+      <h2 id={tid} className="cal-confirm__t">
+        {title}
+      </h2>
+      <p className="cal-confirm__b">{body}</p>
+      <div className="cal-confirm__acts">
+        <button type="button" className="btn btn--sm" onClick={() => ref.current?.close()}>
+          {keepLabel}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          data-testid="confirm-yes"
+          onClick={() => {
+            ref.current?.close();
+            onConfirm();
+          }}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+/** Focus a form field (or the form-level message) after the error has rendered with aria-invalid. */
+const focusId = (id: string) => window.setTimeout(() => document.getElementById(id)?.focus(), 0);
+
 // ------------------------------------------------------------------ ready
 
-function ReadyItem({ r, wired, ucName }: { r: ReadyVideo; wired: Channel[]; ucName: string }) {
+function ReadyItem({
+  r,
+  wired,
+  slots,
+  linked,
+  ucName,
+}: {
+  r: ReadyVideo;
+  wired: Channel[];
+  slots: CalendarSlot[];
+  linked: boolean;
+  ucName: string;
+}) {
   const qc = useQueryClient();
   const [channel, setChannel] = useState(wired[0]?.id ?? "");
   const [when, setWhen] = useState(() => toLocalInput(nextFullHour(new Date())));
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [issue, setIssue] = useState<FieldIssue | null>(null);
+  const [confirmNow, setConfirmNow] = useState(false);
+  const li = useRef<HTMLLIElement>(null);
+  const base = `rd-${r.project_id}`;
+  const ids = { channel: `${base}-ch`, when: `${base}-when`, form: `${base}-err` } as const;
+  const fail = (i: FieldIssue) => {
+    setIssue(i);
+    focusId(i.field === "form" ? ids.form : ids[i.field]);
+  };
+  // deep link (/calendar?project=<id>): bring this item into view, mark it and park focus on it
+  useEffect(() => {
+    if (!linked) return;
+    li.current?.scrollIntoView({ block: "center" });
+    li.current?.focus({ preventScroll: true });
+  }, [linked]);
   const done = () => {
     void qc.invalidateQueries({ queryKey: qk.calendar });
     void qc.invalidateQueries({ queryKey: qk.projects });
@@ -309,8 +438,10 @@ function ReadyItem({ r, wired, ucName }: { r: ReadyVideo; wired: Channel[]; ucNa
       // this item leaves the ready list: keep focus on the slot it became
       window.setTimeout(() => document.getElementById("h-slots")?.focus(), 0);
     },
+    onError: (e) => fail(mapScheduleError(serverError(e))),
   });
   const chosen = channel || wired[0]?.id || "";
+  const check = checkSchedule({ when, channelId: chosen, now: new Date(), slots });
   const body = (publish_at: string): ScheduleBody => ({
     project_id: r.project_id,
     channel_id: chosen,
@@ -321,17 +452,27 @@ function ReadyItem({ r, wired, ucName }: { r: ReadyVideo; wired: Channel[]; ucNa
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const at = fromLocalInput(when);
-    if (!at) {
-      setLocalError("Pick a date and time.");
+    if (check.error || !check.at) {
+      if (check.error) fail(check.error);
       return;
     }
-    setLocalError(null);
-    schedule.mutate(body(at));
+    setIssue(null);
+    schedule.mutate(body(check.at));
   };
-  const base = `rd-${r.project_id}`;
+  const invalid = (f: FieldIssue["field"]) => (issue?.field === f ? true : undefined);
+  const described = (f: FieldIssue["field"]) => {
+    const parts = [issue?.field === f ? ids.form : "", f === "when" && check.warnings.length ? `${base}-warn` : ""].filter(Boolean);
+    return parts.length ? parts.join(" ") : undefined;
+  };
   return (
-    <li className="ready" data-testid={`ready-${r.project_id}`} style={artStyle(identVar(r.use_case_id))}>
+    <li
+      ref={li}
+      id={base}
+      tabIndex={-1}
+      className={`ready${linked ? " is-linked" : ""}`}
+      data-testid={`ready-${r.project_id}`}
+      style={artStyle(identVar(r.use_case_id))}
+    >
       <div className="ready__h">
         <Link to="/studio/$projectId" params={{ projectId: r.project_id }} className="ready__t">
           {r.title}
@@ -347,10 +488,20 @@ function ReadyItem({ r, wired, ucName }: { r: ReadyVideo; wired: Channel[]; ucNa
           <span>rendered {relTime(r.rendered_at)}</span>
         </span>
       </div>
-      <form className="ready__form" onSubmit={submit}>
+      <form className="ready__form" onSubmit={submit} noValidate>
         <label className="fld">
           <span className="fld__k">Channel</span>
-          <select id={`${base}-ch`} value={chosen} onChange={(e) => setChannel(e.target.value)} disabled={!wired.length}>
+          <select
+            id={ids.channel}
+            value={chosen}
+            onChange={(e) => {
+              setChannel(e.target.value);
+              setIssue(null);
+            }}
+            disabled={!wired.length}
+            aria-invalid={invalid("channel")}
+            aria-describedby={described("channel")}
+          >
             {wired.length ? (
               wired.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -364,7 +515,18 @@ function ReadyItem({ r, wired, ucName }: { r: ReadyVideo; wired: Channel[]; ucNa
         </label>
         <label className="fld">
           <span className="fld__k">Date and time</span>
-          <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} required />
+          <input
+            id={ids.when}
+            type="datetime-local"
+            value={when}
+            min={check.min}
+            onChange={(e) => {
+              setWhen(e.target.value);
+              setIssue(null);
+            }}
+            aria-invalid={invalid("when")}
+            aria-describedby={described("when")}
+          />
         </label>
         <details className="ready__opt">
           <summary>Title, description, tags (optional)</summary>
@@ -390,19 +552,35 @@ function ReadyItem({ r, wired, ucName }: { r: ReadyVideo; wired: Channel[]; ucNa
             className="btn btn--primary btn--sm"
             data-testid={`publish-now-${r.project_id}`}
             disabled={!wired.length || schedule.isPending}
-            onClick={() => schedule.mutate(body(new Date().toISOString()))}
+            onClick={() => setConfirmNow(true)}
           >
             Publish now <Arrow />
           </button>
         </div>
       </form>
-      {localError ? <p className="cal-err" role="alert">{localError}</p> : null}
-      {schedule.isError ? (
-        <p className="cal-err" role="alert">
-          <span className="label">Server</span> {serverError(schedule.error)}
+      {check.warnings.length ? (
+        <p id={`${base}-warn`} className="cal-warn" aria-live="polite">
+          {check.warnings.map((w) => w.message).join(" ")}
+        </p>
+      ) : null}
+      {issue ? (
+        <p id={ids.form} tabIndex={-1} className="cal-err" role="alert">
+          {issue.message}
         </p>
       ) : null}
       {!wired.length ? <p className="cal-err">No channel is wired, so nothing can be scheduled.</p> : null}
+      <ConfirmDialog
+        open={confirmNow}
+        title={`Publish "${r.title}" now?`}
+        body={`${r.title} uploads right away to ${wired.find((c) => c.id === chosen)?.name ?? "the channel"} as a private video. You make it public on the platform yourself.`}
+        confirmLabel="Publish now"
+        keepLabel="Not yet"
+        onClose={() => setConfirmNow(false)}
+        onConfirm={() => {
+          setIssue(null);
+          schedule.mutate(body(new Date().toISOString()));
+        }}
+      />
     </li>
   );
 }
@@ -489,23 +667,45 @@ function WeekView({
 
 function SlotRow({
   s,
+  slots,
   channel,
   pubs,
   testid,
 }: {
   s: CalendarSlot;
+  slots: CalendarSlot[];
   channel: Channel | undefined;
   pubs: MetricsPublication[];
   testid: boolean;
 }) {
   const qc = useQueryClient();
   const st = slotStatus(s.status);
+  const drift = slotDrift(s);
+  const missedAt = (s as { missed_at?: string | null }).missed_at ?? null;
   const [when, setWhen] = useState(() => toLocalInput(new Date(s.publish_at)));
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [issue, setIssue] = useState<FieldIssue | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const inputId = `mv-${s.id}`;
+  const errId = `mv-${s.id}-err`;
+  const fail = (i: FieldIssue) => {
+    setIssue(i);
+    focusId(i.field === "form" ? errId : inputId);
+  };
   const done = () => void qc.invalidateQueries({ queryKey: qk.calendar });
-  const move = useMutation({ mutationFn: (at: string) => api.reschedule(s.id, at), onSuccess: done });
-  const cancel = useMutation({ mutationFn: () => api.cancelSlot(s.id), onSuccess: done });
-  const err = move.error ?? cancel.error;
+  const move = useMutation({
+    mutationFn: (at: string) => api.reschedule(s.id, at),
+    onSuccess: done,
+    onError: (e) => fail(mapScheduleError(serverError(e))),
+  });
+  const cancel = useMutation({
+    mutationFn: () => api.cancelSlot(s.id),
+    onSuccess: done,
+    onError: (e) => fail(mapScheduleError(serverError(e))),
+  });
+  const check = checkSchedule({ when, channelId: s.channel_id, now: new Date(), slots, ignoreSlotId: s.id });
+  const title = s.title ?? s.project?.title ?? s.project_id;
+  const actionable = st === "scheduled" || st === "missed";
+  const moveLabel = st === "missed" || drift ? "Reschedule" : "Move";
   return (
     <li className={`slot slot--${st}`} data-testid={testid ? `slot-${s.project_id}` : undefined} style={artStyle(identVar(s.project?.use_case_id ?? ""))}>
       <span className="slot__when">
@@ -515,48 +715,81 @@ function SlotRow({
       <SlotState status={st} />
       <span className="slot__what">
         <Link to="/studio/$projectId" params={{ projectId: s.project_id }} className="slot__t">
-          {s.title ?? s.project?.title ?? s.project_id}
+          {title}
         </Link>
         <span className="slot__m mono">
           {s.project_id} · {channel?.name ?? s.channel_id} · {SLOT_META[st].hint}
+          {st === "missed" && missedAt ? ` (found ${dateTimeLabel(missedAt)})` : ""}
         </span>
+        {drift ? (
+          <span className="slot__drift mono" data-testid={`drift-${s.id}`}>
+            <b>{DRIFT_META[drift].label}</b> {DRIFT_META[drift].hint}
+          </span>
+        ) : null}
       </span>
       <span className="slot__side">
         {st === "published" ? <Visibility slot={s} channel={channel} pubs={pubs} /> : null}
         {st === "failed" ? <span className="slot__err mono">{s.error ?? "no error text"}</span> : null}
-        {st === "scheduled" ? (
+        {actionable ? (
           <form
             className="slot__acts"
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
-              const at = fromLocalInput(when);
-              if (!at) {
-                setLocalError("Pick a date and time.");
+              if (check.error || !check.at) {
+                if (check.error) fail(check.error);
                 return;
               }
-              setLocalError(null);
-              move.mutate(at);
+              setIssue(null);
+              move.mutate(check.at);
             }}
           >
-            <label className="sr-only" htmlFor={`mv-${s.id}`}>
+            <label className="sr-only" htmlFor={inputId}>
               New date and time
             </label>
-            <input id={`mv-${s.id}`} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+            <input
+              id={inputId}
+              type="datetime-local"
+              value={when}
+              min={check.min}
+              onChange={(e) => {
+                setWhen(e.target.value);
+                setIssue(null);
+              }}
+              aria-invalid={issue && issue.field !== "form" ? true : undefined}
+              aria-describedby={issue ? errId : check.warnings.length ? `${inputId}-warn` : undefined}
+            />
             <button type="submit" className="btn btn--sm" disabled={move.isPending}>
-              {move.isPending ? "Moving" : "Move"}
+              {move.isPending ? "Moving" : moveLabel}
             </button>
-            <button type="button" className="btn btn--sm btn--ghost" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
+            <button type="button" className="btn btn--sm btn--ghost" disabled={cancel.isPending} onClick={() => setConfirmCancel(true)}>
               {cancel.isPending ? "Cancelling" : "Cancel slot"}
             </button>
           </form>
         ) : null}
       </span>
-      {localError ? <p className="cal-err slot__msg" role="alert">{localError}</p> : null}
-      {err ? (
-        <p className="cal-err slot__msg" role="alert">
-          <span className="label">Server</span> {serverError(err)}
+      {actionable && check.warnings.length && !issue ? (
+        <p id={`${inputId}-warn`} className="cal-warn slot__msg" aria-live="polite">
+          {check.warnings.map((w) => w.message).join(" ")}
         </p>
       ) : null}
+      {issue ? (
+        <p id={errId} tabIndex={-1} className="cal-err slot__msg" role="alert">
+          {issue.message}
+        </p>
+      ) : null}
+      <ConfirmDialog
+        open={confirmCancel}
+        title={`Cancel the slot for "${title}"?`}
+        body={`${title} comes off the calendar (${dateTimeLabel(s.publish_at)} on ${channel?.name ?? s.channel_id}); it returns to Ready to schedule if its render still passes the gate.`}
+        confirmLabel="Cancel slot"
+        keepLabel="Keep slot"
+        onClose={() => setConfirmCancel(false)}
+        onConfirm={() => {
+          setIssue(null);
+          cancel.mutate();
+        }}
+      />
     </li>
   );
 }

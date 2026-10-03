@@ -11,8 +11,12 @@
     "start": "pnpm --parallel --filter @statreel/server run \"/^(start|worker)$/\"",
     "typecheck": "tsc -b",
     "lint": "biome check .",
+    "lint:changed": "biome check --changed",
+    "lint:ratchet": "node scripts/biome-ratchet.mjs",
     "format": "biome format --write .",
     "test": "vitest run",
+    "test:scripts": "node --test \"scripts/*.test.mjs\"",
+    "check": "node scripts/check.mjs",
     "e2e": "cross-env LLM_MODE=replay AUDIO_MODE=replay PUBLISH_MODE=dry GEN_MODE=fake playwright test",
     "e2e:live": "cross-env LLM_MODE=live AUDIO_MODE=live PUBLISH_MODE=dry LLM_RECORD=1 AUDIO_RECORD=1 E2E_LIVE=1 playwright test"
   },

@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { FACT_KEY_MESSAGE, FACT_KEY_PATTERN } from "./fact-key";
 
 // ------------------------------------------------------------------ registry + use cases
 
@@ -85,7 +86,7 @@ export type HeatmapCell = z.infer<typeof HeatmapCellSchema>;
 export const HookShape = z.enum(["payoff-first", "contradiction", "scenario", "stake"]);
 export const SceneKind = z.enum(["hook", "context", "reveal", "payoff", "close", "endcard"]);
 
-export const FactKey = z.string().regex(/^[a-z0-9-]+:[^#\s]+#[a-z_]+$/, "fact ref must be '<row fact_key>#<column>'");
+export const FactKey = z.string().regex(FACT_KEY_PATTERN, FACT_KEY_MESSAGE);
 
 export const SceneSchema = z.object({
   id: z.string(),
@@ -95,9 +96,31 @@ export const SceneSchema = z.object({
   focus: z.array(z.string()).default([]),
 });
 
+/**
+ * EraAdjusted text limits, derived from the frame geometry (compositions/src/layout.ts, viz slopegraph)
+ * at the 28 px floor, Inter 0.56 em / JetBrains Mono 0.6 em / Barlow Condensed caps 0.46 em (+0.04 spacing):
+ *
+ *   row name        the highlight callout is one nowrap line of Barlow caps at 52 px (vertical) / 48 px
+ *                   (landscape): 869 / (52 * 0.50) = 33, 770 / (48 * 0.50) = 32 -> 32 chars.
+ *   metric labels   wrapped into one slope column, (869 / 2 - 12) = 422 px at 28 px Inter: 26 chars per
+ *                   line; two lines are the most the 564 px chart can give up (each costs 35 px) -> 48.
+ *   attribution     one nowrap line beside the AI-disclosure chip (~376 px + 16 gap): vertical
+ *                   (869 - 392) / (28 * 0.6 + 0.56) = 27 chars; landscape (1712 - 392) / 17.4 = 75 -> 76
+ *                   in the schema, 27 for a vertical short (checked in the refinement below).
+ *   method note     (not yet enforced, see the commit that lands it) vertical two lines of ~55,
+ *                   landscape one line of ~109.
+ */
+export const ERA_TEXT_LIMITS = {
+  rowNameMaxChars: 32,
+  metricLabelMaxChars: 48,
+  attributionMaxChars: 76,
+  attributionVerticalMaxChars: 27,
+} as const;
+const eraTooLong = (what: string, n: number) => `${what} is too long: shorten it - ${n} characters fit`;
+
 export const EraRowSchema = z.object({
   player_id: z.string(),
-  name: z.string(),
+  name: z.string().max(ERA_TEXT_LIMITS.rowNameMaxChars, eraTooLong("player name", ERA_TEXT_LIMITS.rowNameMaxChars)),
   raw_rank: z.number().int().positive(),
   adjusted_rank: z.number().int().positive(),
   raw_value: z.number(),
@@ -112,12 +135,12 @@ export const EraAdjustedPropsSchema = z.object({
   format: Format,
   hook_shape: HookShape,
   title: z.string().max(60),
-  metric_raw_label: z.string(),
-  metric_adjusted_label: z.string(),
+  metric_raw_label: z.string().max(ERA_TEXT_LIMITS.metricLabelMaxChars, eraTooLong("metric_raw_label", ERA_TEXT_LIMITS.metricLabelMaxChars)),
+  metric_adjusted_label: z.string().max(ERA_TEXT_LIMITS.metricLabelMaxChars, eraTooLong("metric_adjusted_label", ERA_TEXT_LIMITS.metricLabelMaxChars)),
   rows: z.array(EraRowSchema).min(3).max(12),
   highlight_player_id: z.string(),
   scenes: z.array(SceneSchema).min(3),
-  attribution: z.string().min(1),
+  attribution: z.string().min(1).max(ERA_TEXT_LIMITS.attributionMaxChars, eraTooLong("attribution", ERA_TEXT_LIMITS.attributionMaxChars)),
   method_note: z.string().min(1),
   show_safe_zone: z.boolean().default(false),
   /** filled by the audio stage; absent in a draft */
@@ -128,6 +151,8 @@ export const EraAdjustedPropsSchema = z.object({
     if (p.scenes.at(-1)?.kind !== "close") ctx.addIssue({ code: "custom", message: "a vertical short ends on a reframe close", path: ["scenes"] });
     if (p.scenes.some((s) => s.kind === "endcard")) ctx.addIssue({ code: "custom", message: "end cards are landscape-only", path: ["scenes"] });
   }
+  if (p.format === "vertical" && p.attribution.length > ERA_TEXT_LIMITS.attributionVerticalMaxChars)
+    ctx.addIssue({ code: "custom", message: eraTooLong("attribution (one line beside the AI-disclosure chip in a vertical short)", ERA_TEXT_LIMITS.attributionVerticalMaxChars), path: ["attribution"] });
   if (!p.rows.some((r) => r.player_id === p.highlight_player_id))
     ctx.addIssue({ code: "custom", message: "highlight_player_id must be one of rows", path: ["highlight_player_id"] });
 });
@@ -296,6 +321,7 @@ export type JobStatus = z.infer<typeof JobStatus>;
 
 export * from "./fixtures";
 
+export * from "./fact-key";
 export * from "./data-race";
 export * from "./generation-rules";
 export * from "./sha256";

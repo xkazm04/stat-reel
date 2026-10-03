@@ -6,6 +6,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
 import { useSources } from "../data";
 import { useConnectionState } from "../events";
+import { focusMain } from "../hooks/useNavFocus";
 import { Wordmark } from "./Wordmark";
 
 export const NAV_LINKS = [
@@ -49,7 +50,15 @@ export function Nav() {
 
   return (
     <header className="nav">
-      <a className="skip" href="#main">
+      {/* biome-ignore lint/a11y/useValidAnchor: a real in-page link (works without JS); the handler only upgrades it */}
+      <a
+        className="skip"
+        href="#main"
+        onClick={(e) => {
+          // #main is focusable only on demand; focus it here so the skip works without a hash in the URL
+          if (focusMain()) e.preventDefault();
+        }}
+      >
         Skip to content
       </a>
       <Link to="/" className="logo" aria-label="StatReel, front page">

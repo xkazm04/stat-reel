@@ -180,3 +180,75 @@ export function activeJob<T extends { status: string; created_at: string }>(jobs
 
 /** Percent string for a 0..1 job progress. */
 export const pct = (p: number | null | undefined): string => `${Math.round(Math.max(0, Math.min(1, p ?? 0)) * 100)} %`;
+
+// ---------------------------------------------------------------- sources: ethics facts
+
+/** Mirrors pipeline/statreel_ingest/config.py TERMS_MAX_AGE_DAYS (the registry lint's stale-terms threshold). */
+export const TERMS_MAX_AGE_DAYS = 180;
+/** Mirrors registry.py SHARE_OF_PUBLISHED / DEFAULT_INTERVAL_S (CLAUDE.md: <= 50 % of published; sources.yaml header: 1 request / 3 s when none). */
+export const SHARE_OF_PUBLISHED = 0.5;
+export const DEFAULT_INTERVAL_S = 3;
+
+export type PublishedRate = { requests: number; per_s: number; burst_per_s?: number | null; note?: string | null };
+
+const WINDOWS: [number, string][] = [
+  [86400, "day"],
+  [3600, "hour"],
+  [60, "min"],
+  [1, "s"],
+];
+const trim = (n: number): string => String(Number(n.toFixed(2)));
+const fmtInterval = (s: number): string => `1 request / ${trim(s)} s`;
+
+/** Seconds between requests to one host the client runs at: the slowest of the published limits, at <= 50 %. */
+export function effectiveIntervalS(rate: PublishedRate | null | undefined): number {
+  if (!rate || !(rate.requests > 0) || !(rate.per_s > 0)) return DEFAULT_INTERVAL_S;
+  const intervals = [rate.per_s / rate.requests];
+  if (rate.burst_per_s && rate.burst_per_s > 0) intervals.push(1 / rate.burst_per_s);
+  return Math.max(...intervals) / SHARE_OF_PUBLISHED;
+}
+
+/** The published limit as the provider states it ("60 / hour"), or null when none is published. */
+export function fmtPublishedRate(rate: PublishedRate | null | undefined): string | null {
+  if (!rate || !(rate.requests > 0) || !(rate.per_s > 0)) return null;
+  const w = WINDOWS.find(([s]) => s === rate.per_s);
+  const base = w ? `${rate.requests} / ${w[1]}` : `${rate.requests} / ${trim(rate.per_s)} s`;
+  return rate.burst_per_s ? `${base}, burst ${rate.burst_per_s} / s` : base;
+}
+
+/** What the Sources page shows in the Rate limit cell: published (or "none published") and the client's effective rate. */
+export function rateFacts(rate: PublishedRate | null | undefined): { published: string; effective: string; isDefault: boolean } {
+  const published = fmtPublishedRate(rate);
+  return published
+    ? { published, effective: `${fmtInterval(effectiveIntervalS(rate))} (<= 50 % of published)`, isDefault: false }
+    : { published: "none published", effective: `${fmtInterval(DEFAULT_INTERVAL_S)} (default)`, isDefault: true };
+}
+
+/** Whole days since a YYYY-MM-DD date (UTC); null when the date is missing or unparseable. */
+export function daysSince(date: string | null | undefined, today: Date = new Date()): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date ?? "");
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Math.floor((Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - t) / 86_400_000);
+}
+
+/** Terms review is due when terms were checked more than TERMS_MAX_AGE_DAYS ago (same rule as the ingest lint: strictly older). */
+export function termsReview(date: string | null | undefined, today: Date = new Date()): { days: number; due: boolean } | null {
+  const days = daysSince(date, today);
+  return days === null ? null : { days, due: days > TERMS_MAX_AGE_DAYS };
+}
+
+/** "1950–now"; null when the registry carries no coverage. */
+export function fmtCoverage(c: { from?: number | string | null; to?: number | string | null } | null | undefined): string | null {
+  if (!c || c.from === undefined || c.from === null) return null;
+  const to = c.to === undefined || c.to === null || c.to === "current" ? "now" : c.to;
+  return `${c.from}–${to}`;
+}
+
+/** Keep the sources matching the verdict filter ("all" keeps everything). */
+export function filterByVerdict<T extends { verdict: string }>(sources: T[], verdict: string): T[] {
+  return verdict === "all" ? sources : sources.filter((s) => s.verdict === verdict);
+}
+
+/** Only http(s) terms links are rendered as links. */
+export const safeHttpUrl = (u: string | null | undefined): string | null => (u && /^https?:\/\//i.test(u) ? u : null);

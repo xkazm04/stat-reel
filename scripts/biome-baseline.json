@@ -1,0 +1,29 @@
+{
+  "rules": {
+    "assist/source/organizeImports": 75,
+    "format": 208,
+    "lint/a11y/noAriaHiddenOnFocusable": 1,
+    "lint/a11y/noStaticElementInteractions": 1,
+    "lint/a11y/noSvgWithoutTitle": 1,
+    "lint/a11y/useFocusableInteractive": 22,
+    "lint/a11y/useKeyWithClickEvents": 1,
+    "lint/a11y/useSemanticElements": 46,
+    "lint/complexity/noCommaOperator": 3,
+    "lint/complexity/noImportantStyles": 14,
+    "lint/complexity/noUselessEscapeInRegex": 1,
+    "lint/complexity/useArrowFunction": 1,
+    "lint/complexity/useOptionalChain": 2,
+    "lint/correctness/noInnerDeclarations": 2,
+    "lint/correctness/noUnusedImports": 1,
+    "lint/correctness/noUnusedPrivateClassMembers": 2,
+    "lint/correctness/noUnusedVariables": 2,
+    "lint/style/noDescendingSpecificity": 79,
+    "lint/style/noNonNullAssertion": 110,
+    "lint/style/useConst": 11,
+    "lint/style/useExponentiationOperator": 4,
+    "lint/suspicious/noAssignInExpressions": 2,
+    "lint/suspicious/noDuplicateProperties": 2,
+    "lint/suspicious/noExplicitAny": 6,
+    "lint/suspicious/useIterableCallbackReturn": 1
+  }
+}

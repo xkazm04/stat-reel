@@ -2,8 +2,8 @@ import { existsSync } from "node:fs";
 import { sampleEraProps, sampleScript } from "@statreel/schemas";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { paths } from "./config";
-import { openDb } from "./db";
-import { ProjectService, matchesDisplayed, parseDisplayed } from "./projects";
+import { openDb, projectProps } from "./db";
+import { ProjectService, SCHEMA_VERSION, matchesDisplayed, parseDisplayed } from "./projects";
 import { Warehouse } from "./warehouse";
 
 describe.skipIf(!existsSync(paths.warehouse))("ProjectService", () => {
@@ -102,5 +102,84 @@ describe("displayed-figure matching (pure)", () => {
   it("still allows rounding", () => {
     expect(ok(17.118, "17.1")).toBe(true);
     expect(ok(17.118, "18")).toBe(false);
+  });
+});
+
+/** Validated reads need no warehouse: rows are written straight into project_props, the way an older build left them. */
+describe("validated props reads", () => {
+  const setup = () => {
+    const db = openDb(":memory:");
+    const svc = new ProjectService(db, {} as Warehouse, []);
+    const p = svc.create({ title: "t", use_case_id: "era-adjusted-rankings", sport: "F1", format: "vertical", mode: "monetized" });
+    const put = (version: number, props: unknown, schema_version = SCHEMA_VERSION) =>
+      db.insert(projectProps).values({ project_id: p.id, version, props_json: typeof props === "string" ? props : JSON.stringify(props), schema_version, created_by: "llm", created_at: "2026-10-01T00:00:00Z" }).run();
+    return { svc, p, put };
+  };
+
+  it("a valid row reads back parsed, with no invalid marker", () => {
+    const { svc, p, put } = setup();
+    put(1, sampleEraProps);
+    const r = svc.latestProps(p.id);
+    expect(r?.invalid).toBeUndefined();
+    expect(r?.props.rows).toHaveLength(6);
+    expect(r?.props.show_safe_zone).toBe(false);
+  });
+
+  it("a row that no longer validates reads back with invalid issues instead of a cast", () => {
+    const { svc, p, put } = setup();
+    put(1, { ...sampleEraProps, attribution: "a".repeat(200), rows: undefined });
+    const r = svc.latestProps(p.id);
+    expect(r?.version).toBe(1);
+    expect(r?.invalid?.issues.some((i) => /^rows:/.test(i))).toBe(true);
+    expect(r?.invalid?.issues.some((i) => /^attribution: .*shorten it - 76 characters fit/.test(i))).toBe(true);
+    // asking an invalid row for its props is the clear error, naming the version and the first issue
+    expect(() => r?.props).toThrow(/props v1 are not usable: .*(rows|attribution)/);
+    // and it is not serialised as if it were props
+    expect(Object.keys(JSON.parse(JSON.stringify(r)))).not.toContain("props");
+  });
+
+  it("malformed JSON is invalid, not a throw", () => {
+    const { svc, p, put } = setup();
+    put(1, "{not json");
+    expect(svc.latestProps(p.id)?.invalid?.issues[0]).toMatch(/props_json is not valid JSON/);
+  });
+
+  it("says which build wrote an old row that fails today's schema", () => {
+    const { svc, p, put } = setup();
+    put(1, { ...sampleEraProps, hook_shape: "did-you-know" }, "era-adjusted@0");
+    const inv = svc.latestProps(p.id)?.invalid;
+    expect(inv?.issues[0]).toBe("props written by era-adjusted@0, this build reads era-adjusted@1");
+    expect(inv?.written_by).toBe("era-adjusted@0");
+    expect(inv?.issues.some((i) => /hook_shape/.test(i))).toBe(true);
+  });
+
+  it("propsHistory validates every row and lists invalid ones without throwing", () => {
+    const { svc, p, put } = setup();
+    put(1, { nope: true });
+    put(2, sampleEraProps);
+    const h = svc.propsHistory(p.id);
+    expect(h.map((r) => [r.version, Boolean(r.invalid)])).toEqual([[2, false], [1, true]]);
+    expect(h.map(({ version, created_by, created_at }) => ({ version, created_by, created_at }))).toHaveLength(2);
+  });
+
+  it("attachTiming refuses an invalid latest row with the version and first issue, and stores nothing", () => {
+    const { svc, p, put } = setup();
+    put(1, { nope: true });
+    expect(() => svc.attachTiming(p.id, undefined)).toThrow(/props v1 are not usable/);
+    expect(svc.propsHistory(p.id)).toHaveLength(1);
+  });
+
+  it("attachTiming stores validated props as a new system version", () => {
+    const { svc, p, put } = setup();
+    put(1, sampleEraProps);
+    expect(svc.attachTiming(p.id, undefined)).toBe(2);
+    expect(svc.latestProps(p.id)?.created_by).toBe("system");
+  });
+
+  it("attachTiming rejects a malformed timing block instead of storing it", () => {
+    const { svc, p, put } = setup();
+    put(1, sampleEraProps);
+    expect(() => svc.attachTiming(p.id, { duration_s: -1 } as never)).toThrow(/timing for props v1 is not valid/);
+    expect(svc.propsHistory(p.id)).toHaveLength(1);
   });
 });

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BoardService } from "./board";
 import { openDb } from "./db";
 import { CaseIdeas, type NewCaseIdea, StyleLibrary, validateCaseIdea } from "./library";
@@ -15,6 +15,89 @@ const setup = () => {
 };
 const shot = (style: string, kase = "career-wins-race") => ({
   image: "items/a.png", width: 1080, height: 1920, title: `${style} on ${kase}`, use_case_id: kase, style: { id: style, name: style.toUpperCase() },
+});
+
+describe("Style library verdict precedence", () => {
+  // now() has millisecond resolution: pin a clock that moves one second per call so "newest" is unambiguous
+  const ticking = () => { let t = Date.parse("2026-10-01T00:00:00Z"); vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(t); return () => { t += 1000; vi.setSystemTime(t); }; };
+  afterEach(() => vi.useRealTimers());
+  const items = (b: BoardService) => b.list({ status: "all" });
+
+  it("reads a 1:1 tie as open, not accepted", () => {
+    const { board, styles } = setup();
+    board.decide(board.create(shot("ink")).id, "accept");
+    board.decide(board.create(shot("ink", "k2")).id, "reject_style");
+    expect(styles.list(items(board))[0]).toMatchObject({ verdict: "open", status: "open", accepts: 1, style_rejects: 1 });
+  });
+
+  it("counts reject_both as a style reject, with separate additive counts", () => {
+    const { board, styles } = setup();
+    board.decide(board.create(shot("ink")).id, "reject_both");
+    board.decide(board.create(shot("ink", "k2")).id, "reject_style");
+    expect(styles.list(items(board))[0]).toMatchObject({ verdict: "rejected", reject_both: 1, reject_style: 1, style_rejects: 2 });
+  });
+
+  it("flags at_risk when the newest decision is a reject that has not flipped the verdict", () => {
+    const tick = ticking();
+    const { board, styles } = setup();
+    board.decide(board.create(shot("ink")).id, "accept");
+    tick();
+    board.decide(board.create(shot("ink", "k2")).id, "accept");
+    tick();
+    board.decide(board.create(shot("ink", "k3")).id, "reject_style");
+    expect(styles.list(items(board))[0]).toMatchObject({ verdict: "accepted", accepts: 2, at_risk: true });
+  });
+
+  it("has no at_risk once rejected, or when the newest decision is an accept", () => {
+    const tick = ticking();
+    const { board, styles } = setup();
+    board.decide(board.create(shot("neon")).id, "reject_style");
+    tick();
+    board.decide(board.create(shot("ink")).id, "reject_style");
+    tick();
+    board.decide(board.create(shot("ink", "k2")).id, "accept");
+    const list = styles.list(items(board));
+    expect(list.find((s) => s.id === "neon")!.at_risk).toBeUndefined();
+    expect(list.find((s) => s.id === "ink")!.at_risk).toBeUndefined();
+  });
+
+  it("falls back to another hero when the stored hero is archived", () => {
+    const { board, styles } = setup();
+    const a = board.create(shot("ink"));
+    const b = board.create(shot("ink", "k2"));
+    styles.update("ink", items(board), { hero_item_id: a.id });
+    board.archive([a.id], "off brief");
+    expect(styles.list(items(board))[0]?.hero_item_id).toBe(b.id);
+  });
+
+  it("never falls back to an archived accepted item", () => {
+    const { board, styles } = setup();
+    const a = board.create(shot("ink"));
+    const b = board.create(shot("ink", "k2"));
+    board.decide(a.id, "accept");
+    board.archive([a.id], "off brief");
+    expect(styles.list(items(board))[0]?.hero_item_id).toBe(b.id);
+  });
+
+  it("takes name and notes from the newest item", () => {
+    const tick = ticking();
+    const { board, styles } = setup();
+    board.create({ ...shot("ink"), style: { id: "ink", name: "Old", notes: "old notes" } });
+    tick();
+    board.create({ ...shot("ink", "k2"), style: { id: "ink", name: "New", notes: "new notes" } });
+    expect(styles.list(items(board))[0]).toMatchObject({ name: "New", notes: "new notes" });
+  });
+
+  it("lets locked and retired survive a verdict flip", () => {
+    const { board, styles } = setup();
+    board.decide(board.create(shot("ink")).id, "accept");
+    styles.update("ink", items(board), { status: "locked" });
+    board.decide(board.create(shot("ink", "k2")).id, "reject_style");
+    board.decide(board.create(shot("ink", "k3")).id, "reject_style");
+    expect(styles.list(items(board))[0]).toMatchObject({ verdict: "rejected", status: "locked" });
+    styles.update("ink", items(board), { status: "retired" });
+    expect(styles.list(items(board))[0]).toMatchObject({ verdict: "rejected", status: "retired" });
+  });
 });
 
 describe("Style library (verdicts from the gate + owner management)", () => {
@@ -131,5 +214,29 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(cases.feedback().map((x) => [x.id, x.decision])).toEqual([[a.id, "reject_short"], [b.id, "accept"]]);
     expect(cases.list().map((x) => x.id)).not.toContain(z.id);
     expect(cases.list({ status: "all" }).map((x) => x.id)).toContain(z.id);
+  });
+
+  it("keeps the owner's decision note when archiving; stores the reason only when there is none", () => {
+    const { cases } = setup();
+    const a = cases.decide(cases.create(idea).id, "reject_short", "only five years");
+    const b = cases.create({ ...idea, title: "undecided" });
+    cases.archive([a.id, b.id], "duplicate run");
+    expect(cases.get(a.id)).toMatchObject({ status: "archived", decision: "reject_short", note: "only five years" });
+    expect(cases.get(b.id)).toMatchObject({ status: "archived", note: "duplicate run" });
+  });
+
+  it("refuses to decide an archived idea", () => {
+    const { cases } = setup();
+    const a = cases.create(idea);
+    cases.archive([a.id], "off");
+    expect(() => cases.decide(a.id, "accept")).toThrow(/archived/);
+    expect(cases.get(a.id)?.status).toBe("archived");
+  });
+
+  it("feedback(since) is exclusive of the boundary", () => {
+    const { cases } = setup();
+    const a = cases.decide(cases.create(idea).id, "accept");
+    expect(cases.feedback(a.decided_at as string)).toEqual([]);
+    expect(cases.feedback("1970-01-01T00:00:00.000Z").map((x) => x.id)).toEqual([a.id]);
   });
 });

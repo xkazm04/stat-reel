@@ -4,13 +4,20 @@ import {
   activeJob,
   bestCells,
   biggestMovers,
+  effectiveIntervalS,
+  filterByVerdict,
+  fmtCoverage,
+  fmtPublishedRate,
   fmtDuration,
   fmtValue,
   neverFetchedFor,
+  rateFacts,
+  safeHttpUrl,
   resumeCandidate,
   rundownOrder,
   sparkPoints,
   splitName,
+  termsReview,
   trendSummary,
   verdictCounts,
 } from "./display";
@@ -115,5 +122,49 @@ describe("charts and rundown", () => {
       ])?.created_at,
     ).toBe("1");
     expect(activeJob([{ status: "failed", created_at: "1" }])).toBeNull();
+  });
+});
+
+describe("sources ethics facts", () => {
+  const day = (iso: string) => new Date(`${iso}T12:00:00Z`);
+  it("shows the published limit and the client's half rate", () => {
+    expect(rateFacts({ requests: 60, per_s: 3600 })).toEqual({
+      published: "60 / hour",
+      effective: "1 request / 120 s (<= 50 % of published)",
+      isDefault: false,
+    });
+    expect(fmtPublishedRate({ requests: 30, per_s: 60, burst_per_s: 3 })).toBe("30 / min, burst 3 / s");
+    expect(fmtPublishedRate({ requests: 5, per_s: 7 })).toBe("5 / 7 s");
+  });
+  it("lets a burst limit slow the client when it is the slower one", () => {
+    // 30/min = 2 s, burst 3/s = 0.33 s -> 2 s / 0.5 = 4 s
+    expect(effectiveIntervalS({ requests: 30, per_s: 60, burst_per_s: 3 })).toBe(4);
+    expect(effectiveIntervalS({ requests: 500, per_s: 3600, burst_per_s: 4 })).toBeCloseTo(14.4);
+    expect(effectiveIntervalS({ requests: 1, per_s: 1, burst_per_s: 0.1 })).toBe(20);
+  });
+  it("falls back to the documented default when no limit is published", () => {
+    expect(rateFacts(null)).toEqual({ published: "none published", effective: "1 request / 3 s (default)", isDefault: true });
+    expect(effectiveIntervalS(undefined)).toBe(3);
+  });
+  it("flags terms older than 180 days, strictly like the ingest lint", () => {
+    expect(termsReview("2026-04-07", day("2026-10-04"))).toEqual({ days: 180, due: false });
+    expect(termsReview("2026-04-06", day("2026-10-04"))).toEqual({ days: 181, due: true });
+    expect(termsReview("2026-09-29T00:00:00.000Z", day("2026-10-04"))).toEqual({ days: 5, due: false });
+    expect(termsReview(undefined)).toBeNull();
+    expect(termsReview("soon")).toBeNull();
+  });
+  it("formats coverage and keeps only the missing ones null", () => {
+    expect(fmtCoverage({ from: 1950, to: "current" })).toBe("1950–now");
+    expect(fmtCoverage({ from: 1950, to: 2025 })).toBe("1950–2025");
+    expect(fmtCoverage(null)).toBeNull();
+    expect(fmtCoverage({})).toBeNull();
+  });
+  it("filters by verdict and only links http(s) terms", () => {
+    const rows = [{ verdict: "legal" }, { verdict: "avoid" }, { verdict: "legal" }];
+    expect(filterByVerdict(rows, "all")).toHaveLength(3);
+    expect(filterByVerdict(rows, "avoid")).toHaveLength(1);
+    expect(safeHttpUrl("https://a.example/t")).toBe("https://a.example/t");
+    expect(safeHttpUrl("javascript:alert(1)")).toBeNull();
+    expect(safeHttpUrl(undefined)).toBeNull();
   });
 });

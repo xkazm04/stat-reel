@@ -140,6 +140,8 @@ export const schedule = sqliteTable("schedule", {
   publication_id: text("publication_id"),
   error: text("error"),
   created_at: text("created_at").notNull(),
+  /** When the tick found the slot overdue past the missed-run window (calendar.ts); null otherwise. */
+  missed_at: text("missed_at"),
 });
 export const boardItems = sqliteTable("board_items", {
   id: text("id").primaryKey(),
@@ -302,7 +304,7 @@ create table if not exists channels (id text primary key, platform text not null
   created_at text not null);
 create table if not exists schedule (id text primary key, project_id text not null, render_id text not null, channel_id text not null,
   publish_at text not null, status text not null, title text, description text, tags_json text, job_id text, publication_id text,
-  error text, created_at text not null);
+  error text, created_at text not null, missed_at text);
 create table if not exists board_items (id text primary key, image text not null, video text, duration_s real, width integer, height integer, title text not null,
   summary text, use_case_id text, proposed_case_json text, style_json text, source_json text, status text not null, decision text,
   note text, decided_at text, created_at text not null);
@@ -348,6 +350,7 @@ export function openDb(file: string): Db {
     const cols = (sqlite.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes(column)) sqlite.exec(`alter table ${table} add column ${column} ${type}`);
   };
+  addColumn("schedule", "missed_at", "text");
   addColumn("board_items", "video", "text");
   addColumn("board_items", "duration_s", "real");
   addColumn("board_items", "case_idea_id", "text");

@@ -69,7 +69,8 @@
             "type": "string",
             "minLength": 1
           },
-          "minItems": 2
+          "minItems": 2,
+          "maxItems": 120
         },
         "entities": {
           "type": "array",
@@ -91,6 +92,7 @@
                   "type": "string",
                   "minLength": 1
                 },
+                "maxItems": 6,
                 "default": []
               },
               "color": {
@@ -147,7 +149,8 @@
                     }
                   ]
                 },
-                "minItems": 2
+                "minItems": 2,
+                "maxItems": 120
               },
               "value_ref": {
                 "type": "string",
@@ -242,6 +245,7 @@
             ],
             "additionalProperties": false
           },
+          "maxItems": 12,
           "default": []
         },
         "spotlight": {

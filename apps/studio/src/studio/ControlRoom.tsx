@@ -147,7 +147,7 @@ export function ControlRoom() {
             </span>
           </button>
           {schedulable ? (
-            <Link to="/calendar" className="btn btn--sm btn--primary stagebar__cal">
+            <Link to="/calendar" search={{ project: pid }} className="btn btn--sm btn--primary stagebar__cal">
               Schedule in Calendar <Arrow />
             </Link>
           ) : detail.publications.length ? (

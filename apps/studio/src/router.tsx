@@ -15,8 +15,10 @@ import {
 import { useEffect, useRef } from "react";
 import { api, qk } from "./api";
 import { parseBoardSearch } from "./board/search";
+import { parseCalendarSearch } from "./calendar";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
+import { useNavFocus } from "./hooks/useNavFocus";
 import { WipeProvider } from "./components/ui";
 import { boardQuery, lineTopicsQuery } from "./workQuery";
 import { calendarQuery, heatmapQuery, heatmapTopicsQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
@@ -46,6 +48,7 @@ const StudioLayout = lazyRouteComponent(() => import("./studio/StudioLayout"), "
 const FrontPhotoFinish = lazyRouteComponent(() => import("./routes/FrontPhotoFinish"), "FrontPhotoFinish");
 
 function RootLayout() {
+  useNavFocus();
   return (
     <WipeProvider>
       <Nav />
@@ -189,6 +192,7 @@ const publishRoute = createRoute({
 const calendarRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/calendar",
+  validateSearch: parseCalendarSearch, // ?project=<id> deep-links a ready video (ControlRoom)
   component: CalendarPage,
   loader: () => warm(calendarQuery, metricsQuery, heatmapQuery),
 });

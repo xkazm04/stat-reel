@@ -718,3 +718,14 @@ td.row__next--blocked {
     padding-bottom: 10px;
   }
 }
+
+/* ── Sources: ethics facts (rate limit, terms link, terms review due) ── */
+.tbl--sources .terms-due {
+  color: var(--status-ask);
+  font-weight: 600;
+}
+.tbl--sources .terms-link {
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
