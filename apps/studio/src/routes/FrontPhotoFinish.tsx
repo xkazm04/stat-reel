@@ -364,7 +364,8 @@ function Frame({
                   <>
                     <b className="num">{sc.total}</b> project{sc.total === 1 ? "" : "s"},{" "}
                     <b className="num">{sc.published}</b> published, <b className="num">{sc.refused}</b> the gate
-                    refused, <b className="num">{sc.notGated}</b> not gated yet
+                    refused, <b className="num">{sc.gated}</b> cleared the gate, <b className="num">{sc.notGated}</b> not
+                    gated yet
                   </>
                 ) : projects.isLoading ? (
                   "Reading the rundown."

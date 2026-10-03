@@ -5,6 +5,7 @@
  */
 import type { LicenseClass, Mode } from "@statreel/schemas";
 import { SPORTS } from "./logic";
+import { bucketCounts, type ProjectBucketCounts } from "./projectState";
 
 const WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
 /** "Ten" for 10; digits above twelve. */
@@ -18,20 +19,13 @@ export function acrossCount(sources: { verdict: string }[], mode: Mode): number 
     .length;
 }
 
-/** Studio counts from project statuses: rendered-but-not-gated means the gate refused the render. */
-export function studioCounts(projects: { status: string }[]): {
-  total: number;
-  published: number;
-  refused: number;
-  notGated: number;
-} {
-  const n = (f: (s: string) => boolean) => projects.filter((p) => f(p.status)).length;
-  return {
-    total: projects.length,
-    published: n((s) => s === "published"),
-    refused: n((s) => s === "rendered"),
-    notGated: n((s) => s === "idea" || s === "data-ready" || s === "scripted"),
-  };
+/**
+ * Studio counts from project statuses (the buckets of projectState.ts, which partition the
+ * projects: published + refused + gated + notGated = total). Rendered-but-not-gated means the gate
+ * refused the render; gated means the gate allowed it and the private upload is left.
+ */
+export function studioCounts(projects: { status: string }[]): ProjectBucketCounts {
+  return bucketCounts(projects);
 }
 
 export const REG_GROUPS = [...SPORTS, "all"] as const;
