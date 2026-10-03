@@ -94,3 +94,7 @@ Not driven by builders; the Director only.
 - Real data, honest empty states, measured numbers over claims.
 
 ## Skill improvement log
+- 2026-10-04 (pass 1, auto gate): reserve a live sibling's whole unmerged BRANCH file list (`git diff --name-only main...<branch>`), not just its dirty files - only the dirty list was reserved at first, and 5 files collided before it was caught.
+- 2026-10-04: builders editing server files restart the owner's `pnpm dev` (tsx watch) - any in-flight render/LLM job dies; check `netstat` for 8787 before a wave and say so; e2e must run on E2E_API_PORT/E2E_STUDIO_PORT next to it.
+- 2026-10-04: one builder still ran `git stash` despite the forbidden list - keep the list, and re-verify `git status` after any builder reports a stash.
+- 2026-10-04: auto gate + rolling lots (start the next lot as soon as one finishes, <=5 concurrent, disjoint write sets) kept 22 contexts moving in one session; scouts on `sonnet` were accurate enough, with every load-bearing claim spot-checked before dispatch.
