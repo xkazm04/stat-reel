@@ -69,8 +69,9 @@ test("accepting one variant archives the other two, undo restores them, rejectin
   await page.goto("/board");
   await page.getByTestId(`board-item-${v2}`).click();
   await page.getByTestId("accept").click();
-  await expect(page.getByTestId("undo-decision")).toBeVisible();
   await page.keyboard.press("Escape");
+  // the Board is pending-first: the accepted design and its archived siblings leave the grid
+  await expect(page.getByTestId(`board-item-${v2}`)).toBeHidden();
   await expect(page.getByTestId(`board-item-${v1}`)).toBeHidden();
   await expect(page.getByTestId(`board-item-${v3}`)).toBeHidden();
   const archived = await (await request.get(`${API}/api/board?status=archived`)).json();
@@ -85,11 +86,14 @@ test("accepting one variant archives the other two, undo restores them, rejectin
   await expect(page.getByTestId(`job-detail-${caseId}`)).toContainText(/new source/i);
   await expect(page.getByTestId(`job-sources-${caseId}`)).toHaveAttribute("href", "/sources");
 
-  // undo the accept: both siblings are back
+  // undo the accept from the accepted design's gate: both siblings are back
   await page.goto("/board");
+  await page.getByTestId("board-filter-accepted").click();
   await page.getByTestId(`board-item-${v2}`).click();
   await page.getByTestId("undo-decision").click();
+  await expect.poll(async () => (await (await request.get(`${API}/api/board/${v2}`)).json()).decision).toBeNull();
   await page.keyboard.press("Escape");
+  await page.getByTestId("board-filter-pending").click();
   await expect(page.getByTestId(`board-item-${v1}`)).toBeVisible();
   await expect(page.getByTestId(`board-item-${v3}`)).toBeVisible();
 
