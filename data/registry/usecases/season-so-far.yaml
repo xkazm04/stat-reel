@@ -21,5 +21,7 @@ duration_s:
   min: 30
   max: 60
 props_schema: null
-query_templates: []
+query_templates:
+- >-
+  season_so_far_leader_by_round: select season, round, race_date, display_name, points_cum, wins_cum, gap_to_leader, fact_key from llm.f1_season_standings_by_round where season = 2026 and rank <= 5 order by round, rank  -- latest round of the season = is_final_round
 notes: null

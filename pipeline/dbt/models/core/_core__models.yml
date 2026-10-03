@@ -31,3 +31,10 @@ models:
     columns:
       - name: wins_cum
         data_tests: [not_null]
+  - name: season_standings_by_round
+    data_tests:
+      - dbt_utils_free_unique_combination:
+          columns: [season, round, player_id]
+    columns:
+      - name: points_cum
+        data_tests: [not_null]

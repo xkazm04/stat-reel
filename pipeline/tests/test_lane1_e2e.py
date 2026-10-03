@@ -297,3 +297,56 @@ def test_driver_race_cumulative_rank_is_unique_per_race_and_tied_flags_ties(repl
         select 1 from llm.f1_driver_race_cumulative b where b.race_id = a.race_id and b.wins_cum = a.wins_cum and b.player_id <> a.player_id)""").fetchone()[0] == 0
     unique, total = con.execute("select count(distinct fact_key), count(*) from llm.f1_driver_race_cumulative").fetchone()
     assert unique == total
+
+
+# --------------------------------------------------------------------------- llm.f1_season_standings_by_round
+
+
+def test_standings_by_round_reconcile_with_official_championship_points(replay_run):
+    """After the final round, points_cum equals f1db's championship_points - for every season without
+    dropped scores (before 1991 only a best-N subset counted, which this view deliberately does not apply)."""
+    con = replay_run["con"]
+    seasons = [r[0] for r in con.execute("select distinct season from llm.f1_season_standings_by_round where not drops_apply order by 1").fetchall()]
+    assert {2008, 2024, 2025, 2026} <= set(seasons)
+    mismatches = con.execute("""
+        with mine as (select season, player_id, points_cum from llm.f1_season_standings_by_round where is_final_round and not drops_apply),
+             official as (select season, driver_id as player_id, championship_points from staging_f1db.stg_f1db__season_driver_standings)
+        select coalesce(m.season, o.season), coalesce(m.player_id, o.player_id), m.points_cum, o.championship_points
+        from mine m full join official o on o.season = m.season and o.player_id = m.player_id
+        where coalesce(m.season, o.season) in (select season from mine)
+          and coalesce(m.points_cum, 0) <> coalesce(o.championship_points, 0)""").fetchall()
+    assert mismatches == []
+
+
+def test_standings_by_round_final_rank_matches_official_position_and_includes_sprints(replay_run):
+    """Compared where points are not tied: the documented tie-break stops at Grand Prix finishes down to 8th, so
+    a points tie that f1db settles by Sprint results or "earliest achieved" (2026: three drivers on 7) may differ."""
+    con = replay_run["con"]
+    wrong = con.execute("""
+        select s.season, s.player_id, s.rank, o.championship_position
+        from llm.f1_season_standings_by_round s
+        join staging_f1db.stg_f1db__season_driver_standings o on o.season = s.season and o.driver_id = s.player_id
+        where s.is_final_round and not s.drops_apply and s.points_cum > 0 and not s.tied_on_points and s.rank <> o.championship_position""").fetchall()
+    assert wrong == []
+    sprint = dict(con.execute("""select season, sum(sprint_points_round) from llm.f1_season_standings_by_round group by 1""").fetchall())
+    assert all(sprint[y] > 0 for y in (2024, 2025, 2026))
+    assert sprint[2008] == 0
+    # a round's points are the race plus the sprint, and the running total adds them up
+    assert con.execute("""select count(*) from (select points_cum - lag(points_cum, 1, 0) over (partition by season, player_id order by round) d, points_round
+                          from llm.f1_season_standings_by_round) where abs(d - points_round) > 1e-9""").fetchone()[0] == 0
+
+
+def test_standings_by_round_shape_rank_gap_and_keys(replay_run):
+    con = replay_run["con"]
+    unique, total = con.execute("select count(distinct fact_key), count(*) from llm.f1_season_standings_by_round").fetchone()
+    assert unique == total
+    assert con.execute("select count(*) from (select season, round, count(*) n, count(distinct rank) r, max(rank) m "
+                       "from llm.f1_season_standings_by_round group by 1, 2) where n <> r or n <> m").fetchone()[0] == 0
+    assert con.execute("select count(*) from llm.f1_season_standings_by_round where (rank = 1) <> (gap_to_leader = 0) and not tied_on_points").fetchone()[0] == 0
+    assert con.execute("select min(gap_to_leader) from llm.f1_season_standings_by_round").fetchone()[0] == 0
+    # dense across rounds: every driver of a season has a row at every round of it
+    assert con.execute("""select count(*) from (select season, player_id, count(*) n from llm.f1_season_standings_by_round group by 1, 2) a
+                          join (select season, count(distinct round) k from llm.f1_season_standings_by_round group by 1) b using (season)
+                          where a.n <> b.k""").fetchone()[0] == 0
+    # Indianapolis counts for the championship in 1950-1960
+    assert con.execute("select count(*) from llm.f1_season_standings_by_round s join core.matches m on m.match_id = s.race_id where m.is_indianapolis").fetchone()[0] > 0

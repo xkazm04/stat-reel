@@ -2,8 +2,8 @@
 
     uv run --project pipeline python pipeline/tests/fixtures/make_f1db_mini.py data/raw/f1db/<snapshot>
 
-Keeps a handful of seasons across eras (with the Indianapolis 500 and shared cars in 1950s rounds)
-and every driver appearing in them. Data: F1DB (CC BY 4.0) - see f1db-mini/README.md.
+Keeps a handful of seasons across eras (with the Indianapolis 500 and shared cars in 1950s rounds,
+and the 2024-26 sprint races) and every driver appearing in them. Data: F1DB (CC BY 4.0) - see f1db-mini/README.md.
 """
 
 import sys
@@ -20,14 +20,14 @@ def main() -> None:
     OUT.mkdir(exist_ok=True)
     con = duckdb.connect()
     seasons = ", ".join(map(str, SEASONS))
-    for name in ("races", "races_race_results", "seasons_driver_standings"):
+    for name in ("races", "races_race_results", "races_sprint_race_results", "seasons_driver_standings"):
         con.execute(f"create view {name} as select * from read_parquet('{(snap / f'{name}.parquet').as_posix()}') where year in ({seasons})")
     con.execute(f"create view seasons as select * from read_parquet('{(snap / 'seasons.parquet').as_posix()}') where year in ({seasons})")
     con.execute(f"""create view drivers as select * from read_parquet('{(snap / 'drivers.parquet').as_posix()}')
                     where id in (select driverId from races_race_results)""")
     con.execute(f"""create view constructors as select * from read_parquet('{(snap / 'constructors.parquet').as_posix()}')
                     where id in (select constructorId from races_race_results)""")
-    for name in ("races", "races_race_results", "seasons_driver_standings", "seasons", "drivers", "constructors"):
+    for name in ("races", "races_race_results", "races_sprint_race_results", "seasons_driver_standings", "seasons", "drivers", "constructors"):
         target = OUT / f"f1db-{name.replace('_', '-')}.csv"
         con.execute(f"copy (select * from {name}) to '{target.as_posix()}' (header, delimiter ',')")
         print(target.name, con.execute(f"select count(*) from {name}").fetchone()[0])

@@ -137,3 +137,37 @@ models:
       - {name: rank_wins_cum, description: "Rank among all drivers at this race by wins_cum, unique and stable: ties broken by podiums_cum, then points_cum, then driver id. 1 = most wins."}
       - {name: tied, description: "True when another driver has the same wins_cum at this race; the rank order within the tie is then a tie-break, not a real difference in wins."}
       - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_season_standings_by_round
+    description: >-
+      The Drivers' Championship after every round of every season (1950 onwards): one row per (season, round,
+      driver) for every driver who started a Grand Prix or scored in that season, at EVERY round of the season
+      (0 points before their first race, totals carried forward). OFFICIAL points: as awarded under that season's
+      own scoring, Grand Prix plus Sprint (Sprints exist 2021 onwards), and the Indianapolis 500 rounds of
+      1950-1960 DO count here because they counted for the championship (unlike the career views, which
+      exclude them). Tie-break: points, then wins, then second places, then thirds ... (Grand Prix results, down
+      to 8th), then driver id; the regulations' final "earliest achieved" step is not implemented. Seasons before
+      1991 counted only each driver's best N results: there points_cum is the TOTAL as awarded and can exceed
+      the official championship points, so ranks can differ from the official table (drops_apply = true); from
+      1991 on, points_cum after the final round equals the official championship points. Source F1DB (CC BY 4.0),
+      attribution required.
+    columns:
+      - {name: fact_key, description: "Stable id of this driver-standing-at-round fact; cite it as <fact_key>#<column>."}
+      - {name: season, description: "Championship year."}
+      - {name: round, description: "Round number within the season (the data clock for a season video)."}
+      - {name: race_id, description: "f1db race id of the round."}
+      - {name: race_date, description: "Race date of the round."}
+      - {name: player_id, description: "f1db driver id (slug)."}
+      - {name: display_name, description: "Name as commonly used (use this on screen)."}
+      - {name: full_name, description: "Full legal name of the driver."}
+      - {name: points_round, description: "Championship points scored in this round: Grand Prix plus Sprint, as awarded that season (0 if none)."}
+      - {name: sprint_points_round, description: "The Sprint part of points_round (0 when the round had no Sprint or the driver scored none)."}
+      - {name: points_cum, description: "Championship points up to and including this round, as awarded that season (Sprints included). Before 1991 this is the all-results total, not the best-N official figure."}
+      - {name: wins_cum, description: "Grand Prix wins in the season up to and including this round (Indianapolis 500 included; Sprint wins are not counted)."}
+      - {name: seconds_cum, description: "Second places in the season so far (Grand Prix results), the first tie-break after wins."}
+      - {name: thirds_cum, description: "Third places in the season so far (Grand Prix results), the second tie-break after wins."}
+      - {name: rank, description: "Championship position after this round: unique within (season, round), by points_cum then the wins/seconds/thirds... tie-break. 1 = leader."}
+      - {name: gap_to_leader, description: "Points behind the leader after this round (0 for the leader)."}
+      - {name: tied_on_points, description: "True when another driver has the same points_cum at this round; rank is then decided by the tie-break."}
+      - {name: is_final_round, description: "True on the last round with results of the season (for the current season: the latest race so far)."}
+      - {name: drops_apply, description: "True for seasons before 1991, when only a best-N subset of results counted: points_cum may then exceed the official total."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}
