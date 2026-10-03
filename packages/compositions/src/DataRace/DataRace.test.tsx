@@ -13,14 +13,23 @@ import {
   resolveDataRaceRenderProps,
 } from "@statreel/schemas";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { COMPOSITIONS, compositionIdFor } from "../compositions";
 import { calculateDataRaceMetadata } from "../Root";
 import { renderTimingMd } from "../timing/index";
 import { DataRaceFrame } from "./DataRaceFrame";
 import { buildSampleDataRace } from "./fixture";
+import { CHIP, raceChips } from "./chips";
 import { LABEL_RIGHT, L, formatValue, textWidth, valueLabelLayout } from "./parts";
 import { CARD, type DataRaceRenderProps, axisMaxFor, dataRaceState, niceTicks, orderedEvents, phaseAt } from "./state";
+
+// Remotion's <Img> reads useCurrentFrame(), which only exists inside a registered composition. These
+// tests hash frames with renderToStaticMarkup, so the real <Img> is swapped for a plain <img>; the
+// parts.tsx source guard below asserts the real component is the one imported.
+vi.mock("remotion", async (orig) => {
+  const { createElement } = await import("react");
+  return { ...(await orig<typeof import("remotion")>()), Img: (p: Record<string, unknown>) => createElement("img", p) };
+});
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.resolve(here, "..", "..", "fixtures");
@@ -236,6 +245,78 @@ describe("axis: one fixed scale with nice gridline ticks (ADR scale-and-axis-des
   });
 });
 
+describe("rank chips: up N / NEW, in frames, independent of the warp", () => {
+  const chips = raceChips(props);
+  const rowChip = (id: string, f: number) => dataRaceState(props, f).rows.find((r) => r.id === id)?.chip ?? null;
+
+  it("derives a chip from every rank gain in the plan's orders (and a NEW for every newcomer)", () => {
+    const ups = chips.filter((c) => c.kind === "up");
+    const news = chips.filter((c) => c.kind === "new");
+    let expectedUps = 0;
+    for (let p = 1; p < plan.periods.length; p++)
+      for (const e of props.entities) {
+        if (e.values[p] == null || e.values[p - 1] == null) continue;
+        const gain = (plan.orders[p - 1] as string[]).indexOf(e.id) - (plan.orders[p] as string[]).indexOf(e.id);
+        const start = Math.round((plan.knots[p] as number[])[0] as number) - CHIP.lead;
+        if (gain >= 1 && start + CHIP.frames <= plan.sections.timeline_end) expectedUps++;
+      }
+    expect(expectedUps).toBeGreaterThan(0);
+    expect(ups).toHaveLength(expectedUps);
+    expect(news.length).toBeGreaterThan(0);
+  });
+
+  it(`every chip is visible for >= 45 frames (it lives ${CHIP.frames}), however the warp runs`, () => {
+    expect(CHIP.frames).toBeGreaterThanOrEqual(45);
+    for (const c of chips) {
+      for (let k = 0; k < 45; k++) {
+        const w = rowChip(c.id, c.start + k);
+        expect(w, `${c.id} ${c.kind} +${k}`).not.toBeNull();
+      }
+      // the newest chip may replace it, but the entity still carries one
+      expect(rowChip(c.id, c.start + CHIP.frames - 1)).not.toBeNull();
+    }
+    const first = chips.find((c) => c.kind === "up") as (typeof chips)[number];
+    expect(markup(first.start + 20)).toContain('data-chip="up"');
+  });
+
+  it("a newcomer gets an entrance cue; rank gains read 'up N'", () => {
+    const n = chips.find((c) => c.kind === "new") as (typeof chips)[number];
+    expect(n.cue).toBe(true);
+    expect(markup(n.start + 2)).toContain('data-chip="new"');
+    expect(markup(n.start + 2)).toContain('data-chip-cue="1"');
+    expect(markup(n.start + 2)).toContain(">NEW<");
+    const u = chips.find((c) => c.kind === "up") as (typeof chips)[number];
+    expect(rowChip(u.id, u.start + 20)?.text).toBe(String(u.jump));
+  });
+
+  it("never more than 2 chip entrance cues at the same frame (cues = scale pops of the first 8 frames)", () => {
+    let max = 0;
+    for (let f = 0; f < plan.sections.timeline_end; f++) {
+      const n = dataRaceState(props, f).rows.filter((r) => r.chip?.cue && r.chip.age < CHIP.enter).length;
+      max = Math.max(max, n);
+    }
+    expect(max).toBeLessThanOrEqual(CHIP.maxCues);
+    expect(max).toBeGreaterThanOrEqual(1);
+    // the budget holds when every entity gains a rank at once: three chips start together, the third has no pop
+    const crowded = { ...props, timing_plan: { ...plan, orders: plan.orders.map((_, i) => (i % 2 ? [...props.entities].map((e) => e.id) : [...props.entities].map((e) => e.id).reverse())) } };
+    const cs = raceChips(crowded);
+    for (let f = 0; f < plan.sections.timeline_end; f++)
+      expect(cs.filter((c) => c.cue && f >= c.start && f < c.start + CHIP.enter).length).toBeLessThanOrEqual(CHIP.maxCues);
+    expect(cs.some((c) => !c.cue)).toBe(true);
+  });
+
+  it("chips are seek-stable, >= 28 px and drawn with the Remotion Img for file logos", () => {
+    const f = (chips.find((c) => c.kind === "up") as (typeof chips)[number]).start + 12;
+    const a = markup(f);
+    markup(f + 5);
+    expect(markup(f)).toBe(a);
+    for (const m of markup(f).matchAll(/data-chip="[a-z]+"[^>]*style="[^"]*font-size:(\d+)px/g)) expect(Number(m[1])).toBeGreaterThanOrEqual(28);
+    const src = readFileSync(path.join(here, "parts.tsx"), "utf8");
+    expect(src).toMatch(/import \{ Img \} from "remotion"/);
+    expect(src).not.toMatch(/<img\b/);
+  });
+});
+
 describe("ending: spotlight (60) -> like & subscribe (60) -> Powered by StatReel (90)", () => {
   const s = plan.sections;
   const which = (f: number) => (markup(f).match(/data-ending="([a-z-]+)"/) ?? [])[1];
@@ -313,12 +394,16 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
   it("45 % of the video and the ending", () => {
     expect({
       mid45: sha(markup(midFrame)),
+      chipNew: sha(markup((raceChips(props).find((c) => c.kind === "new") as { start: number }).start + 3)),
+      chipUp: sha(markup((raceChips(props).find((c) => c.kind === "up") as { start: number }).start + 20)),
       hook0: sha(markup(0)),
       spotlight: sha(markup(plan.sections.timeline_end + 40)),
       like: sha(markup(plan.sections.spotlight_end + 40)),
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
+        "chipNew": "252deb411d0403a1",
+        "chipUp": "009cf38e2847473d",
         "hook0": "e98284f4ea227527",
         "like": "a3864ee6bfbc7a30",
         "mid45": "257f034817829855",

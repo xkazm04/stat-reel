@@ -9,6 +9,7 @@
  */
 import { DATA_RACE_LIMITS, ENDING_FRAMES, type DataRaceProps, type TimingPlan, eventSide } from "@statreel/schemas";
 import { type TimeMap, makeTimeMap, periodAtFrame } from "../timing/index";
+import { type RowChip, chipAt } from "./chips";
 
 export type DataRaceRenderProps = DataRaceProps & { timing_plan: TimingPlan };
 
@@ -21,6 +22,8 @@ export type RaceRow = {
   value: number;
   /** 0 while the entity is not in the data yet, fades in over its first period */
   presence: number;
+  /** rank-change / NEW chip beside the row (timeline only), see chips.ts */
+  chip: RowChip | null;
 };
 
 export type CardState = {
@@ -165,7 +168,7 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
       const p = periodAtFrame(plan.knots, frame + k - RANK_KERNEL / 2 + 1);
       pos += (hann[k] as number) * (ranks[p]?.get(e.id) ?? props.entities.length - 1);
     }
-    return { id: e.id, pos, value, presence };
+    return { id: e.id, pos, value, presence, chip: phase === "timeline" ? chipAt(props, e.id, frame) : null };
   });
   const axisMax = axisMaxFor(props);
 

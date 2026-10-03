@@ -6,6 +6,8 @@
 import { videoTheme } from "@statreel/design-tokens";
 import type { DataRaceProps } from "@statreel/schemas";
 import type { CSSProperties, ReactElement } from "react";
+import { Img } from "remotion";
+import { CHIP, type RowChip } from "./chips";
 import { type CardState, type RaceRow, niceTicks } from "./state";
 
 type Entity = DataRaceProps["entities"][number];
@@ -64,7 +66,7 @@ export function LogoTile({ entity, size, radius }: { entity: Entity; size: numbe
         data-logo="file"
         style={{ width: size, height: size, borderRadius: r, background: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `inset 0 0 0 3px ${entity.color}` }}
       >
-        <img alt="" src={entity.logo.src} style={{ width: "74%", height: "74%", objectFit: "contain" }} />
+        <Img alt="" src={entity.logo.src} style={{ width: "74%", height: "74%", objectFit: "contain" }} />
       </div>
     );
   }
@@ -88,11 +90,42 @@ export const textWidth = (text: string, size: number): number => Math.ceil(text.
  * long prefix/suffix or a bar near full width would cross x 965, so it is shifted left to stay
  * inside and gets a plate so it stays readable where it overlaps the bar tip.
  */
-export function valueLabelLayout(barW: number, text: string, size = 30): { left: number; width: number; plate: boolean } {
-  const width = textWidth(text, size);
+export function valueLabelLayout(barW: number, text: string, size = 30, extra = 0): { left: number; width: number; plate: boolean } {
+  const width = textWidth(text, size) + extra;
   const natural = L.barX - L.marginX + barW + 14;
   const max = LABEL_RIGHT - L.marginX - width;
   return natural <= max ? { left: natural, width, plate: false } : { left: max, width, plate: true };
+}
+
+const chipEase = (x: number): number => {
+  const c = Math.max(0, Math.min(1, x));
+  return 1 + 2.70158 * (c - 1) ** 3 + 1.70158 * (c - 1) ** 2;
+};
+
+/** Estimated width of a chip incl. its leading gap (the end label reserves it for the x 965 clamp). */
+export const chipWidth = (chip: RowChip): number => 10 + 20 + textWidth(chip.text, 28) + (chip.kind === "up" ? 22 : 0);
+
+/**
+ * "Up N" / "NEW" chip. Filled with `accentInk` and lettered in the sheet colour (>= 4.5:1), 28 px.
+ * Only the entrance of a `cue` chip animates (scale pop, `chips.ts` budget); the last frames fade.
+ */
+export function RankChip({ chip }: { chip: RowChip }): ReactElement {
+  const pop = chip.cue ? Math.max(0.01, chipEase(chip.age / CHIP.enter)) : 1;
+  const fade = Math.max(0, Math.min(1, (CHIP.frames - chip.age) / CHIP.exit));
+  return (
+    <span
+      data-chip={chip.kind}
+      data-chip-cue={chip.cue && chip.age < CHIP.enter ? "1" : "0"}
+      style={{ marginLeft: 10, height: 40, padding: "0 10px", borderRadius: 20, boxSizing: "border-box", display: "inline-flex", alignItems: "center", gap: 6, background: T.accentInk, color: T.surface, fontFamily: T.fonts.data, fontWeight: 800, fontSize: 28, lineHeight: 1, opacity: fade, transform: `scale(${pop.toFixed(3)})`, transformOrigin: "0% 50%", ...TNUM }}
+    >
+      {chip.kind === "up" ? (
+        <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 1 15 14H1z" fill={T.surface} />
+        </svg>
+      ) : null}
+      {chip.text}
+    </span>
+  );
 }
 
 /** Gridlines and their labels, behind the rows. Values come from `niceTicks` (grow-free: the axis is fixed). */
@@ -130,7 +163,7 @@ export function BarRow({ entity, row, axisMax, format }: { entity: Entity; row: 
   const w = Math.max(6, Math.min(1, row.value / axisMax) * L.barMaxW);
   const top = L.barsTop + row.pos * L.rowH;
   const text = formatValue(row.value, format);
-  const label = valueLabelLayout(w, text);
+  const label = valueLabelLayout(w, text, 30, row.chip ? chipWidth(row.chip) : 0);
   return (
     <div data-row={entity.id} style={{ position: "absolute", left: L.marginX, top, width: L.width - 2 * L.marginX, height: L.rowH, opacity: row.presence }}>
       <div style={{ position: "absolute", left: 0, top: (L.rowH - L.tile) / 2 }}>
@@ -147,6 +180,7 @@ export function BarRow({ entity, row, axisMax, format }: { entity: Entity; row: 
         style={{ position: "absolute", left: label.left, top: (L.rowH - 44) / 2, width: label.width, height: 44, display: "flex", alignItems: "center", justifyContent: label.plate ? "flex-end" : "flex-start", fontFamily: T.fonts.data, fontWeight: 700, fontSize: 30, color: T.ink, whiteSpace: "nowrap", background: label.plate ? T.surface : undefined, borderRadius: 8, ...TNUM }}
       >
         {text}
+        {row.chip ? <RankChip chip={row.chip} /> : null}
       </div>
     </div>
   );
