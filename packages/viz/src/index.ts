@@ -11,6 +11,7 @@ export {
   digitCount,
   rollingDigits,
 } from "./Callout";
+export { DataClock, type DataClockProps, dataClockLabel, MIN_CLOCK_FONT } from "./DataClock";
 export { hashString, seededRandom } from "./rng";
 export { lineProgress, Slopegraph, type SlopegraphLabels, type SlopegraphProps } from "./Slopegraph";
 export {
@@ -52,4 +53,16 @@ export {
   surname,
   wrapText,
 } from "./text";
+export {
+  type DomainConfig,
+  declaredDomain,
+  domainProgress,
+  parseTime,
+  scaleTime,
+  type TimeScale,
+  type TimeTick,
+  type TimeValue,
+  yearTicks,
+} from "./time-scale";
+export { niceStep, niceTicks } from "./ticks";
 export { type Point, TABULAR, type VizFormat, type VizTheme } from "./types";
