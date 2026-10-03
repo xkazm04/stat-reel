@@ -31,6 +31,7 @@ import {
   stateLabel,
   styleOf,
 } from "./board";
+import { typing } from "./keys";
 import { showUndo } from "./undo";
 
 // ------------------------------------------------------------------ data
@@ -406,8 +407,6 @@ export function ItemFacts({
 
 // ------------------------------------------------------------------ the gate
 
-export const typing = (t: EventTarget | null): boolean =>
-  t instanceof HTMLElement && !!t.closest("input, textarea, select, [contenteditable='true']");
 
 /**
  * A flag that is true for a moment after `flash()`: the "busy" feedback for a keystroke that was

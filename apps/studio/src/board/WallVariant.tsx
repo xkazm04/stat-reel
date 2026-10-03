@@ -23,6 +23,7 @@ import {
   spatialMove,
   styleOf,
 } from "./board";
+import { typing } from "./keys";
 import {
   boxesOf,
   CaseChip,
@@ -31,7 +32,6 @@ import {
   Shot,
   StateMark,
   shotAlt,
-  typing,
   useAdvanceOnRemoval,
   useDecide,
   useFlash,
