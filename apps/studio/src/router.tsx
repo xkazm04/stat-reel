@@ -17,6 +17,7 @@ import { api, qk } from "./api";
 import { parseBoardSearch } from "./board/search";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
+import { useNavFocus } from "./hooks/useNavFocus";
 import { WipeProvider } from "./components/ui";
 import { boardQuery, lineTopicsQuery } from "./workQuery";
 import { calendarQuery, heatmapQuery, heatmapTopicsQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
@@ -46,6 +47,7 @@ const StudioLayout = lazyRouteComponent(() => import("./studio/StudioLayout"), "
 const FrontPhotoFinish = lazyRouteComponent(() => import("./routes/FrontPhotoFinish"), "FrontPhotoFinish");
 
 function RootLayout() {
+  useNavFocus();
   return (
     <WipeProvider>
       <Nav />
