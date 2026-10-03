@@ -122,6 +122,8 @@ test("calendar: schedule the composed video now on YouTube -> private upload (dr
   await page.goto("/calendar");
   await expect(page.getByTestId(`ready-${projectId}`)).toBeVisible();
   await page.getByTestId(`publish-now-${projectId}`).click();
+  // Publish now is irreversible, so the calendar confirms it (naming the video) before it fires
+  await page.getByTestId("confirm-yes").click();
   await expect(page.getByTestId(`slot-${projectId}`)).toContainText(/private/i, { timeout: 120_000 });
   const detail = await (await page.request.get(`${API}/api/projects/${projectId}`)).json();
   const pub = detail.publications[0];
