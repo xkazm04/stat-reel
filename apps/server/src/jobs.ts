@@ -5,7 +5,7 @@
  * changes stream over the event bus. A provider/LLM refusal is its own state (ADR 003).
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { JobKind, JobStatus } from "@statreel/schemas";
 import { type Db, jobs, now } from "./db";
 import type { EventBus } from "./events";
@@ -24,6 +24,12 @@ const CAUSES: readonly string[] = ["owner", "shutdown", "timeout"];
 export type JobContext = { id: string; signal: AbortSignal; progress: (p: number, note?: string) => void };
 export type Handler = (params: Record<string, unknown>, ctx: JobContext) => Promise<Record<string, unknown>>;
 export type Job = typeof jobs.$inferSelect;
+
+/** Terminal job rows older than this many days are pruned at startup (STATREEL_JOB_RETENTION_DAYS, default 30). */
+export function jobRetentionDays(env: Record<string, string | undefined> = process.env): number {
+  const n = Number(env.STATREEL_JOB_RETENTION_DAYS);
+  return Number.isFinite(n) && n > 0 ? n : 30;
+}
 
 export class JobRunner {
   private handlers = new Map<string, Handler>();
@@ -59,9 +65,18 @@ export class JobRunner {
     return this.db.select().from(jobs).where(eq(jobs.id, id)).get();
   }
 
-  list(projectId?: string): Job[] {
+  /** Newest first; ORDER BY / LIMIT run in SQL on jobs_project_created (project_id, created_at). */
+  list(projectId?: string, limit?: number): Job[] {
     const q = this.db.select().from(jobs);
-    return (projectId ? q.where(eq(jobs.project_id, projectId)) : q).all().sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const ordered = (projectId ? q.where(eq(jobs.project_id, projectId)) : q).orderBy(desc(jobs.created_at));
+    return (limit === undefined ? ordered : ordered.limit(limit)).all();
+  }
+
+  /** Retention: drop terminal rows finished more than `days` ago (running/queued rows are never touched). */
+  prune(days = jobRetentionDays()): number {
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const stale = and(inArray(jobs.status, ["succeeded", "failed", "cancelled", "refused"]), or(lt(jobs.finished_at, cutoff), and(lt(jobs.created_at, cutoff), isNull(jobs.finished_at))));
+    return this.db.delete(jobs).where(stale).run().changes;
   }
 
   cancel(id: string, cause: CancelCause = "owner"): void {
@@ -107,6 +122,7 @@ export class JobRunner {
         console.warn(`[jobs] startup sweep failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    this.prune();
     this.db.update(jobs).set({ status: "queued", started_at: null, progress: 0 }).where(eq(jobs.status, "running")).run();
     const kinds = new Set(this.db.select({ kind: jobs.kind }).from(jobs).where(eq(jobs.status, "queued")).all().map((r) => r.kind));
     for (const k of kinds) this.pump(k);
@@ -126,11 +142,15 @@ export class JobRunner {
   private pump(kind: string): void {
     const lane = this.laneOf(kind);
     if (this.closing || this.active.has(lane)) return;
+    // FIFO across every kind that shares the lane, so a render backlog cannot starve gen_render
+    const laneKinds = [...this.handlers.keys()].filter((k) => this.laneOf(k) === lane);
+    if (!laneKinds.length) return;
+    const next = this.db.select().from(jobs).where(and(inArray(jobs.kind, laneKinds), eq(jobs.status, "queued")))
+      .orderBy(asc(jobs.created_at), sql`rowid`).limit(1).get();
+    if (!next) return;
+    kind = next.kind;
     const handler = this.handlers.get(kind);
     if (!handler) return;
-    const next = this.db.select().from(jobs).where(and(eq(jobs.kind, kind), eq(jobs.status, "queued"))).all()
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
-    if (!next) return;
     const controller = new AbortController();
     this.db.update(jobs).set({ status: "running", started_at: now() }).where(eq(jobs.id, next.id)).run();
     this.bus.emit({ type: "job.started", id: next.id, kind, project_id: next.project_id });

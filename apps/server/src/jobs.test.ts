@@ -183,4 +183,67 @@ describe("JobRunner", () => {
     await tick();
     expect(await runner.shutdown(20)).toEqual({ aborted: 1, timedOut: true });
   });
+
+  it("pump starts the oldest queued job across the kinds of a lane (no starvation)", async () => {
+    const { runner } = setup();
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    runner.register("render", async (p) => { order.push(`render${p.n}`); await gate; return {}; });
+    runner.register("gen_render", async (p) => { order.push(`gen${p.n}`); await gate; return {}; }, { lane: "render" });
+    runner.enqueue("render", { n: 0 }); // takes the slot
+    runner.enqueue("render", { n: 1 });
+    runner.enqueue("render", { n: 2 });
+    runner.enqueue("gen_render", { n: 3 });
+    await tick(3);
+    release();
+    await runner.idle();
+    expect(order).toEqual(["render0", "render1", "render2", "gen3"]);
+  });
+
+  it("pump alternates kinds by age: a gen_render queued before a later render goes first", async () => {
+    const { runner, db } = setup();
+    const order: string[] = [];
+    runner.register("render", async (p) => { order.push(`render${p.n}`); return {}; });
+    runner.register("gen_render", async (p) => { order.push(`gen${p.n}`); return {}; }, { lane: "render" });
+    const ins = (id: string, kind: string, at: string, n: number) =>
+      db.$client.prepare("insert into jobs (id, kind, status, params_json, created_at) values (?, ?, 'queued', ?, ?)").run(id, kind, JSON.stringify({ n }), at);
+    ins("a", "render", "2026-01-01T00:00:03Z", 3);
+    ins("b", "gen_render", "2026-01-01T00:00:01Z", 1);
+    ins("c", "render", "2026-01-01T00:00:02Z", 2);
+    runner.resume();
+    await runner.idle();
+    expect(order).toEqual(["gen1", "render2", "render3"]);
+  });
+
+  it("list pushes ORDER BY / LIMIT into SQL and keeps the old signature", () => {
+    const { runner } = setup();
+    runner.register("render", async () => ({}));
+    const ids = [1, 2, 3].map((n) => runner.enqueue("render", { n }, n === 3 ? "p2" : "p1"));
+    expect(runner.list()).toHaveLength(3);
+    expect(runner.list(undefined, 2)).toHaveLength(2);
+    expect(runner.list("p1").map((j) => j.id).sort()).toEqual([ids[0], ids[1]].sort());
+    expect(runner.list("p1", 1)).toHaveLength(1);
+  });
+
+  it("prune removes only old terminal rows", () => {
+    const { runner, db } = setup();
+    const old = "2020-01-01T00:00:00Z";
+    const ins = (id: string, status: string, finished: string | null) =>
+      db.$client.prepare("insert into jobs (id, kind, status, params_json, created_at, finished_at) values (?, 'render', ?, '{}', ?, ?)").run(id, status, old, finished);
+    ins("old-ok", "succeeded", old);
+    ins("old-failed", "failed", old);
+    ins("old-queued", "queued", null);
+    ins("old-running", "running", null);
+    ins("fresh", "succeeded", new Date().toISOString());
+    expect(runner.prune(30)).toBe(2);
+    expect(runner.list().map((j) => j.id).sort()).toEqual(["fresh", "old-queued", "old-running"]);
+  });
+
+  it("the list / pump / project queries use the jobs indexes", () => {
+    const { db } = setup();
+    const plan = (sql: string) => (db.$client.prepare(`explain query plan ${sql}`).all() as { detail: string }[]).map((r) => r.detail).join(" | ");
+    expect(plan("select * from jobs where project_id = 'p' order by created_at desc")).toContain("jobs_project_created");
+    expect(plan("select * from jobs where status = 'queued' and kind in ('a','b') order by created_at, rowid limit 1")).toContain("jobs_status_kind_created");
+  });
 });
