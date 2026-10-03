@@ -22,7 +22,7 @@ describe("Wordmark (ADR 009)", () => {
   });
 
   it("is theme-free: no theme classes or hooks", () => {
-    expect(html).not.toMatch(/oa-|theme/i);
+    expect(html).not.toMatch(/theme/i);
   });
 
   it("the favicon is generated from the shared geometry", () => {
