@@ -71,6 +71,8 @@ export function normalizeYouTubeAnalytics(publication_id: string, report: Analyt
 /**
  * Data API videos.list statistics are LIFETIME totals, available immediately (Analytics lags
  * 1-3 days). Use as a same-day snapshot; watch time, shares and subscribers are not exposed.
+ * The row is a LIFETIME snapshot, not a per-day delta: consumers must take the latest row as the
+ * total and difference consecutive rows for per-day values (apps/server metrics.ts), never sum them.
  */
 export function normalizeYouTubeStatistics(publication_id: string, date: string, stats: VideoStats): MetricsDailyRow {
   return {
