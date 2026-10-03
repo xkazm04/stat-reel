@@ -25,11 +25,18 @@ export class JobRunner {
   private handlers = new Map<string, Handler>();
   private active = new Map<string, { id: string; controller: AbortController; done: Promise<void> }>();
   private waiters: (() => void)[] = [];
+  /** kinds that share a single slot (e.g. `gen_render` runs on the `render` lane); default lane = the kind */
+  private lanes = new Map<string, string>();
 
   constructor(private readonly db: Db, private readonly bus: EventBus) {}
 
-  register(kind: JobKind, handler: Handler): void {
+  register(kind: JobKind, handler: Handler, opts: { lane?: string } = {}): void {
     this.handlers.set(kind, handler);
+    if (opts.lane) this.lanes.set(kind, opts.lane);
+  }
+
+  private laneOf(kind: string): string {
+    return this.lanes.get(kind) ?? kind;
   }
 
   enqueue(kind: JobKind, params: Record<string, unknown>, projectId?: string): string {
@@ -75,7 +82,8 @@ export class JobRunner {
   }
 
   private pump(kind: string): void {
-    if (this.active.has(kind)) return;
+    const lane = this.laneOf(kind);
+    if (this.active.has(lane)) return;
     const handler = this.handlers.get(kind);
     if (!handler) return;
     const next = this.db.select().from(jobs).where(and(eq(jobs.kind, kind), eq(jobs.status, "queued"))).all()
@@ -102,11 +110,11 @@ export class JobRunner {
         else if (err instanceof Refusal) this.finish(next.id, "refused", null, err.message);
         else this.finish(next.id, "failed", null, err instanceof Error ? err.message : String(err));
       } finally {
-        this.active.delete(kind);
-        this.pump(kind);
+        this.active.delete(lane);
+        for (const k of this.handlers.keys()) if (this.laneOf(k) === lane) this.pump(k);
       }
     })();
-    this.active.set(kind, { id: next.id, controller, done });
+    this.active.set(lane, { id: next.id, controller, done });
   }
 
   private finish(id: string, status: JobStatus, result: Record<string, unknown> | null, error: string | null): void {

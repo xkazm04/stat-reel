@@ -5,14 +5,15 @@
   "packageManager": "pnpm@11.1.1",
   "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "pnpm --parallel --filter @statreel/server --filter @statreel/studio dev",
+    "dev": "pnpm --parallel --filter @statreel/server --filter @statreel/studio run \"/^(dev|worker)$/\"",
+    "worker": "pnpm --filter @statreel/server worker",
     "build": "pnpm -r build",
-    "start": "pnpm --filter @statreel/server start",
+    "start": "pnpm --parallel --filter @statreel/server run \"/^(start|worker)$/\"",
     "typecheck": "tsc -b",
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
-    "e2e": "cross-env LLM_MODE=replay AUDIO_MODE=replay PUBLISH_MODE=dry playwright test",
+    "e2e": "cross-env LLM_MODE=replay AUDIO_MODE=replay PUBLISH_MODE=dry GEN_MODE=fake playwright test",
     "e2e:live": "cross-env LLM_MODE=live AUDIO_MODE=live PUBLISH_MODE=dry LLM_RECORD=1 AUDIO_RECORD=1 E2E_LIVE=1 playwright test"
   },
   "devDependencies": {

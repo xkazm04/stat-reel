@@ -60,3 +60,4 @@ e2e/fixtures/audio/
 test-results/
 playwright-report/
 data/board/
+data/generation/

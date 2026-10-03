@@ -46,7 +46,7 @@ export class BoardService {
       id: `bd-${randomUUID().slice(0, 8)}`, image: i.image.split(path.sep).join("/"), video, duration_s: video ? (i.duration_s ?? null) : null, width: i.width ?? null, height: i.height ?? null,
       title: i.title, summary: i.summary ?? null, use_case_id: i.use_case_id ?? null,
       proposed_case_json: i.proposed_case ? JSON.stringify(i.proposed_case) : null, style_json: i.style ? JSON.stringify(i.style) : null,
-      source_json: i.source ? JSON.stringify(i.source) : null, status: "pending", decision: null, note: null, decided_at: null, created_at: now(),
+      source_json: i.source ? JSON.stringify(i.source) : null, status: "pending", decision: null, note: null, decided_at: null, created_at: now(), case_idea_id: null,
     };
     this.db.insert(boardItems).values(row).run();
     return hydrate(row);

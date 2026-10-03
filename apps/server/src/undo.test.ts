@@ -25,7 +25,7 @@ const setup = (generation?: GenerationGuard) => {
   const db = openDb(":memory:");
   const board = new BoardService(db, root);
   const cases = new CaseIdeas(db);
-  const app = buildApp({ db, board, cases, bus: new EventBus(), generation } as unknown as AppDeps);
+  const app = buildApp({ db, board, cases, bus: new EventBus(), generationGuard: generation } as unknown as AppDeps);
   const item = board.create({ image: "items/a.png", title: "t", use_case_id: "x", style: { id: "s", name: "S" } });
   return { app, board, cases, item, c: cases.create(idea) };
 };

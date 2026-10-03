@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { TOPIC_SEED } from "@statreel/schemas";
 import { type AppDeps, buildApp } from "./app";
+import { GenerationQueue } from "./generation/queue";
 import { openDb } from "./db";
 import { EventBus } from "./events";
 import { CaseIdeas, type NewCaseIdea } from "./library";
@@ -208,7 +209,7 @@ describe("GET /api/heatmap/topics", () => {
     expect(topics.heatmap({ now: NOW }).topics.map((t) => t.key)).toEqual(["golf", "boxing", "athletics", "cycling"]);
   });
 
-  it("pending counts come from generation_jobs when that table exists, and are zero before it does", () => {
+  it("pending counts come from queued/running generate_video jobs, and are zero without any", () => {
     const { db, topics, cases } = setup();
     const c1 = cases.create({ ...idea, topic: "energy" });
     const c2 = cases.create({ ...idea, title: "two", topic: "energy" });
@@ -216,12 +217,12 @@ describe("GET /api/heatmap/topics", () => {
     for (const c of [c1, c2, c3]) cases.decide(c.id, "accept");
     const row = (key: string) => topics.heatmap({ now: NOW }).topics.find((t) => t.key === key)!;
     expect(row("energy").pending).toEqual({ queued: 0, running: false });
-    db.$client.exec(`create table generation_jobs (id text primary key, type text not null, case_id text not null, status text not null);`);
-    const add = db.$client.prepare("insert into generation_jobs values (?, ?, ?, ?)");
-    add.run("g1", "generate_video", c1.id, "queued");
-    add.run("g2", "generate_video", c2.id, "running");
-    add.run("g3", "visual_options", c3.id, "queued"); // not a video job
-    add.run("g4", "generate_video", c3.id, "done"); // finished
+    const q = new GenerationQueue(db);
+    const setStatus = (id: string, status: string) => db.$client.prepare("update generation_jobs set status = ? where id = ?").run(status, id);
+    q.enqueue({ type: "generate_video", case_id: c1.id, board_item_id: "bd-00000001" });
+    setStatus(q.enqueue({ type: "generate_video", case_id: c2.id, board_item_id: "bd-00000002" }).job.id, "running");
+    q.enqueue({ type: "visual_options", case_id: c3.id }); // not a video job
+    setStatus(q.enqueue({ type: "generate_video", case_id: c3.id, board_item_id: "bd-00000003" }).job.id, "done"); // finished
     expect(row("energy").pending).toEqual({ queued: 1, running: true });
     expect(row("boxing").pending).toEqual({ queued: 0, running: false });
   });

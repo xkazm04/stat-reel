@@ -36,6 +36,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/serve.ts",
-    "start": "tsx src/serve.ts"
+    "start": "tsx src/serve.ts",
+    "worker": "tsx src/generation/worker-main.ts"
   }
 }

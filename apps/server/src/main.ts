@@ -10,6 +10,13 @@ import { CalendarService } from "./calendar";
 import { modes, paths, repoRoot, server } from "./config";
 import { openDb } from "./db";
 import { EventBus } from "./events";
+import { GenerationConfigSchema } from "@statreel/schemas";
+import { AssetFetcher, ownerContact } from "./generation/assets";
+import { generationDataRoot, loadGenerationConfig } from "./generation/config";
+import { makeGenerationMcpTools } from "./generation/mcp-tools";
+import { GenerationQueue } from "./generation/queue";
+import { queueGuard } from "./generation-guard";
+import { GenerationEventsRelay } from "./generation/relay";
 import { HeatmapService } from "./heatmap-service";
 import { JobRunner } from "./jobs";
 import { CaseIdeas, StyleLibrary } from "./library";
@@ -37,9 +44,19 @@ export async function createServer() {
   const cases = new CaseIdeas(db);
   mkdirSync(path.join(paths.board, "items"), { recursive: true });
   runner.resume();
+  // generation (ADR 010): the server only owns the queue API and relays worker events; `pnpm worker` runs the jobs
+  const queue = new GenerationQueue(db);
+  const genData = generationDataRoot();
+  const assets = new AssetFetcher({ config: (() => { try { return loadGenerationConfig().config.web.download; } catch { return GenerationConfigSchema.parse({}).web.download; } })(), dataRoot: genData, getJob: (id) => queue.get(id), contact: ownerContact(paths.statreelLocal) });
+  const relay = new GenerationEventsRelay(db, bus);
+  relay.start();
+  // renders requested by the worker share the render lane (one render at a time); the composition lands in T9/T10
+  runner.register("gen_render", async () => {
+    throw new Error("generation renders are not wired yet (DataRace composition: T9, finalize: T10)");
+  }, { lane: "render" });
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
-  const app = buildApp({ db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline });
+  const app = buildApp({ generationGuard: queueGuard(queue), db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     const root = path.relative(process.cwd(), dist);
@@ -60,5 +77,5 @@ export async function createServer() {
       serveStatic({ path: path.relative(process.cwd(), path.join(dist, "index.html")), onFound: cacheHeaders }),
     );
   }
-  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board, styles, cases };
+  return { app, db, wh, runner, heatmap, projects, llm, pipeline, bus, calendar, board, styles, cases, queue, relay };
 }

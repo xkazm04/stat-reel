@@ -24,11 +24,14 @@ import { CASE_DECISIONS, type CaseDecision, type CaseIdeas, MIN_SPAN_YEARS, type
 import type { Db } from "./db";
 import { TopicService } from "./topics";
 import { type GenerationGuard, noGenerationJobs } from "./generation-guard";
+import { type GenerationRouteDeps, registerGenerationRoutes } from "./generation/routes";
 
 export type AppDeps = {
   db: Db; calendar: CalendarService; board: BoardService; styles: StyleLibrary; cases: CaseIdeas; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
-  /** background generation lookups for undo (D.1); defaults to "no jobs" until the queue lands (TODO(T7)) */
-  generation?: GenerationGuard;
+  /** generation queue API (ADR 010); optional so lighter test apps need not build it */
+  generation?: GenerationRouteDeps;
+  /** what Board undo asks about background generation (D.1); main.ts derives it from the queue, default = no jobs */
+  generationGuard?: GenerationGuard;
   /** controlled topics + the videos ledger (ADR 011); built from `db` when omitted */
   topics?: TopicService;
 };
@@ -160,7 +163,7 @@ export function buildApp(d: AppDeps) {
   app.delete("/api/board/:id/decision", (c) => {
     const id = c.req.param("id");
     if (!d.board.get(id)) return c.json({ error: "not found" }, 404);
-    const gen = d.generation ?? noGenerationJobs;
+    const gen = d.generationGuard ?? noGenerationJobs;
     if (gen.hasRunning({ kind: "item", id })) return c.json({ error: "a generation job for this item is running; cancel it first" }, 409);
     try {
       gen.cancelQueued({ kind: "item", id });
@@ -206,7 +209,7 @@ export function buildApp(d: AppDeps) {
   app.delete("/api/cases/:id/decision", (c) => {
     const id = c.req.param("id");
     if (!d.cases.get(id)) return c.json({ error: "not found" }, 404);
-    const gen = d.generation ?? noGenerationJobs;
+    const gen = d.generationGuard ?? noGenerationJobs;
     if (gen.hasRunning({ kind: "case", id })) return c.json({ error: "a generation job for this case is running; cancel it first" }, 409);
     try {
       gen.cancelQueued({ kind: "case", id });
@@ -246,6 +249,9 @@ export function buildApp(d: AppDeps) {
     return c.json({ ok: true });
   });
 
+  // ---- generation queue (ADR 010): enqueue/cancel/retry/log/config/worker + worker callbacks
+  if (d.generation) registerGenerationRoutes(app, d.generation);
+
   // ---- files (only under renders/audio)
   app.get("/files/*", (c) => {
     const rel = decodeURIComponent(c.req.path.replace(/^\/files\//, ""));
@@ -279,7 +285,7 @@ export function buildApp(d: AppDeps) {
   // ---- MCP (streamable HTTP, stateless)
   app.all("/mcp", async (c) => {
     const body = c.req.method === "POST" ? await c.req.json().catch(() => undefined) : undefined;
-    await handleMcp(d.tools, c.env.incoming, c.env.outgoing, body);
+    await handleMcp(d.tools, c.env.incoming, c.env.outgoing, body, d.generation?.mcp);
     return new Response(null, { headers: { "x-hono-already-sent": "1" } });
   });
 
