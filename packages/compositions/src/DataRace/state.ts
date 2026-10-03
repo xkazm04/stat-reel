@@ -97,15 +97,36 @@ function planCache(plan: TimingPlan): PlanCache {
   return c;
 }
 
+/** Headroom above the leader so its bar never touches the end of the axis. */
+export const AXIS_HEADROOM = 1.08;
+
+const runMaxCache = new WeakMap<TimingPlan, { entities: unknown; max: number[] }>();
+/** Running maximum of every entity's value over periods 0..i (nulls count as 0), per period. */
+function runningMax(props: DataRaceRenderProps): number[] {
+  const hit = runMaxCache.get(props.timing_plan);
+  if (hit && hit.entities === props.entities) return hit.max;
+  const max: number[] = [];
+  let m = 0;
+  for (let i = 0; i < props.timing_plan.periods.length; i++) {
+    for (const e of props.entities) m = Math.max(m, e.values[i] ?? 0);
+    max.push(m);
+  }
+  runMaxCache.set(props.timing_plan, { entities: props.entities, max });
+  return max;
+}
+
 /**
- * The visual axis maximum. It used to follow the current leader (peak * 1.08), so the whole chart
- * rescaled when the leader shrank, while the plan scored motion against `strategy.axis_max` and
- * the renderer never read it. Now one value for the whole run: the explicit prop, else the plan's
- * axis (the largest value in the data). A pure function of the props, so it can never shrink
- * mid-run and any frame is still seek-stable.
+ * The visual axis maximum: grow-only max-so-far. A fixed data-wide maximum left early bars as
+ * slivers, and following the current leader made the chart rescale whenever the leader shrank.
+ * Displayed values are piecewise linear between periods, so the maximum over every frame up to now
+ * is exactly max(running max of the period values up to `i0`, the current peak): a pure function
+ * of the frame (no render-accumulated state), continuous, and never shrinking. An explicit
+ * `props.axis_max` is the owner override and stays fixed.
  */
-export function axisMaxFor(props: DataRaceRenderProps): number {
-  return Math.max(props.axis_max ?? props.timing_plan.strategy.axis_max, 1e-9);
+export function axisMaxAt(props: DataRaceRenderProps, i0: number, currentPeak: number): number {
+  if (props.axis_max !== undefined) return Math.max(props.axis_max, 1e-9);
+  const before = runningMax(props)[Math.max(0, Math.min(i0, props.timing_plan.periods.length - 1))] ?? 0;
+  return Math.max(Math.max(before, currentPeak) * AXIS_HEADROOM, 1e-9);
 }
 
 const tickRank = (n: number): number => (n === 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0);
@@ -170,7 +191,7 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
     }
     return { id: e.id, pos, value, presence, chip: phase === "timeline" ? chipAt(props, e.id, frame) : null };
   });
-  const axisMax = axisMaxFor(props);
+  const axisMax = axisMaxAt(props, i0, Math.max(0, ...rows.map((r) => r.value)));
 
   // cards
   const sorted = orderedEvents(props);

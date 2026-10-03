@@ -23,7 +23,7 @@ import { CHIP, raceChips } from "./chips";
 import { contrastRatio } from "./contrast";
 import { SPOTLIGHT_DIM, SPOTLIGHT_SCALE } from "./ending";
 import { LABEL_RIGHT, L, formatValue, textWidth, valueLabelLayout } from "./parts";
-import { CARD, type DataRaceRenderProps, axisMaxFor, dataRaceState, niceTicks, orderedEvents, phaseAt } from "./state";
+import { CARD, type DataRaceRenderProps, AXIS_HEADROOM, axisMaxAt, dataRaceState, niceTicks, orderedEvents, phaseAt } from "./state";
 
 // Remotion's <Img> reads useCurrentFrame(), which only exists inside a registered composition. These
 // tests hash frames with renderToStaticMarkup, so the real <Img> is swapped for a plain <img>; the
@@ -191,7 +191,7 @@ describe("race", () => {
   });
 });
 
-describe("axis: one fixed scale with nice gridline ticks (ADR scale-and-axis-design)", () => {
+describe("axis: grow-only max-so-far with nice gridline ticks (ADR scale-and-axis-design)", () => {
   it("the axis max never shrinks, over every frame of the sample fixture", () => {
     let prev = 0;
     for (let f = 0; f < plan.sections.total; f++) {
@@ -199,8 +199,16 @@ describe("axis: one fixed scale with nice gridline ticks (ADR scale-and-axis-des
       expect(a, `frame ${f}`).toBeGreaterThanOrEqual(prev);
       prev = a;
     }
-    expect(axisMaxFor(props)).toBe(plan.strategy.axis_max);
-    expect(axisMaxFor({ ...props, axis_max: 123 })).toBe(123);
+    expect(dataRaceState({ ...props, axis_max: 123 }, midFrame).axisMax).toBe(123);
+    expect(axisMaxAt({ ...props, axis_max: 123 }, 0, 1e9)).toBe(123);
+  });
+
+  it("grows with the leader: at the first visible period the leader's bar is >= 50 % of the bar width", () => {
+    const st = dataRaceState(props, plan.sections.hook_end);
+    const leader = Math.max(...st.rows.map((r) => r.value));
+    expect((leader / st.axisMax) * L.barMaxW).toBeGreaterThanOrEqual(0.5 * L.barMaxW);
+    expect(st.axisMax).toBeLessThan(plan.strategy.axis_max);
+    expect(dataRaceState(props, plan.sections.timeline_end - 1).axisMax).toBeCloseTo(plan.strategy.axis_max * AXIS_HEADROOM, 6);
   });
 
   it("niceTicks gives 3-4 round values <= max (2 only where no round step fits)", () => {
@@ -451,13 +459,13 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
-        "chipNew": "e7f009bcbea5357b",
-        "chipUp": "e4ec681320b7f2e7",
-        "hook0": "25d60bf9f1671ef6",
+        "chipNew": "0af2776c2500ab0f",
+        "chipUp": "12c080285f36edc3",
+        "hook0": "82c6217f7e72dc05",
         "like": "4fd9eeef8ee716e2",
-        "mid45": "a8b954c1dcf5227c",
+        "mid45": "3afd214c17a418d4",
         "poweredEnd": "8688d428ce072a85",
-        "spotlight": "d9224485bb67226b",
+        "spotlight": "5bdd817955da3b62",
       }
     `);
   });
