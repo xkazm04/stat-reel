@@ -116,7 +116,7 @@ def test_conformed_core_and_mart_exist(replay_run):
     tables = {f"{s}.{t}" for s, t in con.execute("select table_schema, table_name from information_schema.tables").fetchall()}
     for rel in ("core.players", "core.seasons", "core.matches", "core.player_match_results", "core.player_season_stats",
                 "marts.mart_era_adjusted", "llm.f1_driver_era_adjusted", "llm.f1_driver_seasons",
-                "core.teams", "llm.f1_race_results", "llm.f1_constructor_seasons", "llm.f1_driver_bios", "llm.f1_seasons"):
+                "core.teams", "llm.f1_race_results", "llm.f1_driver_race_cumulative", "core.driver_race_cumulative", "llm.f1_constructor_seasons", "llm.f1_driver_bios", "llm.f1_seasons"):
         assert rel in tables, rel
 
 
@@ -226,3 +226,74 @@ def test_constructor_seasons_and_bios(replay_run):
     con = replay_run["con"]
     assert con.execute("select sum(wins) from llm.f1_constructor_seasons").fetchone()[0] ==         con.execute("select count(distinct race_id) from llm.f1_race_results where position_number = 1 and not is_indianapolis").fetchone()[0]
     assert con.execute("select count(*) from llm.f1_driver_bios where date_of_birth is not null").fetchone()[0] > 100
+
+
+# --------------------------------------------------------------------------- llm.f1_driver_race_cumulative
+
+
+def cumulative_oracle(results_csv: Path, races_csv: Path) -> dict[tuple[str, int], dict]:
+    """Far-side oracle in plain Python: cumulative starts/wins/podiums per (driver, race) from the CSVs,
+    dense from each driver's first start to the last race with results; Indianapolis is not a race."""
+    con = duckdb.connect()
+    races = con.execute(f"""select id from read_csv('{races_csv.as_posix()}') where grandPrixId <> 'indianapolis'
+                            order by year, round""").fetchall()
+    rows = con.execute(f"select raceId, driverId, positionNumber, positionText from read_csv('{results_csv.as_posix()}')").fetchall()
+    with_results = {r[0] for r in rows}
+    order = [r[0] for r in races if r[0] in with_results]
+    entered, won, podium = defaultdict(set), defaultdict(set), defaultdict(set)
+    for race, driver, pos, text in rows:
+        if text in NON_STARTS:
+            continue
+        entered[driver].add(race)
+        if pos == 1:
+            won[driver].add(race)
+        if pos and pos <= 3:
+            podium[driver].add(race)
+    out = {}
+    for driver, ents in entered.items():
+        if not ents & set(order):
+            continue
+        debut = min(i for i, race in enumerate(order) if race in ents)
+        for i in range(debut, len(order)):
+            upto = set(order[: i + 1])
+            out[(driver, order[i])] = {
+                "entered": order[i] in ents, "starts": len(ents & upto), "wins": len(won[driver] & upto), "podiums": len(podium[driver] & upto)}
+    return out
+
+
+def test_driver_race_cumulative_matches_the_far_side_oracle(replay_run):
+    con = replay_run["con"]
+    oracle = cumulative_oracle(FIXTURE / "f1db-races-race-results.csv", FIXTURE / "f1db-races.csv")
+    got = {(d, r): {"entered": e, "starts": s, "wins": w, "podiums": p} for d, r, e, s, w, p in con.execute(
+        "select player_id, race_id, entered, starts_cum, wins_cum, podiums_cum from llm.f1_driver_race_cumulative").fetchall()}
+    assert got == oracle
+    assert any(v["wins"] > 1 for v in oracle.values())
+
+
+def test_driver_race_cumulative_is_dense_after_debut_and_carries_totals_forward(replay_run):
+    con = replay_run["con"]
+    gaps = con.execute("""
+        select count(*) from (
+            select player_id, max(race_seq) - min(race_seq) + 1 - count(*) as missing
+            from llm.f1_driver_race_cumulative group by 1) where missing <> 0""").fetchone()[0]
+    assert gaps == 0
+    latest = con.execute("select max(race_seq) from llm.f1_driver_race_cumulative").fetchone()[0]
+    assert con.execute("select count(distinct player_id) from llm.f1_driver_race_cumulative where race_seq = ?", [latest]).fetchone()[0] == \
+        con.execute("select count(distinct player_id) from llm.f1_driver_race_cumulative").fetchone()[0]
+    # every driver's first row is a start; totals never decrease
+    assert con.execute("""select count(*) from (select player_id, first(entered order by race_seq) f from llm.f1_driver_race_cumulative group by 1)
+                          where not f""").fetchone()[0] == 0
+    assert con.execute("""select count(*) from (select wins_cum - lag(wins_cum) over (partition by player_id order by race_seq) d
+                          from llm.f1_driver_race_cumulative) where d < 0""").fetchone()[0] == 0
+
+
+def test_driver_race_cumulative_rank_is_unique_per_race_and_tied_flags_ties(replay_run):
+    con = replay_run["con"]
+    bad = con.execute("""select count(*) from (select race_id, count(*) n, count(distinct rank_wins_cum) r, max(rank_wins_cum) m
+                         from llm.f1_driver_race_cumulative group by 1) where n <> r or n <> m""").fetchone()[0]
+    assert bad == 0
+    assert con.execute("select count(*) from llm.f1_driver_race_cumulative where tied and wins_cum > 0").fetchone()[0] > 0
+    assert con.execute("""select count(*) from llm.f1_driver_race_cumulative a where tied and not exists (
+        select 1 from llm.f1_driver_race_cumulative b where b.race_id = a.race_id and b.wins_cum = a.wins_cum and b.player_id <> a.player_id)""").fetchone()[0] == 0
+    unique, total = con.execute("select count(distinct fact_key), count(*) from llm.f1_driver_race_cumulative").fetchone()
+    assert unique == total

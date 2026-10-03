@@ -24,3 +24,10 @@ models:
     columns:
       - name: points_current_system
         data_tests: [not_null]
+  - name: driver_race_cumulative
+    data_tests:
+      - dbt_utils_free_unique_combination:
+          columns: [player_id, race_id]
+    columns:
+      - name: wins_cum
+        data_tests: [not_null]
