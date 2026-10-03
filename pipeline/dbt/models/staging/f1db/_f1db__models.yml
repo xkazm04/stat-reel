@@ -23,3 +23,13 @@ models:
     columns:
       - name: driver_id
         data_tests: [not_null]
+  - name: stg_f1db__sprint_race_results
+    columns:
+      - name: race_id
+        data_tests:
+          - not_null
+          - relationships: {to: ref('stg_f1db__races'), field: race_id}
+      - name: driver_id
+        data_tests:
+          - not_null
+          - relationships: {to: ref('stg_f1db__drivers'), field: driver_id}

@@ -21,5 +21,7 @@ duration_s:
   min: 30
   max: 60
 props_schema: null
-query_templates: []
+query_templates:
+- >-
+  points_fight_top10_by_round: select season, round, race_date, display_name, points_cum, rank, gap_to_leader, tied_on_points, fact_key from llm.f1_season_standings_by_round where season = 2024 and rank <= 10 order by round, rank  -- change season; for seasons before 1991 check drops_apply
 notes: null

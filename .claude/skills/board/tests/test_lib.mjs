@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateDesign, validateShot } from "../scripts/lib.mjs";
+import { applyFeedback, assessClockLabels, assessFrameFacts, assessLongevity, attributionPresent, dataReadySports, dataReadyUseCases, emptyLedger, excerptWindow, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, stagedSeasonRange, textOutsideSafeBox, validateDesign, validateShot } from "../scripts/lib.mjs";
 
 const item = (id, decision, style, useCase, note = null, proposed = null) => ({
   id, decision, note, decided_at: `2026-09-30T10:0${id.length}:00Z`, style: { id: style, name: style }, use_case_id: useCase, proposed_case: proposed,
@@ -109,7 +109,7 @@ test("a time-evolution design declares a 30-90 s run and a data timeline", () =>
   assert.match(validateDesign({ ...tl, timeline: undefined }, { useCases: ["career-wins-race"] }).join(), /timeline/);
   assert.match(validateDesign({ ...tl, timeline: { unit: "season", from: 2026, to: 1950 } }, { useCases: ["career-wins-race"] }).join(), /from < to/);
   assert.match(validateDesign({ ...tl, use_case_id: "era-adjusted-rankings" }, { useCases: ["career-wins-race"] }).join(), /not a time-evolution use case/);
-  assert.deepEqual(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p", data_time: "season" } }, { useCases: [] }), []);
+  assert.deepEqual(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p", data_time: "season", sport: "F1" } }, { useCases: [] }), []);
   assert.match(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p" } }, { useCases: [] }).join(), /data_time/);
 });
 
@@ -224,4 +224,126 @@ test("checkImages: listed, inside the folder, small, text-banned prompts, no unl
   assert.match(checkImages([{ ...ok[0], role: "chart" }], { "img/asphalt.jpg": 1 }).join(), /role/);
   assert.match(checkImages([], { "img/x.png": 1 }).join(), /not listed/);
   assert.match(checkImages([{ ...ok[0], file: "../x.jpg" }], {}).join(), /inside the variant folder/);
+});
+
+// ---- truth probes
+
+test("clock labels: a frame whose printed season agrees with floor(dataClock) passes", () => {
+  const r = assessClockLabels([
+    { t: 0, clock: 1990, texts: ["1990 · R1", "Data: F1DB (CC BY 4.0)"] },
+    { t: 10, clock: 1994.94, texts: [{ text: "1994 · R16", px: 120 }, { text: "1990", px: 30 }] }, // axis tick 1990 is smaller: not the clock
+    { t: 20, clock: 1995.0000000001, texts: ["1995"] },
+  ]);
+  assert.deepEqual(r.problems, []);
+  assert.equal(r.checked, 3);
+});
+
+test("clock labels: a season-ahead label (the tl-001 failure) is caught with frame time, label and clock", () => {
+  const r = assessClockLabels([
+    { t: 0, clock: 1987, texts: ["1987 · R1"] },
+    { t: 30.5, clock: 1987.94, texts: [{ text: "1988 · R16", px: 140 }, { text: "1987", px: 32 }] },
+  ]);
+  assert.equal(r.ok, false);
+  assert.match(r.problems[0], /t=30\.5s label "1988" but dataClock=1987\.94 \(season 1987\)/);
+});
+
+test("clock labels: unlabelled frames, year ranges and non-season units are not failures", () => {
+  const r = assessClockLabels([
+    { t: 0, clock: 1950, texts: ["Wins", "Hamilton 12"] },
+    { t: 5, clock: 1960, texts: ["1950-2026 F1 wins"] }, // a range is a title
+    { t: 9, clock: NaN, texts: ["1999"] },
+  ]);
+  assert.equal(r.ok, true);
+  assert.equal(r.checked, 0);
+  assert.equal(r.unlabelled, 2);
+  assert.match(assessClockLabels([{ t: 0, clock: 3, texts: ["2020"] }], { unit: "race" }).skipped, /race/);
+});
+
+const rr = (race_id, season, round, name, pos, pts) => ({ race_id, season, round, display_name: name, position_number: pos, points_current_system: pts, is_indianapolis: false });
+const tables = { f1_race_results: [
+  rr("a", 1990, 1, "Senna", 1, 25), rr("a", 1990, 1, "Prost", 2, 18),
+  rr("b", 1990, 2, "Prost", 1, 25), rr("b", 1990, 2, "Senna", 3, 15),
+  rr("c", 1991, 1, "Senna", 1, 25), rr("c", 1991, 1, "Prost", 4, 12),
+  { ...rr("i", 1991, 2, "Senna", 1, 25), is_indianapolis: true },
+] };
+
+test("frameFacts: declared standings that match the staged data pass (cumulative, season-scoped, per round)", () => {
+  assert.equal(assessFrameFacts({ period: { season: 1990, round: 2 }, top: [{ name: "Prost", value: 1 }, { name: "Senna", value: 1 }] }, tables, { clock: 1990.5 }).ok, true);
+  assert.equal(assessFrameFacts({ period: 1991, top: [{ name: "Senna", value: 2 }, { name: "Prost", value: 1 }] }, tables).ok, true);
+  assert.equal(assessFrameFacts({ period: 1991, from: 1991, top: [{ name: "Senna", value: 1 }, { name: "Prost", value: 0 }] }, tables).ok, true); // window starts in 1991
+  assert.equal(assessFrameFacts({ period: 1991, scope: "season", metric: "points_current_system", top: [{ name: "Senna", value: 25 }, { name: "Prost", value: 12 }] }, tables).ok, true);
+});
+
+test("frameFacts: a wrong value, a missing leader, an unknown driver and a period off the clock fail", () => {
+  const wrong = assessFrameFacts({ period: 1991, top: [{ name: "Senna", value: 3 }] }, tables, { t: 12 });
+  assert.match(wrong.problems.join(), /t=12\.0s.*"Senna" drawn as 3.*gives 2/);
+  const missing = assessFrameFacts({ period: 1991, top: [{ name: "Prost", value: 1 }] }, tables);
+  assert.match(missing.problems.join(), /leader is missing/);
+  assert.match(assessFrameFacts({ period: 1991, top: [{ name: "Nobody", value: 1 }] }, tables).problems.join(), /no wins/);
+  assert.match(assessFrameFacts({ period: 1991, top: [{ name: "Senna", value: 2 }] }, tables, { clock: 1990.9 }).problems.join(), /dataClock=1990\.90/);
+});
+
+test("frameFacts: a design that does not declare it is skipped, never failed", () => {
+  for (const d of [undefined, null]) assert.deepEqual(assessFrameFacts(d, tables), { ok: true, declared: false, problems: [], note: "not declared" });
+});
+
+// ---- the F1 data-ready predicate and proposed cases
+
+const cell = (sport, status) => ({ sport, mode: "m", status });
+const ucs = [
+  { id: "f1-ready", cells: [cell("Soccer", "blocked"), cell("F1", "data-ready")] },
+  { id: "soccer-only", cells: [cell("Soccer", "data-ready"), cell("F1", "not-tested")] },
+  { id: "f1-failing", cells: [cell("F1", "failing")] },
+  { id: "no-cells" },
+];
+
+test("dataReadyUseCases keeps only use cases with a data-ready cell for the sport", () => {
+  assert.deepEqual(dataReadyUseCases(ucs).map((u) => u.id), ["f1-ready"]);
+  assert.deepEqual(dataReadyUseCases(ucs, { sport: "soccer" }).map((u) => u.id), ["soccer-only"]);
+  assert.deepEqual(dataReadyUseCases(undefined), []);
+  assert.deepEqual(dataReadySports(ucs).sort(), ["F1", "Soccer"]);
+});
+
+test("a proposed case must be about a sport with data-ready cells and fit the staged seasons", () => {
+  const base = { ...tl, use_case_id: null };
+  const pc = (extra) => ({ ...base, proposed_case: { name: "N", pitch: "p", data_time: "season", ...extra } });
+  const opts = { useCases: [], sports: ["F1"], period: { from: 1950, to: 2026 } };
+  assert.deepEqual(validateDesign(pc({ sport: "F1" }), opts), []);
+  assert.match(validateDesign(pc({ sport: "Soccer" }), opts).join(), /proposed case needs Soccer data, which is not tested yet/);
+  assert.match(validateDesign(pc({}), opts).join(), /needs sport/);
+  assert.match(validateDesign(pc({ sport: "F1", data_time: "fortnight" }), opts).join(), /data_time/);
+  const out = { ...pc({ sport: "F1" }), timeline: { unit: "season", from: 1940, to: 2026 } };
+  assert.match(validateDesign(out, opts).join(), /staged tables cover seasons 1950-2026/);
+  assert.deepEqual(validateDesign(out, { ...opts, period: null }), []); // range unknown (harvest pre-check): skipped
+  assert.deepEqual(stagedSeasonRange({ f1_seasons: [{ season: 1950 }, { season: 2025 }] }), { from: 1950, to: 2025 });
+  assert.equal(stagedSeasonRange({}), null);
+});
+
+// ---- safe box and attribution
+
+const rect = (text, x, y, w = 200, h = 40) => ({ text, x, y, w, h, t: 12 });
+
+test("safe box (vertical): text inside passes, text in the bands fails", () => {
+  // box: x 65..950, y 270..1250
+  assert.deepEqual(textOutsideSafeBox([rect("1990", 65, 300), rect("Wins", 700, 1200, 250, 50)], "vertical").outside, []);
+  const r = textOutsideSafeBox([rect("1990", 80, 300), rect("tick", 80, 100), rect("source", 80, 1300), rect("left", 20, 600), rect("right", 800, 600, 200)], "vertical");
+  assert.deepEqual(r.outside.map((o) => o.text), ["tick", "source", "left", "right"]);
+  assert.equal(r.ok, false);
+  assert.equal(textOutsideSafeBox([rect("edge", 64, 269)], "vertical").ok, true); // 2 px slack
+});
+
+test("safe box: landscape has no box defined and is skipped with a note; unknown formats fail", () => {
+  const r = textOutsideSafeBox([rect("x", 0, 0)], "landscape");
+  assert.equal(r.ok, true);
+  assert.match(r.skipped, /no landscape safe box/);
+  assert.equal(textOutsideSafeBox([], "square").ok, false);
+});
+
+test("attribution: present when the string is on screen (any spacing, any node split), missing otherwise", () => {
+  assert.equal(attributionPresent(["1990", "Data: F1DB (CC BY 4.0)"]).ok, true);
+  assert.equal(attributionPresent([{ text: "Data:" }, { text: "F1DB (CC BY 4.0)" }]).ok, true);
+  assert.equal(attributionPresent(["DATA:  F1DB  (CC BY 4.0)"]).ok, true);
+  assert.equal(attributionPresent(["1990", "Source: F1DB"]).ok, false);
+  assert.equal(attributionPresent([]).ok, false);
+  assert.equal(attributionPresent(["Data: Ergast"], "Data: Ergast").ok, true);
 });

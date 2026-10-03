@@ -1,5 +1,18 @@
+import type { TopicVideoCell } from "./topicHeatmap";
 import { describe, expect, it } from "vitest";
-import { ageLabel, bucketOf, cellAria, sortTopics, visibleColumns } from "./topicHeatmap";
+import {
+  ageLabel,
+  bucketOf,
+  cellAria,
+  clampPos,
+  emptyCellLabel,
+  newTabLabel,
+  nextPos,
+  sortTopics,
+  tabIndexFor,
+  topicSummary,
+  visibleColumns,
+} from "./topicHeatmap";
 
 describe("topic heatmap helpers", () => {
   it("bucketOf: boundaries at 7/8, 30/31 and 90/91 days", () => {
@@ -25,5 +38,33 @@ describe("topic heatmap helpers", () => {
   it("cellAria names topic, ordinal, date and age", () => {
     const v = { n: 2, id: "vd-1", title: "t", created_at: "2026-10-03T10:00:00Z", age_days: 3, bucket: "fresh" as const, case_id: null, project_id: null, url: null };
     expect(cellAria("Energy", v, 3)).toBe("Energy, video 2 of 3, created 3 Oct 2026, 3 days ago");
+  });
+  it("topicSummary counts topics, videos and accepted cases from the data", () => {
+    const v = { n: 1 } as TopicVideoCell;
+    expect(topicSummary([{ videos: [], accepted_cases: 2 }, { videos: [], accepted_cases: 3 }, { videos: [], accepted_cases: 1 }])).toBe(
+      "3 topics, 0 videos, 6 accepted cases",
+    );
+    expect(topicSummary([{ videos: [v], accepted_cases: 1 }])).toBe("1 topic, 1 video, 1 accepted case");
+  });
+  it("announces new-tab links and labels empty cells", () => {
+    expect(newTabLabel("Energy, video 1 of 1")).toBe("Energy, video 1 of 1, opens in a new tab");
+    expect(emptyCellLabel("Energy", 2, "queued", false)).toBe("Energy, video 2: queued");
+    expect(emptyCellLabel("Energy", 1, null, true)).toBe("Energy: no video yet");
+    expect(emptyCellLabel("Energy", 3, null, false)).toBe("Energy, video 3: empty");
+  });
+  it("roving tabindex: one tab stop, arrows reach every cell, edges clamp", () => {
+    const cur = { r: 1, c: 2 };
+    expect(tabIndexFor(cur, 1, 2)).toBe(0);
+    expect(tabIndexFor(cur, 0, 0)).toBe(-1);
+    expect(nextPos(cur, "ArrowRight", 3, 5)).toEqual({ r: 1, c: 3 });
+    expect(nextPos(cur, "ArrowDown", 3, 5)).toEqual({ r: 2, c: 2 });
+    expect(nextPos({ r: 2, c: 4 }, "ArrowDown", 3, 5)).toEqual({ r: 2, c: 4 });
+    expect(nextPos(cur, "Home", 3, 5)).toEqual({ r: 1, c: 0 });
+    expect(nextPos(cur, "End", 3, 5)).toEqual({ r: 1, c: 4 });
+    expect(nextPos(cur, "Enter", 3, 5)).toBeNull();
+    expect(nextPos(cur, "ArrowUp", 0, 0)).toBeNull();
+    // a stale position after the grid shrank is pulled back inside first
+    expect(clampPos({ r: 9, c: 9 }, 3, 5)).toEqual({ r: 2, c: 4 });
+    expect(nextPos({ r: 9, c: 9 }, "ArrowLeft", 3, 5)).toEqual({ r: 2, c: 3 });
   });
 });

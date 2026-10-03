@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { acrossCount, clock, numberWord, registryGrid, registryShare, sceneStrip, splitNeq, studioCounts } from "./frontpf";
+import {
+  acrossCount,
+  clock,
+  lineIsQuiet,
+  lineItems,
+  numberWord,
+  onTheLine,
+  registryGrid,
+  registryShare,
+  sceneStrip,
+  splitNeq,
+  studioCounts,
+  videosLine,
+} from "./frontpf";
 
 describe("frontpf", () => {
   it("counts sources across the line per mode", () => {
@@ -47,5 +60,54 @@ describe("frontpf", () => {
     expect(numberWord(10)).toBe("Ten");
     expect(numberWord(14)).toBe("14");
     expect(clock(62.5)).toBe("1:02.500");
+  });
+});
+
+describe("on the line today", () => {
+  const topic = (key: string, accepted_cases: number, queued = 0, running = false, videos = 0) => ({
+    key,
+    label: key.toUpperCase(),
+    accepted_cases,
+    pending: { queued, running },
+    videos: Array.from({ length: videos }, () => ({})),
+  });
+  it("counts cases, generation, ledger and Board from the real shapes", () => {
+    const l = onTheLine(
+      [topic("a", 2, 1, true), topic("b", 0, 3), topic("c", 5, 0, false, 2)],
+      [{ status: "accepted" }, { status: "pending" }, { status: "pending" }, { status: "rejected" }],
+    );
+    expect(l).toEqual({
+      acceptedCases: 7,
+      byTopic: [
+        { key: "c", label: "C", accepted: 5 },
+        { key: "a", label: "A", accepted: 2 },
+      ],
+      queued: 4,
+      running: 1,
+      videos: 2,
+      boardAccepted: 1,
+      boardPending: 2,
+    });
+  });
+  it("keeps zero rows labelled and links each count to where the owner acts", () => {
+    const l = onTheLine([], []);
+    expect(lineIsQuiet(l)).toBe(true);
+    expect(lineItems(l).map((i) => [i.id, i.to, i.n])).toEqual([
+      ["cases", "topics", 0],
+      ["generation", "topics", 0],
+      ["board-accepted", "board-accepted", 0],
+      ["board-pending", "board-pending", 0],
+    ]);
+  });
+  it("shortens the topic detail and pluralises", () => {
+    const l = onTheLine([topic("a", 1), topic("b", 1), topic("c", 1), topic("d", 1)], []);
+    const cases = lineItems(l)[0];
+    expect(cases?.text).toBe("accepted cases");
+    expect(cases?.detail).toBe("A 1, B 1, C 1, +1 more");
+    expect(lineItems(onTheLine([topic("a", 1)], []))[0]?.text).toBe("accepted case");
+  });
+  it("says honestly that the ledger is empty", () => {
+    expect(videosLine(onTheLine([], []))).toMatch(/^0 videos rendered yet/);
+    expect(videosLine(onTheLine([topic("a", 0, 0, false, 1)], []))).toBe("1 video on the ledger");
   });
 });

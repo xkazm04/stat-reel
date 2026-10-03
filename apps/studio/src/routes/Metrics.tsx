@@ -100,7 +100,7 @@ export function MetricsPage() {
       </header>
 
       {met.isError ? (
-        <Failure error={met.error} what="Metrics" />
+        <Failure error={met.error} what="Metrics" onRetry={() => void met.refetch()} retrying={met.isFetching} />
       ) : met.isLoading ? (
         <Loading what="metrics" />
       ) : !pubs.length ? (

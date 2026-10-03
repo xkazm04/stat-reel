@@ -27,6 +27,7 @@ import { DnsList, FinishPicture, LaneBar, ModeSwitch, SourceChip } from "../comp
 import { Arrow, FormatIcon, Glyph, NotEqual, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { LaneArt } from "../components/LaneArt";
+import { OnTheLine } from "../components/OnTheLine";
 import { Programme } from "../components/LazyProgramme";
 import type { PlayerMeta } from "../components/Programme";
 import { Slate } from "../components/Slate";
@@ -431,6 +432,7 @@ function Frame({
               </span>
             </div>
           )}
+          <OnTheLine variant="way" style={css({ "--d": 5 })} />
         </nav>
       </div>
       <div className="pf-hairline" aria-hidden="true">

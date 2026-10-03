@@ -240,6 +240,23 @@ const JOB_VERB: Record<string, string> = {
 };
 
 /**
+ * Job kind -> the owner's noun for it, and a job status -> its phrase. These mirror projectState.ts
+ * (JOB_LABEL / jobFlag), which imports this module's stage words at load time, so importing it back
+ * here would be a cycle; its jobFlag test pins the same wording. No raw `${kind} ${status}` token
+ * reaches the owner (status-vocabulary).
+ */
+const JOB_NOUN: Record<string, string> = {
+  llm: "Co-pilot draft",
+  audio: "Audio",
+  render: "Render",
+  publish: "Publish",
+  ingest: "Ingest",
+  transform: "Transform",
+  metrics: "Metrics pull",
+};
+const ACTIVE_PHRASE: Record<string, string> = { queued: "waiting in the queue", running: "running" };
+
+/**
  * The next action for a project. A running job wins ("wait"); a failed/refused latest job asks
  * the owner to look; otherwise the stage decides.
  */
@@ -251,14 +268,14 @@ export function nextAction(status: string, latestJob?: JobLike | null): NextActi
         : "";
     return {
       verb: JOB_VERB[latestJob.kind] ?? `Job ${latestJob.kind}`,
-      hint: `${latestJob.status}${pct}`,
+      hint: `${ACTIVE_PHRASE[latestJob.status] ?? "working"}${pct}`,
       tone: "wait",
     };
   }
   if (latestJob && (latestJob.status === "failed" || latestJob.status === "refused") && status !== "published") {
     return {
       verb: latestJob.status === "refused" ? "Review refusal" : "Fix failed job",
-      hint: `${latestJob.kind} ${latestJob.status}${latestJob.error ? `: ${latestJob.error}` : ""}`,
+      hint: `${JOB_NOUN[latestJob.kind] ?? "A job"} ${latestJob.status}${latestJob.error ? `: ${latestJob.error}` : ""}`,
       tone: "blocked",
     };
   }

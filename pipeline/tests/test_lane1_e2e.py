@@ -297,3 +297,103 @@ def test_driver_race_cumulative_rank_is_unique_per_race_and_tied_flags_ties(repl
         select 1 from llm.f1_driver_race_cumulative b where b.race_id = a.race_id and b.wins_cum = a.wins_cum and b.player_id <> a.player_id)""").fetchone()[0] == 0
     unique, total = con.execute("select count(distinct fact_key), count(*) from llm.f1_driver_race_cumulative").fetchone()
     assert unique == total
+
+
+# --------------------------------------------------------------------------- llm.f1_season_standings_by_round
+
+
+def test_standings_by_round_reconcile_with_official_championship_points(replay_run):
+    """After the final round, points_cum equals f1db's championship_points - for every season without
+    dropped scores (before 1991 only a best-N subset counted, which this view deliberately does not apply)."""
+    con = replay_run["con"]
+    seasons = [r[0] for r in con.execute("select distinct season from llm.f1_season_standings_by_round where not drops_apply order by 1").fetchall()]
+    assert {2008, 2024, 2025, 2026} <= set(seasons)
+    mismatches = con.execute("""
+        with mine as (select season, player_id, points_cum from llm.f1_season_standings_by_round where is_final_round and not drops_apply),
+             official as (select season, driver_id as player_id, championship_points from staging_f1db.stg_f1db__season_driver_standings)
+        select coalesce(m.season, o.season), coalesce(m.player_id, o.player_id), m.points_cum, o.championship_points
+        from mine m full join official o on o.season = m.season and o.player_id = m.player_id
+        where coalesce(m.season, o.season) in (select season from mine)
+          and coalesce(m.points_cum, 0) <> coalesce(o.championship_points, 0)""").fetchall()
+    assert mismatches == []
+
+
+def test_standings_by_round_final_rank_matches_official_position_and_includes_sprints(replay_run):
+    """Compared where points are not tied: the documented tie-break stops at Grand Prix finishes down to 8th, so
+    a points tie that f1db settles by Sprint results or "earliest achieved" (2026: three drivers on 7) may differ."""
+    con = replay_run["con"]
+    wrong = con.execute("""
+        select s.season, s.player_id, s.rank, o.championship_position
+        from llm.f1_season_standings_by_round s
+        join staging_f1db.stg_f1db__season_driver_standings o on o.season = s.season and o.driver_id = s.player_id
+        where s.is_final_round and not s.drops_apply and s.points_cum > 0 and not s.tied_on_points and s.rank <> o.championship_position""").fetchall()
+    assert wrong == []
+    sprint = dict(con.execute("""select season, sum(sprint_points_round) from llm.f1_season_standings_by_round group by 1""").fetchall())
+    assert all(sprint[y] > 0 for y in (2024, 2025, 2026))
+    assert sprint[2008] == 0
+    # a round's points are the race plus the sprint, and the running total adds them up
+    assert con.execute("""select count(*) from (select points_cum - lag(points_cum, 1, 0) over (partition by season, player_id order by round) d, points_round
+                          from llm.f1_season_standings_by_round) where abs(d - points_round) > 1e-9""").fetchone()[0] == 0
+
+
+def test_standings_by_round_shape_rank_gap_and_keys(replay_run):
+    con = replay_run["con"]
+    unique, total = con.execute("select count(distinct fact_key), count(*) from llm.f1_season_standings_by_round").fetchone()
+    assert unique == total
+    assert con.execute("select count(*) from (select season, round, count(*) n, count(distinct rank) r, max(rank) m "
+                       "from llm.f1_season_standings_by_round group by 1, 2) where n <> r or n <> m").fetchone()[0] == 0
+    assert con.execute("select count(*) from llm.f1_season_standings_by_round where (rank = 1) <> (gap_to_leader = 0) and not tied_on_points").fetchone()[0] == 0
+    assert con.execute("select min(gap_to_leader) from llm.f1_season_standings_by_round").fetchone()[0] == 0
+    # dense across rounds: every driver of a season has a row at every round of it
+    assert con.execute("""select count(*) from (select season, player_id, count(*) n from llm.f1_season_standings_by_round group by 1, 2) a
+                          join (select season, count(distinct round) k from llm.f1_season_standings_by_round group by 1) b using (season)
+                          where a.n <> b.k""").fetchone()[0] == 0
+    # Indianapolis counts for the championship in 1950-1960
+    assert con.execute("select count(*) from llm.f1_season_standings_by_round s join core.matches m on m.match_id = s.race_id where m.is_indianapolis").fetchone()[0] > 0
+
+
+# --------------------------------------------------------------------------- llm.f1_race_winners
+
+
+def winners_oracle(results_csv: Path, races_csv: Path, drivers_csv: Path) -> dict[tuple[int, str], dict]:
+    """Far-side oracle: winners per Grand Prix straight from the CSVs, age from date of birth in Python."""
+    from datetime import date
+
+    con = duckdb.connect()
+    races = {r[0]: r[1] for r in con.execute(
+        f"select id, date from read_csv('{races_csv.as_posix()}') where grandPrixId <> 'indianapolis'").fetchall()}
+    born = dict(con.execute(f"select id, dateOfBirth from read_csv('{drivers_csv.as_posix()}')").fetchall())
+    rows = con.execute(f"select raceId, driverId, positionNumber, positionText, sharedCar, gridPositionNumber from read_csv('{results_csv.as_posix()}')").fetchall()
+    out = {}
+    for race, driver, pos, text, shared, grid in rows:
+        if race in races and pos == 1 and text not in NON_STARTS:
+            d, b = races[race], born[driver]
+            d = d if isinstance(d, date) else date.fromisoformat(str(d))
+            out[(race, driver)] = {"age": (d - b).days / 365.2425, "grid": grid, "shared": bool(shared)}
+    return out
+
+
+def test_race_winners_match_the_far_side_oracle(replay_run):
+    con = replay_run["con"]
+    oracle = winners_oracle(FIXTURE / "f1db-races-race-results.csv", FIXTURE / "f1db-races.csv", FIXTURE / "f1db-drivers.csv")
+    got = {(race, driver): {"age": age, "grid": grid, "shared": shared} for race, driver, age, grid, shared in con.execute(
+        "select race_id, player_id, age_at_win, grid_position, shared_drive from llm.f1_race_winners").fetchall()}
+    assert set(got) == set(oracle)
+    for key, want in oracle.items():
+        assert got[key]["age"] == pytest.approx(want["age"], abs=1e-9), key
+        assert got[key]["grid"] == want["grid"], key
+        assert got[key]["shared"] == want["shared"], key
+    assert any(v["shared"] for v in oracle.values()), "fixture contains a shared winning drive"
+    assert any(v["grid"] is None for v in oracle.values()), "fixture contains a winner with no recorded grid"
+
+
+def test_race_winners_one_winner_per_race_except_shared_drives(replay_run):
+    con = replay_run["con"]
+    unique, total = con.execute("select count(distinct (race_id, player_id)), count(*) from llm.f1_race_winners").fetchone()
+    assert unique == total
+    assert con.execute("select count(*) from (select race_id, count(*) n, bool_or(shared_drive) s from llm.f1_race_winners group by 1) where n > 1 and not s").fetchone()[0] == 0
+    # every Grand Prix with results has a winner; the Indianapolis 500 is not one
+    assert con.execute("""select count(*) from core.matches m where m.has_results and not m.is_indianapolis
+                          and m.match_id not in (select race_id from llm.f1_race_winners)""").fetchone()[0] == 0
+    assert con.execute("select count(*) from llm.f1_race_winners w join core.matches m on m.match_id = w.race_id where m.is_indianapolis").fetchone()[0] == 0
+    assert con.execute("select min(age_at_win) from llm.f1_race_winners").fetchone()[0] > 18

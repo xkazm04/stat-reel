@@ -5,8 +5,64 @@
  * No React, no DOM (unit-tested in heatmap.test.ts).
  */
 import type { CellStatus, HeatmapCell, LicenseClass, Mode, Sport } from "@statreel/schemas";
-import { allowedIn, decisionAid, failingKinds, SPORTS } from "./logic";
+import { allowedIn, decisionAid, failingKinds, relTime, SPORTS } from "./logic";
 import { bestCells } from "./display";
+
+/**
+ * Why a Blocked cell is blocked (DESIGN §7). Blocked stays ONE status; the cause is what a reader
+ * needs to tell a to-do ("not tested") from a dead end ("not applicable") or a real failure.
+ * Derived from the payload only: the server writes "not applicable: ..." into `reason` for a
+ * format that does not exist in that sport (apps/server/src/heatmap.ts), and every other cause
+ * comes from the first required kind without a passing source.
+ */
+export type BlockedCause = "not-tested" | "failing-test" | "not-applicable" | "licence" | "no-source";
+
+export function blockedCause(c: HeatmapCell): BlockedCause {
+  if (/^not applicable\b/i.test(c.reason)) return "not-applicable";
+  const k = c.kinds.find((x) => !x.best);
+  if (!k) return "not-applicable"; // nothing to test or fix: every kind passes, yet the cell is blocked
+  if (k.tested) return "failing-test";
+  if (!k.sources.length) return "no-source";
+  // declared sources exist but none could ever clear in this mode: testing them would not help
+  return k.sources.some((s) => allowedIn(c.mode, s.license_class)) ? "not-tested" : "licence";
+}
+
+const BLOCKED_HINT: Record<BlockedCause, string> = {
+  "not-tested": "not tested",
+  "failing-test": "failing test",
+  "not-applicable": "n/a here",
+  licence: "licence",
+  "no-source": "no source",
+};
+/** Legend wording per cause, in display order. */
+export const BLOCKED_CAUSES: { cause: BlockedCause; label: string }[] = [
+  { cause: "not-tested", label: "not tested" },
+  { cause: "failing-test", label: "failing test" },
+  { cause: "no-source", label: "no source" },
+  { cause: "licence", label: "licence" },
+  { cause: "not-applicable", label: "n/a" },
+];
+
+/** Blocked cells of one mode, counted per cause (zero causes omitted from the legend by the caller). */
+export function blockedBreakdown(cells: HeatmapCell[], mode: Mode): Record<BlockedCause, number> {
+  const out: Record<BlockedCause, number> = {
+    "not-tested": 0,
+    "failing-test": 0,
+    "not-applicable": 0,
+    licence: 0,
+    "no-source": 0,
+  };
+  for (const c of cells) if (c.mode === mode && c.status === "blocked") out[blockedCause(c)]++;
+  return out;
+}
+
+/** "34 blocked · 33 not tested · 1 n/a" for the legend; "" when nothing is blocked. */
+export function blockedLegend(b: Record<BlockedCause, number>): string {
+  const total = Object.values(b).reduce((a, n) => a + n, 0);
+  if (!total) return "";
+  const parts = BLOCKED_CAUSES.filter((x) => b[x.cause]).map((x) => `${b[x.cause]} ${x.label}`);
+  return [`${total} blocked`, ...parts].join(" · ");
+}
 
 /** The short second line inside a cell: why, in three words. */
 export function cellHint(c: HeatmapCell): string {
@@ -16,10 +72,7 @@ export function cellHint(c: HeatmapCell): string {
     const k = c.kinds.find((x) => x.best && !allowedIn(c.mode, x.best));
     return k?.best === "paid" ? "paid licence" : "NC only";
   }
-  const k = c.kinds.find((x) => !x.best);
-  if (!k) return "blocked";
-  if (k.tested) return "failing test";
-  return k.sources.length ? "not tested" : "no source";
+  return BLOCKED_HINT[blockedCause(c)];
 }
 
 export const focusKey = (usecase: string, sport: string): string => `${usecase}|${sport}`;
@@ -60,6 +113,12 @@ export function sportCounts(cells: HeatmapCell[], mode: Mode, sport: string): Re
   return out;
 }
 
+/** "snapshot 3 h ago" from the newest trend snapshot (the cell data is a snapshot, not live). */
+export function snapshotAge(trend: { at: string }[], now = Date.now()): string {
+  const at = trend.at(-1)?.at;
+  return at ? `snapshot ${relTime(at, now)}` : "no snapshot yet";
+}
+
 export type FixCandidate = { id: string; status: string; action: string };
 export type CellFix = {
   kind: string;
@@ -70,7 +129,7 @@ export type CellFix = {
   flipsThisCell: boolean;
   /** the status the cell would become if this were its only fix */
   becomes: CellStatus;
-  /** legal sources already on the registry for this kind in this cell that do not pass yet */
+  /** sources already on the registry for this kind in this cell whose licence class is allowed in the cell's mode and that do not pass yet */
   candidates: FixCandidate[];
   /** ASK/BLOCKED cells in this mode that this same kind x sport alone would flip (this one included) */
   flipsInGrid: number;
@@ -84,7 +143,8 @@ const ACTION: Record<string, string> = {
 
 /**
  * What would clear one cell in its mode: one entry per failing kind (none for Go / Data ready).
- * Candidates are legal sources the registry already declares; finding a new one is the owner's call.
+ * Candidates are sources the registry already declares whose class clears THIS mode (legal only when
+ * monetized; legal or non-commercial in non-commercial mode); finding a new one is the owner's call.
  */
 export function cellFixes(cells: HeatmapCell[], cell: HeatmapCell): CellFix[] {
   const failing = failingKinds(cell);
@@ -100,7 +160,7 @@ export function cellFixes(cells: HeatmapCell[], cell: HeatmapCell): CellFix[] {
       flipsThisCell: failing.length === 1,
       becomes: cell.composition_implemented ? "go" : "data-ready",
       candidates: (k?.sources ?? [])
-        .filter((s) => s.license_class === "legal" && s.status !== "pass")
+        .filter((s) => allowedIn(cell.mode, s.license_class) && s.status !== "pass")
         .map((s) => ({ id: s.id, status: s.status, action: ACTION[s.status] ?? `resolve "${s.status}"` })),
       flipsInGrid: entry?.flips.length ?? 0,
     };

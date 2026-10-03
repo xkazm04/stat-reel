@@ -78,8 +78,7 @@ these style + case pairings:
 - **Beginning and end.** At t = 0 the title and the chart frame are already readable. The run ends on
   the latest data with a short hold. The cut-out comes from the middle, so the middle has to be as
   good as the ends.
-- In vertical designs, keep critical content inside the safe box (top 270, bottom 670, left 65,
-  right 130) for the whole run.
+- Vertical designs keep readable text inside the safe box for the whole run (gated by `check.mjs`).
 
 ## Deliverable, per variant (in addition to the contract below)
 
@@ -125,14 +124,15 @@ these style + case pairings:
 
   - `timeline.unit` is one of season, race, matchday, career-start, date, and `from`/`to` are
     numbers in that unit.
-  - For a new case use `"proposed_case": {"name", "pitch", "data_time", "requires": [kinds]}` with
-    `use_case_id: null`.
+  - For a new case use `"proposed_case": {"name", "pitch", "data_time", "sport", "requires": [kinds]}` with
+    `use_case_id: null`. `sport` is the sport whose staged data you use (today only `"F1"`); a
+    proposal about a sport without data-ready data fails the harness.
   - A style `id` is how the owner's feedback finds your style in later loops. Reuse an id only for the
     same style.
 
 ## Hard constraints
 
-- The attribution `Data: F1DB (CC BY 4.0)` is visible for the whole run.
+- The attribution `Data: F1DB (CC BY 4.0)` stays on screen for the whole run (gated by `check.mjs`).
 - No league, team, sponsor or broadcaster marks, and no athlete photos.
 - Fonts only from `data/fonts/` (Barlow Condensed, Inter, JetBrains Mono; OFL). Numbers use tabular
   figures. No network.

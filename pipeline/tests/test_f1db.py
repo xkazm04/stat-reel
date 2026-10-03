@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from statreel_ingest.client import EthicalClient
-from statreel_ingest.snapshot import current_snapshot, read_manifest
+from statreel_ingest.snapshot import SchemaDrift, current_snapshot, read_manifest
 from statreel_ingest.sources import f1db
 
 API = "https://api.github.com"
@@ -115,3 +115,77 @@ def test_ingest_never_uses_the_robots_disallowed_download_url(registry, tmp_path
     assert not any("/releases/download/" in str(r.url) for r in srv.requests)
     assert all(r.url.host in ("api.github.com", "release-assets.githubusercontent.com") for r in srv.requests)
     json.loads((tmp_path / "log.jsonl").read_text().splitlines()[0])
+
+
+# ---- schema contract at ingest time -----------------------------------------------------------------
+
+DRIVERS = "id,name\nfangio,x\nclark,y\n"
+RACES = "id,year,round\n1,1950,1\n2,1950,2\n3,1963,1\n"
+
+
+def ingest_twice(registry, tmp_path, clock, second_zip, **kw):
+    f1db.ingest(client_for(registry, tmp_path, clock, ReleaseServer("v1")), tmp_path / "raw", now=NOW)
+    return f1db.ingest(client_for(registry, tmp_path, clock, ReleaseServer("v2", second_zip)), tmp_path / "raw",
+                       now=NOW.replace(hour=19), **kw)
+
+
+def test_manifest_records_columns_types_and_rows(registry, tmp_path, clock):
+    f1db.ingest(client_for(registry, tmp_path, clock, ReleaseServer()), tmp_path / "raw", now=NOW)
+    m = read_manifest(current_snapshot(tmp_path / "raw", "f1db"))
+    assert [c["name"] for c in m["tables"]["races"]["columns"]] == ["id", "year", "round"]
+    assert m["tables"]["races"]["columns"][1]["type"] == "BIGINT" and m["tables"]["races"]["rows"] == 3
+    assert m["skipped_members"] == [] and m["accepted_drift"] == []
+
+
+def test_renamed_column_fails_and_leaves_no_snapshot_behind(registry, tmp_path, clock):
+    renamed = build_zip({"f1db-drivers.csv": DRIVERS, "f1db-races.csv": RACES.replace("year", "season")})
+    with pytest.raises(SchemaDrift, match=r"races\.year removed \(renamed to season\?\)"):
+        ingest_twice(registry, tmp_path, clock, renamed)
+    assert read_manifest(current_snapshot(tmp_path / "raw", "f1db"))["release_tag"] == "v1"
+    assert len([p for p in (tmp_path / "raw" / "f1db").iterdir() if p.is_dir()]) == 1
+
+
+def test_type_change_fails(registry, tmp_path, clock):
+    retyped = build_zip({"f1db-drivers.csv": DRIVERS, "f1db-races.csv": RACES.replace("1963", "n/a")})
+    with pytest.raises(SchemaDrift, match="races.year type changed BIGINT -> VARCHAR"):
+        ingest_twice(registry, tmp_path, clock, retyped)
+
+
+def test_added_column_only_warns(registry, tmp_path, clock):
+    wider_races = "id,year,round,laps\n1,1950,1,50\n2,1950,2,50\n3,1963,1,60\n"
+    res = ingest_twice(registry, tmp_path, clock, build_zip({"f1db-drivers.csv": DRIVERS, "f1db-races.csv": wider_races}))
+    assert res.downloaded and "races.laps added (BIGINT)" in res.warnings
+
+
+def test_dropped_zip_member_is_reported_by_name(registry, tmp_path, clock):
+    z = build_zip({"f1db-drivers.csv": DRIVERS, "f1db-races.csv": RACES, "f1db-notes.txt": "hello", "README.md": "readme"})
+    res = f1db.ingest(client_for(registry, tmp_path, clock, ReleaseServer(zip_bytes=z)), tmp_path / "raw", now=NOW)
+    assert "skipped non-CSV zip members: README.md, f1db-notes.txt" in res.warnings
+    assert read_manifest(res.snapshot_dir)["skipped_members"] == ["README.md", "f1db-notes.txt"]
+
+
+def test_row_count_drop_fails(registry, tmp_path, clock):
+    shrunk = build_zip({"f1db-drivers.csv": "id,name\nfangio,x\n", "f1db-races.csv": RACES})
+    with pytest.raises(SchemaDrift, match="drivers rows dropped 2 -> 1"):
+        ingest_twice(registry, tmp_path, clock, shrunk)
+
+
+def test_accept_drift_publishes_and_records_what_was_accepted(registry, tmp_path, clock):
+    renamed = build_zip({"f1db-drivers.csv": DRIVERS, "f1db-races.csv": RACES.replace("year", "season")})
+    res = ingest_twice(registry, tmp_path, clock, renamed, accept_drift=True)
+    assert res.downloaded and any(w.startswith("ACCEPTED drift: races.year removed") for w in res.warnings)
+    assert read_manifest(res.snapshot_dir)["accepted_drift"] == ["races.year removed (renamed to season?)"]
+
+
+def test_missing_asset_names_the_release_and_what_exists(registry, tmp_path, clock):
+    class NoCsv(ReleaseServer):
+        def __call__(self, request):
+            resp = super().__call__(request)
+            if str(request.url) == LATEST:
+                body = json.loads(resp.content)
+                body["assets"] = [a for a in body["assets"] if a["name"] != "f1db-csv.zip"]
+                return httpx.Response(200, json=body)
+            return resp
+
+    with pytest.raises(f1db.MissingAsset, match=r"release v9 has no asset named f1db-csv\.zip \(assets: f1db-json-single\.zip\)"):
+        f1db.ingest(client_for(registry, tmp_path, clock, NoCsv("v9")), tmp_path / "raw", now=NOW)

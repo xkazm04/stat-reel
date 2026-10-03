@@ -256,6 +256,39 @@ describe("recording a render", () => {
   });
 });
 
+describe("ledger robustness", () => {
+  it("a replayed recordVideo returns the existing row's id, not a phantom one", () => {
+    const { db, topics } = setup();
+    const v = { topic_key: "energy", topic_source: "case.topic" as const, title: "t", format: "landscape", path: "renders/a.mp4" };
+    const a = topics.recordVideo({ ...v, render_id: "r1" });
+    expect(topics.recordVideo({ ...v, render_id: "r1" })).toBe(a);
+    const g = topics.recordVideo({ ...v, generation_job_id: "g1", path: "renders/b.mp4" });
+    expect(topics.recordVideo({ ...v, generation_job_id: "g1", path: "renders/b.mp4" })).toBe(g);
+    expect((db.$client.prepare("select count(*) as n from videos").get() as { n: number }).n).toBe(2);
+  });
+
+  it("a record with neither render_id nor generation_job_id has nothing to dedupe on and is always appended", () => {
+    const { db, topics } = setup();
+    const v = { topic_key: "energy", topic_source: "case.topic" as const, title: "t", format: "landscape", path: "renders/a.mp4" };
+    expect(topics.recordVideo(v)).not.toBe(topics.recordVideo(v));
+    expect((db.$client.prepare("select count(*) as n from videos").get() as { n: number }).n).toBe(2);
+  });
+
+  it("recordRender applies the originating case's topic when case_id is given, else the project's", () => {
+    const { db, topics, cases } = setup();
+    const c = cases.create({ ...idea, domain: "sports", topic: "motorsport-endurance" });
+    db.$client.exec(`insert into projects (id, title, use_case_id, sport, format, mode, status, created_at, topic) values ('p-a','A','u','NBA','landscape','m','rendered','t',null)`);
+    const rec = (render_id: string, case_id?: string) => topics.recordRender({ render_id, project_id: "p-a", title: "A", format: "landscape", path: "renders/p-a/v.mp4", created_at: "2026-10-01T00:00:00.000Z", ...(case_id ? { case_id } : {}) });
+    rec("r1", c.id);
+    rec("r2");
+    const rows = db.$client.prepare("select render_id, topic_key, topic_source, case_id from videos order by render_id").all();
+    expect(rows).toEqual([
+      { render_id: "r1", topic_key: "motorsport-endurance", topic_source: "case.topic", case_id: c.id },
+      { render_id: "r2", topic_key: "basketball", topic_source: "project.sport", case_id: null },
+    ]);
+  });
+});
+
 describe("the board skill's case brief and checker stay in step with the seed", () => {
   const skill = path.resolve(__dirname, "../../../.claude/skills/board");
   const pickable = TOPIC_SEED.map((t) => t.key).filter((k) => k !== "unassigned");

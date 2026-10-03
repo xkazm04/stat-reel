@@ -1868,3 +1868,62 @@ a.pf-way:focus-visible .pf-way__detail > svg {
   font-size: clamp(calc(var(--r) * 2), 3.5vw, calc(var(--r) * 6));
   line-height: 0.9;
 }
+
+/* On the line today (components/OnTheLine.tsx): the way row on the Front, the panel in the Rundown's empty state */
+.pf-way--line {
+  height: auto;
+  min-height: clamp(44px, 6.4vh, 92px);
+  overflow: visible;
+}
+.pf-way--line .pf-way__detail > span:first-child {
+  overflow: visible;
+  white-space: normal;
+}
+.otl__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--r) * 0.2) calc(var(--r) * 1.4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.otl__link {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-line-strong);
+  text-underline-offset: 3px;
+}
+.otl__link:hover,
+.otl__link:focus-visible {
+  text-decoration-color: var(--color-brand);
+}
+.otl__detail,
+.otl__ledger {
+  color: var(--color-text-muted);
+}
+.otl__ledger {
+  display: block;
+  margin-top: calc(var(--r) * 0.2);
+}
+.otl__warn {
+  color: var(--color-text);
+}
+.otl--panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.otl--panel .otl__list {
+  gap: 4px 20px;
+}
+.otl--panel b.num {
+  display: inline;
+  margin: 0;
+  font: inherit;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text);
+}

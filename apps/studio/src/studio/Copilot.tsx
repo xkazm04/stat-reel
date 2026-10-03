@@ -155,10 +155,7 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
       </div>
       {log.isError ? (
         <div className="copilot__fail">
-          <Failure error={log.error} what="The session log" />
-          <button type="button" className="btn btn--sm" onClick={() => void log.refetch()} disabled={log.isFetching}>
-            {log.isFetching ? "Retrying" : "Retry"}
-          </button>
+          <Failure error={log.error} what="The session log" onRetry={() => void log.refetch()} retrying={log.isFetching} />
         </div>
       ) : null}
       <div className="llm-log-wrap">

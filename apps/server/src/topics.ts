@@ -100,33 +100,45 @@ export class TopicService {
     return this.get(key)!;
   }
 
-  /** Resolve a topic for a finished project render: project.topic, then the sport, then `unassigned`. */
-  resolveForProject(projectId: string): { key: string; source: TopicSource } {
+  /**
+   * Resolve a topic for a finished project render with resolveTopic's precedence: the originating
+   * case's topic (then its domain) when `caseId` is given, then project.topic, then the sport, then `unassigned`.
+   */
+  resolveForProject(projectId: string, caseId?: string | null): { key: string; source: TopicSource } {
     const p = this.sql.prepare("select topic, sport from projects where id = ?").get(projectId) as { topic: string | null; sport: string } | undefined;
-    const r = resolveTopic({ projectTopic: p?.topic, projectSport: p?.sport });
+    const c = caseId ? (this.sql.prepare("select topic, domain from case_ideas where id = ?").get(caseId) as { topic: string | null; domain: string } | undefined) : undefined;
+    const r = resolveTopic({ caseTopic: c?.topic, caseDomain: c?.domain, projectTopic: p?.topic, projectSport: p?.sport });
     return this.get(r.key)?.active === false || !this.get(r.key) ? { key: UNASSIGNED_TOPIC, source: "unassigned" } : r;
   }
 
-  /** Append a row to the ledger (idempotent per render_id / generation_job_id). Returns the video id. */
+  /**
+   * Append a row to the ledger (idempotent per render_id / generation_job_id). Returns the id of the
+   * row that is in the ledger: on a replay that is the EXISTING row's id, never a phantom one.
+   * A record with neither key has nothing to be idempotent on and is always appended.
+   */
   recordVideo(v: NewVideo): string {
     const topic = this.get(v.topic_key) ?? this.get(UNASSIGNED_TOPIC)!;
     const id = `vd-${randomUUID().slice(0, 8)}`;
     const abs = v.path.replace(/\\/g, "/");
     const rel = /^([a-zA-Z]:)?\//.test(abs) ? relativeToData(abs) : abs;
-    this.sql
+    const res = this.sql
       .prepare(
         `insert or ignore into videos (id, topic_key, topic_label, topic_source, case_id, project_id, render_id, generation_job_id, title, format, duration_s, path, created_at)
          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(id, topic.key, topic.label, topic.key === v.topic_key ? v.topic_source : "unassigned", v.case_id ?? null, v.project_id ?? null, v.render_id ?? null,
         v.generation_job_id ?? null, v.title, v.format, v.duration_s ?? null, rel, v.created_at ?? new Date().toISOString());
-    return id;
+    if (res.changes > 0) return id;
+    const existing = (v.render_id ? this.sql.prepare("select id from videos where render_id = ?").get(v.render_id) : undefined) as { id: string } | undefined
+      ?? (v.generation_job_id ? (this.sql.prepare("select id from videos where generation_job_id = ?").get(v.generation_job_id) as { id: string } | undefined) : undefined);
+    if (!existing) throw new Error("video row was ignored but no row matches its render_id/generation_job_id");
+    return existing.id;
   }
 
   /** A video row for a successful project render (hooked next to the `renders` insert in pipeline.ts). */
-  recordRender(r: { render_id: string; project_id: string; title: string; format: string; path: string; duration_s?: number | null; created_at: string }): string {
-    const t = this.resolveForProject(r.project_id);
-    return this.recordVideo({ topic_key: t.key, topic_source: t.source, project_id: r.project_id, render_id: r.render_id, title: r.title, format: r.format,
+  recordRender(r: { render_id: string; project_id: string; title: string; format: string; path: string; duration_s?: number | null; created_at: string; case_id?: string | null }): string {
+    const t = this.resolveForProject(r.project_id, r.case_id);
+    return this.recordVideo({ topic_key: t.key, topic_source: t.source, case_id: r.case_id ?? null, project_id: r.project_id, render_id: r.render_id, title: r.title, format: r.format,
       duration_s: r.duration_s ?? null, path: r.path, created_at: r.created_at });
   }
 

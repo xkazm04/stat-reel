@@ -12,12 +12,15 @@ import {
   Navigate,
   Outlet,
 } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { api, qk } from "./api";
 import { parseBoardSearch } from "./board/search";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
 import { WipeProvider } from "./components/ui";
+import { boardQuery, lineTopicsQuery } from "./workQuery";
 import { calendarQuery, heatmapQuery, heatmapTopicsQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
+import { isModuleLoadError } from "./moduleError";
 import { queryClient } from "./queryClient";
 
 /**
@@ -62,13 +65,42 @@ function NotFound() {
   );
 }
 
-function RouteError({ error }: { error: unknown }) {
+/**
+ * The default error component of every route: it renders inside the shell (each match has its own
+ * boundary under the root's <Outlet/>), so the nav survives a screen failing. A lazy-chunk failure
+ * after a rebuild cannot be retried (the stale bundle caches the rejection), so it offers a reload
+ * instead of an eternal Retry (async-ui-states: version skew offers refresh). The alert takes focus
+ * so a keyboard / screen-reader owner lands on it.
+ */
+function RouteError({ error, reset }: { error: unknown; reset?: () => void }) {
+  const stale = isModuleLoadError(error);
+  const alertRef = useRef<HTMLDivElement>(null);
+  useEffect(() => alertRef.current?.focus(), []);
+  const retry = () => {
+    reset?.();
+    void router.invalidate();
+  };
   return (
     <main id="main" className="page">
-      <div className="failure" role="alert">
-        <b>This screen failed</b>
-        <span className="mono">{error instanceof Error ? error.message : String(error)}</span>
-        <Link to="/">Back to the front</Link>
+      <div className="failure" role="alert" tabIndex={-1} ref={alertRef}>
+        <b>{stale ? "StatReel was updated" : "This screen failed"}</b>
+        {stale ? (
+          <span>A newer version of StatReel is available. Reload to continue.</span>
+        ) : (
+          <span className="mono">{error instanceof Error ? error.message : String(error)}</span>
+        )}
+        <div className="failure__actions">
+          {stale ? (
+            <button type="button" className="btn btn--sm" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+          ) : (
+            <button type="button" className="btn btn--sm" onClick={retry}>
+              Retry
+            </button>
+          )}
+          <Link to="/">Back to the front</Link>
+        </div>
       </div>
     </main>
   );
@@ -80,7 +112,7 @@ export const asMode = (v: unknown): Mode | undefined =>
 export const asSport = (v: unknown): Sport | undefined =>
   typeof v === "string" && SPORTS.includes(v) ? (v as Sport) : undefined;
 
-const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: NotFound, errorComponent: RouteError });
+const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: NotFound });
 
 export type FrontSearch = { format?: string; sport?: Sport; mode?: Mode };
 const indexRoute = createRoute({
@@ -92,8 +124,8 @@ const indexRoute = createRoute({
     mode: asMode(s.mode),
   }),
   component: FrontPhotoFinish,
-  // what the Front reads (useProjects, useHeatmap, useSources); it never reads metrics
-  loader: () => warm(projectsQuery, sourcesQuery, heatmapQuery),
+  // what the Front reads (useProjects, useHeatmap, useSources, the On the line panel: topics + board); never metrics
+  loader: () => warm(projectsQuery, sourcesQuery, heatmapQuery, lineTopicsQuery, boardQuery),
 });
 
 /**
@@ -129,14 +161,14 @@ const projectsRoute = createRoute({
   path: "/projects",
   validateSearch: (s: Record<string, unknown>): ProjectsSearch => ({ view: s.view === "list" ? "list" : undefined }),
   component: ProjectsPage,
-  loader: () => warm(projectsQuery, metricsQuery),
+  loader: () => warm(projectsQuery, metricsQuery, lineTopicsQuery, boardQuery),
 });
 
 const studioIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/studio",
   component: StudioIndex,
-  loader: () => warm(projectsQuery),
+  loader: () => warm(projectsQuery, lineTopicsQuery, boardQuery),
 });
 
 export const studioRoute = createRoute({
@@ -196,6 +228,7 @@ const routeTree = rootRoute.addChildren([
 export const router = createRouter({
   routeTree,
   defaultPreload: "intent",
+  defaultErrorComponent: RouteError,
   // the query cache owns freshness; the router must not re-run loaders for a warm preload
   defaultPreloadStaleTime: 0,
   // a pending screen shows only after 150 ms and then stays 250 ms, so fast loads never flash

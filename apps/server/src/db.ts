@@ -283,6 +283,8 @@ create table if not exists assets (id text primary key, project_id text not null
 create table if not exists jobs (id text primary key, kind text not null, project_id text, status text not null,
   progress real not null default 0, params_json text not null, result_json text, error text, created_at text not null,
   started_at text, finished_at text);
+create index if not exists jobs_project_created on jobs(project_id, created_at);
+create index if not exists jobs_status_kind_created on jobs(status, kind, created_at);
 create table if not exists renders (id text primary key, project_id text not null, job_id text not null, format text not null,
   path text not null, manifest_path text not null, checks_json text not null, policy_json text, created_at text not null);
 create table if not exists llm_sessions (id text primary key, engine text not null, external_session_id text, project_id text,
@@ -353,6 +355,15 @@ export function openDb(file: string): Db {
   for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
   migrateTopics(sqlite); // topics + videos tables, seed, topic columns, backfills (ADR 011); idempotent
   return drizzle(sqlite) as Db;
+}
+
+/** Orderly stop: fold the WAL into the main file, then release the handle (the generation worker keeps its own). */
+export function closeDb(db: Db): void {
+  try {
+    db.$client.pragma("wal_checkpoint(TRUNCATE)");
+  } finally {
+    db.$client.close();
+  }
 }
 
 export const now = () => new Date().toISOString();

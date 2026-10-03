@@ -32,7 +32,7 @@ export function StudioLayout() {
             It is not in this studio's database. <Link to="/projects">Open the rundown</Link>.
           </Empty>
         ) : (
-          <Failure error={q.error} what={`Project ${projectId}`} />
+          <Failure error={q.error} what={`Project ${projectId}`} onRetry={() => void q.refetch()} retrying={q.isFetching} />
         )}
       </main>
     );

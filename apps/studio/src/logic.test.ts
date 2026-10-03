@@ -17,6 +17,7 @@ import {
   toolResultStatus,
   trendSeries,
 } from "./logic";
+import { jobFlag } from "./projectState";
 
 type K = HeatmapCell["kinds"][number];
 const kind = (k: string, best: K["best"], sources: K["sources"] = [], tested = true): K => ({
@@ -171,7 +172,11 @@ describe("stage logic", () => {
     });
     const f = nextAction("scripted", { kind: "audio", status: "refused", error: "refused by elevenlabs: x" });
     expect(f).toMatchObject({ verb: "Review refusal", tone: "blocked" });
-    expect(f.hint).toContain("refused by elevenlabs: x");
+    expect(f.hint).toBe("Audio refused: refused by elevenlabs: x");
+    // the same words projectState's jobFlag gives the Rundown (one vocabulary per concept)
+    expect(f.hint).toBe(jobFlag({ kind: "audio", status: "refused", error: "refused by elevenlabs: x" }));
+    expect(nextAction("scripted", { kind: "weird", status: "failed" }).hint).toBe("A job failed");
+    expect(nextAction("scripted", { kind: "render", status: "queued" }).hint).toBe("waiting in the queue");
     expect(needsYou("published")).toBe(false);
     expect(needsYou("scripted", { kind: "render", status: "queued" })).toBe(false);
   });

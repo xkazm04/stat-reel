@@ -15,3 +15,4 @@ sources:
       - name: seasons
       - name: seasons_driver_standings
       - name: constructors
+      - name: races_sprint_race_results

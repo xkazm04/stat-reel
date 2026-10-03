@@ -61,6 +61,16 @@
   font-weight: var(--weight-display-light);
   color: var(--color-text-dim);
 }
+/* Blocked is one status; its causes (not tested / failing / n/a ...) sit under it, counted from the data */
+.hm-legend li.has-why {
+  flex-wrap: wrap;
+}
+.hm-legend__why {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
 .hm-legend small {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1205,7 +1215,7 @@ html.hm-layer-open {
   border: 1px solid var(--color-line-strong);
 }
 a.tp-cell--video:hover,
-a.tp-cell--video:focus-visible {
+.tp-cell:focus-visible {
   outline: 2px solid var(--color-text);
   outline-offset: 1px;
 }

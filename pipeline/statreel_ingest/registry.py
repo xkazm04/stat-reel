@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Literal
@@ -101,7 +102,54 @@ class Registry:
     def authorize(self, source_id: str, url: str) -> Source:
         """Raise unless `url` may be fetched on behalf of `source_id`."""
         src = self.require_fetchable(source_id)
-        host = urlsplit(url).hostname or ""
-        if urlsplit(url).scheme != "https" or host not in src.hosts:
-            raise HostNotRegistered(f"{url} is not a registered https host for source {source_id} ({src.hosts})")
+        problem = _url_problem(url, src)
+        if problem:
+            raise HostNotRegistered(f"{url} refused for source {source_id}: {problem} (registered hosts: {src.hosts})")
         return src
+
+
+def _url_problem(url: str, src: Source) -> str | None:
+    """Why `url` is not a plain https URL on a registered host, or None. The registry lists bare
+    hostnames, so scheme, port and userinfo must each be checked rather than inferred from hostname."""
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return "malformed URL"
+    if parts.scheme != "https":
+        return "not https"
+    if parts.username is not None or parts.password is not None or "@" in parts.netloc:
+        return "userinfo in URL"
+    if port not in (None, 443):
+        return f"non-default port {port}"
+    if (parts.hostname or "") not in src.hosts:
+        return "host not registered"
+    return None
+
+
+@dataclass(frozen=True)
+class LintFinding:
+    level: Literal["error", "warn"]
+    code: str
+    message: str
+
+
+def lint_registry(sources: list[Source], *, today: date | None = None, max_age_days: int = 180) -> list[LintFinding]:
+    """Structural checks on the registry. Errors are ethics violations; warnings need a human look (a shared platform host such as api.github.com
+    legitimately serves several sources, so a verdict conflict is flagged, not failed)."""
+    today = today or date.today()
+    out: list[LintFinding] = []
+    by_host: dict[str, set[tuple[str, str]]] = {}
+    for s in sources:
+        if s.verdict == "avoid" and s.hosts:
+            out.append(LintFinding("error", "avoid-has-hosts", f"{s.id}: verdict avoid but lists hosts {s.hosts}"))
+        for h in s.hosts:
+            by_host.setdefault(h, set()).add((s.id, s.verdict))
+        age = (today - s.terms_checked_at).days
+        if age > max_age_days:
+            out.append(LintFinding("warn", "stale-terms", f"{s.id}: terms last checked {age} days ago (> {max_age_days})"))
+    for host, owners in sorted(by_host.items()):
+        if len({v for _, v in owners}) > 1:
+            listing = ", ".join(f"{i}={v}" for i, v in sorted(owners))
+            out.append(LintFinding("warn", "host-verdict-conflict", f"{host} is listed with differing verdicts: {listing}"))
+    return out

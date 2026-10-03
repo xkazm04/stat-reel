@@ -22,7 +22,7 @@ import { setLayerOrigin } from "../components/layerTransition";
 import { artStyle, Failure, Loading, Sparkline } from "../components/ui";
 import { useHeatmap, useSources } from "../data";
 import { LINE, REACH } from "../finishline";
-import { cellHint, focusKey, gridMove, parseFocus, sportCounts } from "../heatmap";
+import { blockedBreakdown, blockedLegend, cellHint, focusKey, gridMove, parseFocus, sportCounts } from "../heatmap";
 import { cellOf, countStatuses, MODE_LABEL, relTime, SPORTS, trendSeries } from "../logic";
 import { formatLabel, pad2, STATUS_ORDER, STATUS_WORD, trendSummary } from "../display";
 import type { HeatmapSearch } from "../router";
@@ -161,6 +161,7 @@ export function HeatmapFeasibility() {
 
   const n = countStatuses(cells, mode);
   const per = usecases.length * SPORTS.length;
+  const why = blockedLegend(blockedBreakdown(cells, mode));
   const lastSnap = trend.at(-1)?.at;
   const caps = src.data?.capabilities ?? [];
 
@@ -190,10 +191,15 @@ export function HeatmapFeasibility() {
           </div>
           <ul className="hm-legend" aria-label={`Status counts, ${MODE_LABEL[mode]}`}>
             {STATUS_ORDER.map((k) => (
-              <li key={k} className={`st--${k}${n[k] ? "" : " is-zero"}`}>
+              <li key={k} className={`st--${k}${n[k] ? "" : " is-zero"}${k === "blocked" && why ? " has-why" : ""}`}>
                 <span className="hm-legend__n num">{n[k]}</span>
                 <StatusChip status={k} size={14} />
                 <small>{n[k] ? `of ${per}` : "none"}</small>
+                {k === "blocked" && why ? (
+                  <span className="hm-legend__why num" data-testid="legend-blocked-why">
+                    {why}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -213,7 +219,7 @@ export function HeatmapFeasibility() {
 
         {hm.isError ? (
           <div className="hm-state">
-            <Failure error={hm.error} what="The heatmap" />
+            <Failure error={hm.error} what="The heatmap" onRetry={() => void hm.refetch()} retrying={hm.isFetching} />
           </div>
         ) : hm.isLoading ? (
           <div className="hm-state">

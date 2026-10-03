@@ -20,19 +20,24 @@ brief.
 
 **Mistakes that got designs rejected or flagged before:**
 
-- **The year label ran ahead of the data.** "1988 · round 16/16" was printed over the 1987 bars. The
-  printed season and round, `dataClock(t)` and the values drawn must come from the same data step.
+- **The year label ran ahead of the data.** "1988 · round 16/16" was printed over the 1987 bars.
+  `check.mjs` fails any sampled frame whose printed season is not `floor(dataClock(t))` (the clock is
+  the largest year-bearing text). Optionally declare `window.statreel.frameFacts(t)` ->
+  `{period, metric, scope, from, top: [{name, value}]}` (see `data/skeleton.html`): `check.mjs` then
+  recomputes the standings from `data/f1_race_results.json` and fails a drawn value that is wrong or
+  a leader that is missing. Not declared = not checked.
 - **Facts that do not exist.** Every entry in `facts` must be a real `fact_key` from `data/*.json`
   plus one of that row's columns (`<fact_key>#<column>`). Copy keys from the rows you used; never
   type them from memory.
 - **Clock coverage.** `dataClock` has to sweep at least 85% of `timeline.from`→`timeline.to` over the
   run and must not stand still for long stretches. Hold the end for 2 s at most.
-- **Use the safe box fully; keep the bands outside it non-critical.** In 1080×1920, critical content
-  (clock, chart, labels, annotations) fills the safe box: top 270, bottom 670, left 65, right 130. The
-  bands outside it may carry atmosphere such as texture or colour, but nothing the viewer must read.
+- **Use the safe box fully; keep the bands outside it non-critical.** In 1080×1920 the clock, chart,
+  labels, annotations and the attribution fill the safe box (`check.mjs` fails any text outside it and
+  prints the numbers). The bands outside it may carry atmosphere such as texture or colour, but nothing
+  the viewer must read.
 - **Text too small: a hard failure.** Every readable text, including axis ticks, legends, labels, the
   attribution and canvas text, is at least 28 px in the artboard. `check.mjs` measures it at five
-  moments and fails the variant otherwise. If a label cannot be 28 px, drop it: fewer, larger labels
+  moments and fails the variant otherwise (the same frames gate the safe box and the attribution). If a label cannot be 28 px, drop it: fewer, larger labels
   beat many small ones. Text size is not part of any style. When you build on an accepted style, raise
   all its text to 28 px or more. The data clock is the largest element on screen.
 - **Labels colliding during rank swaps.** Interpolate positions and keep labels attached to their

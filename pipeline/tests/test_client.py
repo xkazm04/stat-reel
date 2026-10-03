@@ -164,3 +164,58 @@ def test_signed_redirect_targets_are_never_cached(registry, tmp_path, clock):
     make_client(registry, tmp_path, clock, srv).get(f"{API}/asset")
     cached = list((tmp_path / "cache").rglob("*")) if (tmp_path / "cache").exists() else []
     assert not any("sig=secret" in p.read_text(errors="ignore") for p in cached if p.is_file())
+
+
+# ---- ethics-layer edge cases: robots status classes, scheme downgrade, redirect loops -------------
+
+def test_robots_4xx_means_no_restrictions(registry, tmp_path, clock):
+    srv = Server({f"{API}/robots.txt": httpx.Response(403), f"{API}/a": httpx.Response(200, content=b"ok")})
+    assert make_client(registry, tmp_path, clock, srv).get(f"{API}/a").content == b"ok"
+
+
+def test_robots_network_error_means_disallow(registry, tmp_path, clock):
+    def boom(request):
+        raise httpx.ConnectError("unreachable", request=request)
+
+    srv = Server({f"{API}/robots.txt": boom})
+    with pytest.raises(RobotsDisallowed):
+        make_client(registry, tmp_path, clock, srv).get(f"{API}/a")
+    assert srv.hits(f"{API}/a") == 0
+
+
+def test_redirect_downgrade_to_http_is_refused(registry, tmp_path, clock):
+    srv = Server({
+        f"{API}/robots.txt": robots_allow_all(),
+        f"{API}/asset": httpx.Response(302, headers={"location": "http://api.github.com/blob"}),
+    })
+    with pytest.raises(HostNotRegistered, match="not https"):
+        make_client(registry, tmp_path, clock, srv).get(f"{API}/asset")
+    assert srv.hits("http://api.github.com/blob") == 0
+
+
+def test_redirect_to_a_non_default_port_is_refused(registry, tmp_path, clock):
+    srv = Server({
+        f"{API}/robots.txt": robots_allow_all(),
+        f"{API}/asset": httpx.Response(302, headers={"location": f"{API}:8443/blob"}),
+    })
+    with pytest.raises(HostNotRegistered, match="port"):
+        make_client(registry, tmp_path, clock, srv).get(f"{API}/asset")
+
+
+def test_redirect_loop_stops_at_max_redirects(registry, tmp_path, clock):
+    from statreel_ingest.client import MAX_REDIRECTS
+
+    srv = Server({f"{API}/robots.txt": robots_allow_all(), f"{API}/loop": httpx.Response(302, headers={"location": f"{API}/loop"})})
+    with pytest.raises(httpx.TooManyRedirects):
+        make_client(registry, tmp_path, clock, srv).get(f"{API}/loop")
+    assert srv.hits(f"{API}/loop") == MAX_REDIRECTS + 1
+
+
+def test_relative_redirect_is_resolved_and_rechecked(registry, tmp_path, clock):
+    srv = Server({
+        f"{API}/robots.txt": robots_allow_all(),
+        f"{API}/a": httpx.Response(301, headers={"location": "/b"}),
+        f"{API}/b": httpx.Response(200, content=b"b"),
+    })
+    res = make_client(registry, tmp_path, clock, srv).get(f"{API}/a")
+    assert res.final_url == f"{API}/b" and res.content == b"b"

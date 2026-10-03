@@ -44,7 +44,7 @@ must be running on 127.0.0.1:8787.
    - 30-90 s `duration_s`
    - a `timeline {unit, from, to}` that runs forward
    - `chart_form`
-   - a time-evolution use case, or a proposed case with `data_time`
+   - a data-ready time-evolution use case, or a proposed case with `data_time` and a `sport` that has data-ready cells (F1 today; `dataReadyUseCases` is the one predicate for lanes, harvest and check.mjs)
    - a stable style id, and fact refs
 
    The artboard must expose `window.statreel.seek(t)` and `dataClock(t)`. The harness renders the
@@ -68,9 +68,8 @@ must be running on 127.0.0.1:8787.
   is cited as `<fact_key>#<column>` in `shot.json`.
 - The data clock advances monotonically for the whole run, and the picture is viz-led, with no
   narration and no text-led story.
-- The attribution `Data: F1DB (CC BY 4.0)` is visible for the whole run.
-- Vertical designs keep critical content inside the safe box for the whole run: top 270, bottom 670,
-  left 65, right 130.
+- Attribution on screen and text inside the vertical safe box are gated by `check.mjs`
+  (`attributionPresent`, `textOutsideSafeBox` in `scripts/lib.mjs` hold the numbers).
 - No league, team, sponsor or broadcaster marks, and no athlete photos. Illustration must read as
   illustration.
 - Every readable text is at least 28 px (owner rule; `check.mjs` measures DOM, SVG and canvas text).
