@@ -23,7 +23,6 @@
   /* ── Colour · signal: the finish line ─────────────────────────────── */
   --color-brand: #b8321a;            /* the line as text (AA on the sheet) */
   --color-brand-ink: #ffffff;
-  --color-brand-dim: #e4432a;
   --color-brand-wash: rgba(228, 67, 42, 0.09);
   --color-signal: #e4432a;           /* the finish hairline itself: the only signal colour */
   --color-primary: #12161a;          /* primary action: graphite, the line on hover */
@@ -47,18 +46,9 @@
   --status-blocked: #38414a;
   --status-go-ink: #ffffff;
   --status-go-wash: rgba(8, 112, 75, 0.1);
-  --status-data-ready-wash: rgba(26, 95, 200, 0.09);
   --status-ask-wash: rgba(147, 87, 0, 0.1);
   --status-blocked-wash: rgba(56, 65, 74, 0.1);
   /* status glyphs: positions relative to the line */
-  --status-go-glyph: "bar-through-line-with-flag";
-  --status-data-ready-glyph: "bar-at-line-hollow-end";
-  --status-ask-glyph: "hatched-bar-short-with-dot";
-  --status-blocked-glyph: "barred-gate-at-start";
-  --status-go-pattern: solid;
-  --status-data-ready-pattern: solid-hollow-end;
-  --status-ask-pattern: hatch;
-  --status-blocked-pattern: crosshatch;
 
   /* ── Colour · licence class (markers carry the shape) ─────────────── */
   --licence-legal: #08704b;
@@ -81,16 +71,16 @@
      color-mix(in srgb, var(--lane-color) var(--lane-ink-mix), var(--color-text)). The hues stay
      as marks and fills; theme-contrast.test.ts holds every lane's ink at 4.5:1. */
   --lane-ink-mix: 60%;
-  --ident-counterfactual-timelines: #6a5be2;
-  --ident-era-adjusted-rankings: #0a93a3;
-  --ident-spatial-career-maps: #2c9a55;
-  --ident-network-flow-timelines: #1f73da;
-  --ident-distribution-races: #b83c9b;
-  --ident-probability-narratives: #d4820e;
-  --ident-similarity-dna: #d2426b;
-  --ident-metric-explainer-shorts: #6e8f10;
-  --ident-reactive-weekend-pipeline: #1899cf;
-  --ident-interactive-companion-loop: #566a90;
+  --ident-counterfactual-timelines: var(--lane-1);
+  --ident-era-adjusted-rankings: var(--lane-2);
+  --ident-spatial-career-maps: var(--lane-3);
+  --ident-network-flow-timelines: var(--lane-4);
+  --ident-distribution-races: var(--lane-5);
+  --ident-probability-narratives: var(--lane-6);
+  --ident-similarity-dna: var(--lane-7);
+  --ident-metric-explainer-shorts: var(--lane-8);
+  --ident-reactive-weekend-pipeline: var(--lane-9);
+  --ident-interactive-companion-loop: var(--lane-10);
 
   /* ── Type (theme parts) ───────────────────────────────────────────── */
   --text-base: 15px;

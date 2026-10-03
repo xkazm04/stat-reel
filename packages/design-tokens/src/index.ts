@@ -12,7 +12,8 @@ export const fontFamilies = {
   data: '"JetBrains Mono", ui-monospace, monospace',
 } as const;
 
-/** One ident colour per use case (the Photo Finish lanes; the studio reads them as --ident-<id>). */
+/** One ident colour per use case (the Photo Finish lanes; the studio reads them as --ident-<id>, which aliases --lane-N;
+ * token-parity.test.ts holds this list against the CSS). */
 export const identColors: Record<string, string> = {
   "counterfactual-timelines": "#6a5be2",
   "era-adjusted-rankings": "#0a93a3",
@@ -67,5 +68,4 @@ export const videoTheme: VideoTheme = {
 export const safeZoneVertical = { top: 270, bottom: 670, left: 65, right: 130, width: 1080, height: 1920 } as const;
 export const safeZoneLandscape = { top: 60, bottom: 90, left: 96, right: 96, width: 1920, height: 1080 } as const;
 
-export const motion = { instantMs: 90, fastMs: 160, baseMs: 260, wipeMs: 560, sceneMs: 900 } as const;
 export * from "./logo";
