@@ -41,19 +41,25 @@ export type VideoTheme = {
   fonts: typeof fontFamilies;
 };
 
-/** Video frames (night palette; moves to Photo Finish in the video-palette step of ADR 009). */
+/**
+ * Video frames (ADR 009, owner decision 2026-10-03): the Photo Finish palette, built from the same
+ * values as the studio tokens (theme-photofinish.css): the timing sheet as ground, graphite ink,
+ * one clay-red signal. `accent` is the signal as a stroke or fill; text in the signal colour uses
+ * `accentInk` (the brand red, AA on the sheet). All text colours reach 4.5:1 on `background`
+ * (video-theme.test.ts). Burned captions are graphite on a translucent sheet plate.
+ */
 export const videoTheme: VideoTheme = {
-  background: "#05070c",
-  surface: "#0f1524",
-  grid: "#222c43",
-  ink: "#f3f6fb",
-  inkDim: "#a3aec4",
-  inkFaint: "#7887a3",
-  accent: "#d6ff3f",
-  accentInk: "#d6ff3f",
-  captionBox: "rgba(5, 7, 12, 0.78)",
-  captionInk: "#ffffff",
-  captionActive: "#d6ff3f",
+  background: "#eceff2", // --color-bg, the timing sheet
+  surface: "#ffffff", // --color-surface
+  grid: "#c6ced5", // --color-line, hairline rules
+  ink: "#12161a", // --color-text, graphite
+  inkDim: "#38414a", // --color-text-muted
+  inkFaint: "#56616c", // --color-text-dim, still AA on the sheet
+  accent: "#e4432a", // --color-signal, the finish line
+  accentInk: "#b8321a", // --color-brand, the line as text
+  captionBox: "rgba(245, 247, 249, 0.94)", // --color-bg-raised as a translucent plate
+  captionInk: "#12161a",
+  captionActive: "#b8321a",
   fonts: fontFamilies,
 };
 
