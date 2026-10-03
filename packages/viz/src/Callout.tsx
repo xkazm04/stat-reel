@@ -91,7 +91,7 @@ export function Callout(props: CalloutProps): ReactElement {
     label,
     theme,
     fontSize: fs,
-    labelFontSize = Math.max(22, Math.round(fs * 0.2)),
+    labelFontSize = Math.max(28, Math.round(fs * 0.2)),
     color = theme.ink,
     labelColor = theme.inkDim,
     align = "start",

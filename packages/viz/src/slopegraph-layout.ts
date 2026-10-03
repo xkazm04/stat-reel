@@ -81,8 +81,8 @@ export type SlopegraphLayout = {
 };
 
 const DEFAULTS = {
-  vertical: { minFontSize: 28, maxFontSize: 40, titleFontSize: 28, subFontSize: 21 },
-  landscape: { minFontSize: 24, maxFontSize: 34, titleFontSize: 26, subFontSize: 19 },
+  vertical: { minFontSize: 28, maxFontSize: 40, titleFontSize: 28, subFontSize: 28 },
+  landscape: { minFontSize: 28, maxFontSize: 34, titleFontSize: 28, subFontSize: 28 },
 } as const;
 
 /**

@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { videoTheme } from "@statreel/design-tokens";
 import { type EraAdjustedProps, EraAdjustedPropsSchema, sampleEraProps } from "@statreel/schemas";
+import { slopegraphLayout } from "@statreel/viz";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
@@ -19,6 +20,7 @@ import {
   frameLayout,
   frameState,
   resolveScenes,
+  toSlopeRows,
 } from "./index";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -218,6 +220,31 @@ describe("frame", () => {
     expect(Math.min(...sizes)).toBeGreaterThanOrEqual(28);
   });
 
+  it.each(["vertical", "landscape"] as const)("every readable text in the %s artboard is at least 28 px (owner rule)", (format) => {
+    // sweep the whole run so hook, context, reveal, payoff and close all contribute markup
+    const sizes: number[] = [];
+    for (let t = 0; t <= 60; t += 1.5) {
+      const html = markup(t, format, { ...props, timing: timeline });
+      for (const m of html.matchAll(/font-size:\s*([\d.]+)px/g)) sizes.push(Number(m[1]));
+      for (const m of html.matchAll(/font-size="([\d.]+)"/g)) sizes.push(Number(m[1]));
+    }
+    expect(sizes.length).toBeGreaterThan(50);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(28);
+  });
+
+  it.each(["vertical", "landscape"] as const)("the sample slopegraph still fits its chart box at 28 px text (%s)", (format) => {
+    const L = frameLayout(format);
+    const l = slopegraphLayout(toSlopeRows(props.rows), {
+      width: L.chart.width,
+      height: L.chart.height,
+      format,
+      titles: { left: "Raw rank", right: "Era-adjusted rank", leftSub: props.metric_raw_label, rightSub: props.metric_adjusted_label },
+      maxStep: format === "vertical" ? 92 : 100,
+    });
+    expect(l.overflow).toBe(false);
+    expect(l.fontSize).toBeGreaterThanOrEqual(28);
+  });
+
   it("burns in the caption active at t", () => {
     const html = markup(1, "vertical", { ...props, timing: timeline });
     expect(html).toContain("data-captions");
@@ -248,10 +275,10 @@ describe("frame", () => {
       l30: sha(markup(30, "landscape")),
     }).toMatchInlineSnapshot(`
       {
-        "l30": "6ddddfeaddc1e586",
-        "t0": "0a5622feffcb9352",
-        "t30": "641fd14bfe141315",
-        "t40": "9aa85afca1161ede",
+        "l30": "6f28befec98672bb",
+        "t0": "2f06714558ba199d",
+        "t30": "c5767a133ddeab2c",
+        "t40": "de354c003932d123",
       }
     `);
   });

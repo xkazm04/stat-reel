@@ -44,15 +44,17 @@ export function frameLayout(format: Format): FrameLayout {
       width: safeZoneVertical.width,
       height: safeZoneVertical.height,
       critical: c,
-      meta: { x, y: c.y + 2, width: w, height: 34 },
-      method: { x, y: c.y + 44, width: w, height: 48 },
-      headline: { x, y: 382, width: w, height: 56 },
-      chart: { x, y: 448, width: w, height: captionTop - 8 - 448 },
-      statement: { x, y: 390, width: w, height: captionTop - 30 - 390 },
-      callout: { x, y: 448, width: w, height: captionTop - 8 - 448 },
+      // 28 px is the floor for readable text (owner rule): meta is one 42 px row, the method note
+      // two 33.6 px lines (~55 chars per line at 869 px), which pushes the content below it ~20 px
+      meta: { x, y: c.y + 2, width: w, height: 42 },
+      method: { x, y: c.y + 48, width: w, height: 68 },
+      headline: { x, y: 404, width: w, height: 56 },
+      chart: { x, y: 468, width: w, height: captionTop - 8 - 468 },
+      statement: { x, y: 404, width: w, height: captionTop - 30 - 404 },
+      callout: { x, y: 468, width: w, height: captionTop - 8 - 468 },
       captionTop,
-      metaFontSize: 22,
-      methodFontSize: 19,
+      metaFontSize: 28,
+      methodFontSize: 28,
     };
   }
   // landscape: caption box 2 x 52 px x 1.2 + 2 x 10 px, bottom edge at 990 -> top ~845
@@ -64,14 +66,15 @@ export function frameLayout(format: Format): FrameLayout {
     width: safeZoneLandscape.width,
     height: safeZoneLandscape.height,
     critical: c,
-    meta: { x, y: c.y + 2, width: w, height: 32 },
-    method: { x, y: c.y + 42, width: w, height: 30 },
+    // 28 px floor: one meta row of 40 px and a one-line (~109 chars at 1712 px) method note
+    meta: { x, y: c.y + 2, width: w, height: 40 },
+    method: { x, y: c.y + 46, width: w, height: 36 },
     headline: { x, y: 170, width: leftW, height: 220 },
     chart: { x: chartX, y: 160, width: x + w - chartX, height: captionTop - 16 - 160 },
     statement: { x, y: 170, width: Math.round(w * 0.62), height: captionTop - 30 - 170 },
     callout: { x, y: 170, width: leftW, height: captionTop - 16 - 170 },
     captionTop,
-    metaFontSize: 22,
-    methodFontSize: 20,
+    metaFontSize: 28,
+    methodFontSize: 28,
   };
 }
