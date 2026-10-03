@@ -92,3 +92,26 @@ export const canSchedule = (policy: { allow?: boolean } | null | undefined, busy
 /** A produce job can be stopped only while it is queued or running (JobRunner.cancel is a no-op after). */
 export const canCancelJob = (job: { status: string } | null | undefined): boolean =>
   !!job && (job.status === "queued" || job.status === "running");
+
+/** Only EraAdjustedSlope has a player; an undefined name (no use case resolved yet) means the default. */
+export const hasPlayer = (compositionName: string | null | undefined): boolean =>
+  compositionName === undefined || compositionName === "EraAdjustedSlope";
+
+export type CompositionState = "built" | "not-built" | "loading" | "unavailable";
+
+/**
+ * What the player can honestly say: "not-built" (the use case's composition has no player; it never
+ * will load, so no spinner), "loading" (chunk in flight), "unavailable" (the chunk failed to load),
+ * else "built".
+ */
+export function compositionState(
+  compositionName: string | null | undefined,
+  load: "loading" | "ready" | "missing",
+): CompositionState {
+  if (!hasPlayer(compositionName)) return "not-built";
+  return load === "ready" ? "built" : load === "missing" ? "unavailable" : "loading";
+}
+
+/** Why Produce is disabled by the composition, or null when it is not. */
+export const produceBlockReason = (state: CompositionState): string | null =>
+  state === "not-built" ? "No player for this use case yet; Produce needs a built composition." : null;

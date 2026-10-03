@@ -10,6 +10,7 @@ import { Programme } from "../components/LazyProgramme";
 import type { PlayerMeta } from "../components/Programme";
 import { Slate } from "../components/Slate";
 import { timecode } from "../logic";
+import type { CompositionState } from "../studio-logic";
 
 export function usePlayerFrame(ref: RefObject<PlayerRef | null>, meta: PlayerMeta | null): number {
   const [frame, setFrame] = useState(0);
@@ -53,12 +54,15 @@ export function Monitor({
   playerRef,
   meta,
   onMeta,
+  state,
 }: {
   props: EraAdjustedProps | null;
   compositionName: string | null | undefined;
   playerRef: RefObject<PlayerRef | null>;
   meta: PlayerMeta | null;
   onMeta: (m: PlayerMeta | null) => void;
+  /** what the player can say; "not-built" is stated plainly instead of a dead transport */
+  state: CompositionState;
 }) {
   const [format, setFormat] = useState<Format>(props?.format ?? "vertical");
   const [safe, setSafe] = useState<boolean>(props?.show_safe_zone ?? false);
@@ -164,7 +168,9 @@ export function Monitor({
           {muted ? "Sound off" : "Sound on"}
         </button>
         <span className="attr">
-          {props
+          {props && state === "not-built"
+            ? "No player for this use case yet: the composition is not built, so there is nothing to play or scrub."
+            : props
             ? `${props.attribution}${props.format !== format ? ` · previewing ${format}; the render uses props.format (${props.format})` : ""}${props.timing ? "" : " · draft timing: scenes split evenly until Produce measures the voice"}`
             : "The monitor plays the project's props through the real composition."}
         </span>

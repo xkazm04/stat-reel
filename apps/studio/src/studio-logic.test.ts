@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCancelJob, canSchedule, cps, draftSpans, peakCueCps, rulerTicks, sceneSpans, spanAt, spanLabel } from "./studio-logic";
+import { canCancelJob, canSchedule, compositionState, hasPlayer, produceBlockReason, cps, draftSpans, peakCueCps, rulerTicks, sceneSpans, spanAt, spanLabel } from "./studio-logic";
 
 const scenes = [
   { id: "hook", kind: "hook" },
@@ -72,5 +72,24 @@ describe("canCancelJob", () => {
     expect(canCancelJob({ status: "running" })).toBe(true);
     for (const st of ["succeeded", "failed", "cancelled", "refused"]) expect(canCancelJob({ status: st })).toBe(false);
     expect(canCancelJob(null)).toBe(false);
+  });
+});
+
+describe("compositionState", () => {
+  it("not-built for any composition but EraAdjustedSlope, whatever the load status", () => {
+    for (const load of ["loading", "ready", "missing"] as const) {
+      expect(compositionState("BarRace", load)).toBe("not-built");
+      expect(compositionState(null, load)).toBe("not-built");
+    }
+  });
+  it("follows the load status for the built composition (undefined = default)", () => {
+    expect(hasPlayer(undefined)).toBe(true);
+    expect(compositionState(undefined, "loading")).toBe("loading");
+    expect(compositionState("EraAdjustedSlope", "ready")).toBe("built");
+    expect(compositionState("EraAdjustedSlope", "missing")).toBe("unavailable");
+  });
+  it("gives Produce a reason only when not built", () => {
+    expect(produceBlockReason("not-built")).toMatch(/No player/);
+    for (const s of ["built", "loading", "unavailable"] as const) expect(produceBlockReason(s)).toBeNull();
   });
 });

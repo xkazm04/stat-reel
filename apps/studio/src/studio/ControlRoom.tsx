@@ -15,7 +15,8 @@ import { Arrow } from "../components/glyphs";
 import type { PlayerMeta } from "../components/Programme";
 import { latestRender, renderPolicy } from "../data";
 import { nextAction } from "../logic";
-import { canCancelJob, canSchedule, sceneSpans } from "../studio-logic";
+import { useComposition } from "../composition";
+import { canCancelJob, canSchedule, compositionState, produceBlockReason, sceneSpans } from "../studio-logic";
 import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
 import { PropsPanel } from "./PropsPanel";
@@ -41,6 +42,10 @@ export function ControlRoom() {
 
   // stop the running audio/render job; job.* SSE events (events.ts) refresh the project, so no manual invalidate
   const cancel = useMutation({ mutationFn: (jobId: string) => api.cancelJob(jobId) });
+
+  const comp = useComposition();
+  const cstate = compositionState(usecase?.composition, comp.status);
+  const blockReason = produceBlockReason(cstate);
 
   const props = detail?.props?.props ?? null;
   const duration = props?.timing?.duration_s ?? (meta ? meta.durationInFrames / meta.fps : 0);
@@ -68,7 +73,7 @@ export function ControlRoom() {
   const llm = detail.jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running"));
   const render = latestRender(detail);
   const policy = renderPolicy(render);
-  const canProduce = !!props && !!detail.script && !running && !llm;
+  const canProduce = !!props && !!detail.script && !running && !llm && !blockReason;
   const next = nextAction(detail.project.status, detail.jobs[0]);
   const schedulable = canSchedule(policy, !!running) && !detail.publications.length;
 
@@ -92,6 +97,7 @@ export function ControlRoom() {
             onClick={() => produce.mutate()}
             disabled={!canProduce || produce.isPending}
             aria-busy={!!running || produce.isPending}
+            title={blockReason ?? undefined}
           >
             {running ? "Producing" : render ? "Produce again" : "Produce"}
           </button>
@@ -109,6 +115,7 @@ export function ControlRoom() {
           ) : null}
           {running ? <JobLine job={running} projectId={pid} /> : null}
           {!props || !detail.script ? <span className="stagebar__hint">needs props and a script first</span> : null}
+          {blockReason ? <span className="stagebar__hint">{blockReason}</span> : null}
           {cancel.isError ? <span className="joberr">{errorText(cancel.error)}</span> : null}
           {produce.isError ? <span className="joberr">{errorText(produce.error)}</span> : null}
         </div>
@@ -172,6 +179,7 @@ export function ControlRoom() {
             playerRef={playerRef}
             meta={meta}
             onMeta={onMeta}
+            state={cstate}
           />
         </Defer>
         <Defer tier={3} id="room:copilot" phClass="copilot panel-col" minHeight={300}>
@@ -184,6 +192,7 @@ export function ControlRoom() {
             duration={duration}
             playerRef={playerRef}
             meta={meta}
+            state={cstate}
             onScene={(id) => {
               seekScene(id);
               openScript(id);

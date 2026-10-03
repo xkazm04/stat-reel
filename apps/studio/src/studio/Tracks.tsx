@@ -9,7 +9,7 @@ import type { PlayerRef } from "@remotion/player";
 import type { EraAdjustedProps } from "@statreel/schemas";
 import { type PointerEvent, type RefObject, useMemo } from "react";
 import type { PlayerMeta } from "../components/Programme";
-import { rulerTicks, type SceneSpan, spanAt } from "../studio-logic";
+import { type CompositionState, rulerTicks, type SceneSpan, spanAt } from "../studio-logic";
 import { usePlayerFrame } from "./Monitor";
 
 export function Tracks({
@@ -18,6 +18,7 @@ export function Tracks({
   duration,
   playerRef,
   meta,
+  state,
   onScene,
 }: {
   props: EraAdjustedProps | null;
@@ -26,6 +27,8 @@ export function Tracks({
   duration: number;
   playerRef: RefObject<PlayerRef | null>;
   meta: PlayerMeta | null;
+  /** what the player can say; "not-built" must not read as a load in progress */
+  state: CompositionState;
   onScene: (sceneId: string) => void;
 }) {
   const frame = usePlayerFrame(playerRef, meta);
@@ -53,7 +56,11 @@ export function Tracks({
             <span>Tracks · scenes · voice · music · captions</span>
           </span>
           {props
-            ? "Loading the composition to lay the scenes on the ruler."
+            ? state === "not-built"
+              ? "No player for this use case yet, so the scenes cannot be laid on the ruler."
+              : state === "unavailable"
+                ? "The composition could not be loaded, so the scenes cannot be laid on the ruler."
+                : "Loading the composition to lay the scenes on the ruler."
             : "No props yet, so there is nothing to time. Draft with Claude (right) to store scenes."}
         </p>
       </section>

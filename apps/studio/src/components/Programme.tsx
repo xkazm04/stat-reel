@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { type RefObject, useEffect, useMemo } from "react";
 import { useComposition } from "../composition";
 import { playerProps } from "../data";
+import { hasPlayer } from "../studio-logic";
 import { StatusChip } from "./glyphs";
 
 export type PlayerMeta = { fps: number; durationInFrames: number };
@@ -39,7 +40,7 @@ export function Programme({
   compositionName?: string | null;
 }) {
   const comp = useComposition();
-  const wantsEra = compositionName === undefined || compositionName === "EraAdjustedSlope";
+  const wantsEra = hasPlayer(compositionName);
   const inputProps = useMemo(() => {
     const p = playerProps(props);
     return p
