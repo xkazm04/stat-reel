@@ -11,6 +11,7 @@ import { caseStage, EnqueueGenerationSchema, type GenerationJob, type Generation
 import type { Db } from "../db";
 import type { EventBus } from "../events";
 import type { JobRunner } from "../jobs";
+import type { GenerationMcpTools } from "./mcp-tools";
 import { loadGenerationConfig, type LoadedGenerationConfig, generationDataRoot } from "./config";
 import { insideWork, jobPaths } from "./paths";
 import { type GenerationQueue, QueueConflict } from "./queue";
@@ -23,6 +24,8 @@ export type GenerationRouteDeps = {
   bus: EventBus;
   runner: JobRunner;
   dataRoot?: string;
+  /** MCP tools for generation sessions (fetch_asset etc.) */
+  mcp?: GenerationMcpTools;
   config?: () => LoadedGenerationConfig;
   /** data gate (D.6, T11). Until it exists, `generate_video` is refused: the ethics layer fails closed. */
   gate?: (req: { type: GenerationJobType; case_id: string; board_item_id?: string }) => GateVerdict;

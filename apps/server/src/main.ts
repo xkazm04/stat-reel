@@ -10,6 +10,10 @@ import { CalendarService } from "./calendar";
 import { modes, paths, repoRoot, server } from "./config";
 import { openDb } from "./db";
 import { EventBus } from "./events";
+import { GenerationConfigSchema } from "@statreel/schemas";
+import { AssetFetcher, ownerContact } from "./generation/assets";
+import { generationDataRoot, loadGenerationConfig } from "./generation/config";
+import { makeGenerationMcpTools } from "./generation/mcp-tools";
 import { GenerationQueue } from "./generation/queue";
 import { GenerationEventsRelay } from "./generation/relay";
 import { HeatmapService } from "./heatmap-service";
@@ -41,6 +45,8 @@ export async function createServer() {
   runner.resume();
   // generation (ADR 010): the server only owns the queue API and relays worker events; `pnpm worker` runs the jobs
   const queue = new GenerationQueue(db);
+  const genData = generationDataRoot();
+  const assets = new AssetFetcher({ config: (() => { try { return loadGenerationConfig().config.web.download; } catch { return GenerationConfigSchema.parse({}).web.download; } })(), dataRoot: genData, getJob: (id) => queue.get(id), contact: ownerContact(paths.statreelLocal) });
   const relay = new GenerationEventsRelay(db, bus);
   relay.start();
   // renders requested by the worker share the render lane (one render at a time); the composition lands in T9/T10
@@ -49,7 +55,7 @@ export async function createServer() {
   }, { lane: "render" });
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
-  const app = buildApp({ db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner } });
+  const app = buildApp({ db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     const root = path.relative(process.cwd(), dist);

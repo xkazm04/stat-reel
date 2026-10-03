@@ -230,7 +230,7 @@ export function buildApp(d: AppDeps) {
   // ---- MCP (streamable HTTP, stateless)
   app.all("/mcp", async (c) => {
     const body = c.req.method === "POST" ? await c.req.json().catch(() => undefined) : undefined;
-    await handleMcp(d.tools, c.env.incoming, c.env.outgoing, body);
+    await handleMcp(d.tools, c.env.incoming, c.env.outgoing, body, d.generation?.mcp);
     return new Response(null, { headers: { "x-hono-already-sent": "1" } });
   });
 
