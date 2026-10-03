@@ -28,6 +28,87 @@ export function studioCounts(projects: { status: string }[]): ProjectBucketCount
   return bucketCounts(projects);
 }
 
+// ------------------------------------------------------------------ on the line today
+
+type TopicLike = {
+  key: string;
+  label: string;
+  accepted_cases: number;
+  pending: { queued: number; running: boolean };
+  videos: unknown[];
+};
+
+/** What the owner has in hand today, counted from the topic heatmap and the Board (no invention). */
+export type OnTheLine = {
+  acceptedCases: number;
+  /** topics with accepted cases, most first (ties by label) */
+  byTopic: { key: string; label: string; accepted: number }[];
+  /** generation jobs waiting, summed over topics */
+  queued: number;
+  /** topics with a generation job running (the API reports a flag per topic, not a count) */
+  running: number;
+  /** videos on the ledger */
+  videos: number;
+  boardAccepted: number;
+  boardPending: number;
+};
+
+export function onTheLine(topics: TopicLike[], board: { status: string }[]): OnTheLine {
+  const byTopic = topics
+    .filter((t) => t.accepted_cases > 0)
+    .map((t) => ({ key: t.key, label: t.label, accepted: t.accepted_cases }))
+    .sort((a, b) => b.accepted - a.accepted || a.label.localeCompare(b.label));
+  return {
+    acceptedCases: byTopic.reduce((n, t) => n + t.accepted, 0),
+    byTopic,
+    queued: topics.reduce((n, t) => n + t.pending.queued, 0),
+    running: topics.filter((t) => t.pending.running).length,
+    videos: topics.reduce((n, t) => n + t.videos.length, 0),
+    boardAccepted: board.filter((i) => i.status === "accepted").length,
+    boardPending: board.filter((i) => i.status === "pending").length,
+  };
+}
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+/** Where the owner acts on a count (the view maps each to a route). */
+export type LineTarget = "topics" | "board-pending" | "board-accepted";
+export type LineItem = { id: string; to: LineTarget; n: number; text: string; detail: string | null };
+
+/** The panel's rows: one per count, each linked to where the owner acts; zero rows stay (a labelled 0). */
+export function lineItems(l: OnTheLine): LineItem[] {
+  const top = l.byTopic.slice(0, 3).map((t) => `${t.label} ${t.accepted}`);
+  const more = l.byTopic.length - top.length;
+  return [
+    {
+      id: "cases",
+      to: "topics",
+      n: l.acceptedCases,
+      text: plural(l.acceptedCases, "accepted case", "accepted cases"),
+      detail: top.length ? `${top.join(", ")}${more > 0 ? `, +${more} more` : ""}` : null,
+    },
+    {
+      id: "generation",
+      to: "topics",
+      n: l.queued + l.running,
+      text: `generating: ${l.queued} queued, ${l.running} ${plural(l.running, "topic", "topics")} running`,
+      detail: null,
+    },
+    { id: "board-accepted", to: "board-accepted", n: l.boardAccepted, text: "accepted on the Board", detail: null },
+    { id: "board-pending", to: "board-pending", n: l.boardPending, text: "awaiting your call on the Board", detail: null },
+  ];
+}
+
+/** True when nothing is accepted, queued, running or pending: the panel then says so in one line. */
+export const lineIsQuiet = (l: OnTheLine): boolean =>
+  l.acceptedCases + l.queued + l.running + l.boardAccepted + l.boardPending === 0;
+
+/** The ledger line; honest about the stub: finished generation jobs do not add a video yet. */
+export const videosLine = (l: OnTheLine): string =>
+  l.videos === 0
+    ? "0 videos rendered yet: a finished generation job does not add one to the ledger yet"
+    : `${l.videos} ${plural(l.videos, "video", "videos")} on the ledger`;
+
 export const REG_GROUPS = [...SPORTS, "all"] as const;
 export const REG_CLASSES: LicenseClass[] = ["avoid", "paid", "non_commercial", "legal"];
 

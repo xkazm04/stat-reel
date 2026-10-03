@@ -1,5 +1,6 @@
 /** /studio without a project: cut to the newest project, or say honestly that there is none. */
 import { Link, Navigate } from "@tanstack/react-router";
+import { OnTheLine } from "../components/OnTheLine";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useProjects } from "../data";
 
@@ -24,6 +25,7 @@ export function StudioIndex() {
       <Empty title="No project yet — create one from a Go cell">
         The control room opens on a project. Open the <Link to="/heatmap" search={{ view: "feasibility" }}>rights grid</Link>, pick a Go cell, then
         Create project.
+        <OnTheLine variant="panel" />
       </Empty>
     </main>
   );

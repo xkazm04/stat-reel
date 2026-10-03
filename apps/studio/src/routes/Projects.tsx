@@ -9,6 +9,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type CSSProperties, useState } from "react";
 import type { MetricsPublication, ProjectWithJobs } from "../api";
 import { Defer } from "../components/arrive";
+import { OnTheLine } from "../components/OnTheLine";
 import { Arrow, FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading } from "../components/ui";
@@ -76,6 +77,7 @@ export function ProjectsPage() {
       ) : !projects.length ? (
         <Empty title="No project yet">
           Create one from a Go cell on the <Link to="/heatmap" search={{ view: "feasibility" }}>rights grid</Link>: open the cell, then Create project.
+          <OnTheLine variant="panel" />
         </Empty>
       ) : view === "board" ? (
         <Defer tier={1} id="rundown:sheet" minHeight={360}>

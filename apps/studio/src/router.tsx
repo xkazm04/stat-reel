@@ -17,6 +17,7 @@ import { parseBoardSearch } from "./board/search";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
 import { WipeProvider } from "./components/ui";
+import { boardQuery, lineTopicsQuery } from "./workQuery";
 import { calendarQuery, heatmapQuery, heatmapTopicsQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
 import { queryClient } from "./queryClient";
 
@@ -92,8 +93,8 @@ const indexRoute = createRoute({
     mode: asMode(s.mode),
   }),
   component: FrontPhotoFinish,
-  // what the Front reads (useProjects, useHeatmap, useSources); it never reads metrics
-  loader: () => warm(projectsQuery, sourcesQuery, heatmapQuery),
+  // what the Front reads (useProjects, useHeatmap, useSources, the On the line panel: topics + board); never metrics
+  loader: () => warm(projectsQuery, sourcesQuery, heatmapQuery, lineTopicsQuery, boardQuery),
 });
 
 /**
@@ -129,14 +130,14 @@ const projectsRoute = createRoute({
   path: "/projects",
   validateSearch: (s: Record<string, unknown>): ProjectsSearch => ({ view: s.view === "list" ? "list" : undefined }),
   component: ProjectsPage,
-  loader: () => warm(projectsQuery, metricsQuery),
+  loader: () => warm(projectsQuery, metricsQuery, lineTopicsQuery, boardQuery),
 });
 
 const studioIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/studio",
   component: StudioIndex,
-  loader: () => warm(projectsQuery),
+  loader: () => warm(projectsQuery, lineTopicsQuery, boardQuery),
 });
 
 export const studioRoute = createRoute({
