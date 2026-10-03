@@ -1,6 +1,6 @@
 /* Calendar (ADR 006): channel cards, ready-to-schedule list, the week (7 day columns) and the list
-   of every slot. Shared structure from tokens; On Air dresses it in broadcast plates, Photo Finish
-   in rules on the timing sheet (the published slot crosses the clay line). */
+   of every slot. Structure from tokens; Photo Finish
+   dresses it in rules on the timing sheet (the published slot crosses the clay line). */
 
 .cal-page .page__head {
   align-items: stretch;
@@ -534,15 +534,6 @@
   bottom: -6px;
   width: var(--border-signal);
   background: var(--color-signal);
-}
-
-/* ── On Air: broadcast plates ───────────────────────────────────────── */
-[data-theme="onair"] .ch-card__name {
-  transform: skewX(var(--shape-slant));
-}
-[data-theme="onair"] .ch-card--live,
-[data-theme="onair"] .ch-card--dry {
-  box-shadow: inset 0 3px 0 var(--color-brand);
 }
 
 @media (max-width: 1280px) {

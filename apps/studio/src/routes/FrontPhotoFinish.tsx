@@ -59,7 +59,7 @@ import {
   STATUS_WORD,
   splitName,
   verdictCounts,
-} from "../onair";
+} from "../display";
 import type { FrontSearch } from "../router";
 import { useProgramme } from "./useProgramme";
 

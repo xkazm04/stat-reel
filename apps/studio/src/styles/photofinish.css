@@ -39,6 +39,28 @@
 [data-theme="photofinish"] .pf-mark__b {
   font-weight: var(--weight-display-heavy);
 }
+/* Frame Stat icon (ADR 009): graphite frame, sheet-coloured cut-outs, the tallest bar in the signal red */
+[data-theme="photofinish"] .pf-mark__icon {
+  height: 0.92em;
+  width: auto;
+  margin-right: 0.28em;
+  flex: none;
+}
+[data-theme="photofinish"] .fsm__frame,
+[data-theme="photofinish"] .fsm__bar {
+  fill: var(--color-text);
+}
+[data-theme="photofinish"] .fsm__hole,
+[data-theme="photofinish"] .fsm__window {
+  fill: var(--color-bg);
+}
+[data-theme="photofinish"] .fsm__bar--lead {
+  fill: var(--color-signal);
+}
+[data-theme="photofinish"] a:hover .fsm__bar--lead,
+[data-theme="photofinish"] a:focus-visible .fsm__bar--lead {
+  fill: var(--color-brand);
+}
 [data-theme="photofinish"] .pf-mark__l {
   width: var(--border-signal);
   height: 34px;
@@ -68,13 +90,6 @@
 }
 [data-theme="photofinish"] .nav__links a:focus-visible {
   outline-offset: -3px;
-}
-[data-theme="photofinish"] .theme-switch__opts {
-  border-color: var(--color-text);
-  background: var(--color-surface);
-}
-[data-theme="photofinish"] .theme-switch__opts button + button {
-  border-left-color: var(--color-text);
 }
 @media (max-width: 1100px) {
   [data-theme="photofinish"] .nav__drawer.is-open .nav__links a {

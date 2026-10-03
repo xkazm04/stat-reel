@@ -1,7 +1,6 @@
 /* Front · Photo Finish (A/3 landing port, ADR 006). The landing scales as one composition: --r is
    A/3's fluid root unit (15px at phone width to 26px on a 2560px screen), display type uses vw/vh.
-   Only rendered in the photofinish theme; every class is prefixed pf- (the On Air front owns
-   .scene/.stage/.strip/.frame). Decoration (ticks, lane rules, scan lines, grain) stays low
+   Every class is prefixed pf-. Decoration (ticks, lane rules, scan lines, grain) stays low
    contrast and never sits behind body text at a contrast cost. */
 
 .pf-landing {

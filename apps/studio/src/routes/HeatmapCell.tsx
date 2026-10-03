@@ -5,9 +5,9 @@
  * never-fetched sources), the capability tests (detail, rows, coverage) and the projects already
  * made for this pairing. It names what would clear this cell (its failing kinds and the legal
  * candidates already on the registry), offers neighbours to make next, and Create project.
- * It expands from the clicked cell (Photo Finish: the lane band widens behind the clay hairline;
- * On Air: a parallelogram opens in the format's ident colour) and closes back into it (button or
- * Esc), returning focus to that cell on the grid. Reduced motion: it simply appears.
+ * It expands from the clicked cell (the lane band widens behind the clay hairline) and closes
+ * back into it (button or Esc), returning focus to that cell on the grid. Reduced motion: it
+ * simply appears.
  */
 import type { HeatmapCell, Mode, Source, Sport, UseCase } from "@statreel/schemas";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
@@ -15,38 +15,29 @@ import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef } f
 import { errorText, type ProjectWithJobs } from "../api";
 import { useCreateProject } from "../components/createProject";
 import { DnsList, FinishPicture, ModeSwitch, testWord } from "../components/finish";
-import { Arrow, LicChip, StatusChip, TestChip } from "../components/glyphs";
+import { Arrow, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { takeLayerOrigin, visibleRect, type Rect } from "../components/layerTransition";
 import { artStyle, Loading, useReducedMotion } from "../components/ui";
 import { useHeatmap, useProjects, useSources } from "../data";
 import { cellFixes, focusKey, neighbours } from "../heatmap";
-import { allowedIn, type Capability, cellOf, MODE_LABEL, SPORTS, STAGE_LABEL } from "../logic";
-import { formatLabel, kindLong, LICENCE_WORD, neverFetchedFor, pad2, STATUS_AIR, STATUS_WORD } from "../onair";
+import { type Capability, cellOf, MODE_LABEL, SPORTS, STAGE_LABEL } from "../logic";
+import { formatLabel, kindLong, LICENCE_WORD, neverFetchedFor, pad2, STATUS_AIR, STATUS_WORD } from "../display";
 import type { HeatmapSearch } from "../router";
-import { type ThemeName, useTheme } from "../theme";
 
 // ------------------------------------------------------------------ choreography
 
-function clipFrom(theme: ThemeName, r: Rect, box: DOMRect): string {
+function clipFrom(r: Rect, box: DOMRect): string {
   const t = Math.max(0, r.top - box.top);
   const b = Math.max(t + 1, r.bottom - box.top);
-  if (theme === "photofinish") {
-    // the lane band widens into the scene (A/3): full width, the cell's row height
-    return `polygon(0px ${t}px, ${box.width}px ${t}px, ${box.width}px ${b}px, 0px ${b}px)`;
-  }
-  // a broadcast parallelogram around the cell
-  const l = r.left - box.left;
-  const rr = r.right - box.left;
-  const k = (b - t) * 0.18;
-  return `polygon(${l + k}px ${t}px, ${rr + k}px ${t}px, ${rr - k}px ${b}px, ${l - k}px ${b}px)`;
+  // the lane band widens into the scene: full width, the cell's row height
+  return `polygon(0px ${t}px, ${box.width}px ${t}px, ${box.width}px ${b}px, 0px ${b}px)`;
 }
 
-function clipFull(theme: ThemeName, box: DOMRect): string {
+function clipFull(box: DOMRect): string {
   const w = box.width;
   const h = box.height;
-  if (theme === "photofinish") return `polygon(0px 0px, ${w}px 0px, ${w}px ${h}px, 0px ${h}px)`;
-  return `polygon(${-0.25 * w}px 0px, ${1.25 * w}px 0px, ${1.1 * w}px ${h}px, ${-0.4 * w}px ${h}px)`;
+  return `polygon(0px 0px, ${w}px 0px, ${w}px ${h}px, 0px ${h}px)`;
 }
 
 const ms = (el: Element, v: string, fallback: number): number => {
@@ -63,7 +54,6 @@ export function HeatmapCellLayer() {
   const search = useSearch({ from: "/heatmap/$usecase/$sport" }) as HeatmapSearch;
   const mode: Mode = search.mode ?? "monetized";
   const navigate = useNavigate();
-  const { theme } = useTheme();
   const reduced = useReducedMotion();
   const hm = useHeatmap();
   const src = useSources();
@@ -92,17 +82,17 @@ export function HeatmapCellLayer() {
     if (!origin) return;
     const box = el.getBoundingClientRect();
     el.style.transition = "none";
-    el.style.clipPath = clipFrom(theme, origin, box);
+    el.style.clipPath = clipFrom(origin, box);
     void el.offsetWidth;
     const dur = ms(el, "--motion-wipe", 600);
     el.style.transition = `clip-path ${dur}ms var(--ease-wipe)`;
-    el.style.clipPath = clipFull(theme, box);
+    el.style.clipPath = clipFull(box);
     const t = window.setTimeout(() => {
       el.style.transition = "";
       el.style.clipPath = "";
     }, dur + 40);
     return () => window.clearTimeout(t);
-  }, [key, reduced, theme]);
+  }, [key, reduced]);
 
   // a new cell starts at the top, with focus on the way back
   // biome-ignore lint/correctness/useExhaustiveDependencies: refocus on every cell change
@@ -130,12 +120,12 @@ export function HeatmapCellLayer() {
     const box = el.getBoundingClientRect();
     const dur = ms(el, "--motion-base", 300);
     el.style.transition = "none";
-    el.style.clipPath = clipFull(theme, box);
+    el.style.clipPath = clipFull(box);
     void el.offsetWidth;
     el.style.transition = `clip-path ${dur}ms var(--ease-wipe)`;
-    el.style.clipPath = clipFrom(theme, target, box);
+    el.style.clipPath = clipFrom(target, box);
     window.setTimeout(done, dur);
-  }, [navigate, mode, key, usecase, sport, reduced, theme]);
+  }, [navigate, mode, key, usecase, sport, reduced]);
 
   // Esc closes; Tab stays inside the layer
   useEffect(() => {
@@ -189,7 +179,7 @@ export function HeatmapCellLayer() {
 
   return (
     <div
-      className={`hl hl--${theme}`}
+      className="hl hl--photofinish"
       ref={root}
       role="dialog"
       aria-modal="true"
@@ -212,7 +202,7 @@ export function HeatmapCellLayer() {
           <span aria-current="true">{sport}</span>
         </nav>
         <div className="hl-bar__right">
-          <ModeSwitch mode={mode} onChange={setMode} label={theme === "photofinish" ? "Line at" : "Mode"} />
+          <ModeSwitch mode={mode} onChange={setMode} label="Line at" />
         </div>
       </header>
 
@@ -246,7 +236,6 @@ export function HeatmapCellLayer() {
           sources={src.data?.sources ?? []}
           caps={src.data?.capabilities ?? []}
           projects={pr.data?.projects ?? []}
-          theme={theme}
           onClose={close}
           onMode={setMode}
           onCell={goCell}
@@ -270,14 +259,13 @@ type BodyProps = {
   sources: Source[];
   caps: Capability[];
   projects: ProjectWithJobs[];
-  theme: ThemeName;
   onClose: () => void;
   onMode: (m: Mode) => void;
   onCell: (usecase: string, sport: string) => void;
 };
 
 function CellBody(p: BodyProps) {
-  const { uc, sport, mode, cell, cells, sources, theme } = p;
+  const { uc, sport, mode, cell, cells, sources } = p;
   const create = useCreateProject();
   const other: Mode = mode === "monetized" ? "non_commercial" : "monetized";
   const oc = cellOf(cells, uc.id, sport, other);
@@ -292,14 +280,12 @@ function CellBody(p: BodyProps) {
         .filter((a): a is string => !!a),
     ),
   ];
-  const pf = theme === "photofinish";
 
   return (
     <div className="hl-body">
       {/* ---- the cell */}
       <section className="hl-sum" aria-labelledby="hl-title">
         <p className="eyebrow">
-          {pf ? null : <i />}
           <span className="hl-lane">
             Lane {pad2(p.lane)} of {pad2(p.lanes)}
           </span>
@@ -326,7 +312,7 @@ function CellBody(p: BodyProps) {
           })}
         </div>
         <div className={`hl-status st--${cell.status}`}>
-          <StatusChip status={cell.status} size={pf ? 20 : 24} />
+          <StatusChip status={cell.status} size={20} />
           <small>
             {STATUS_AIR[cell.status]} · {MODE_LABEL[mode]} · today
           </small>
@@ -403,21 +389,17 @@ function CellBody(p: BodyProps) {
       <section className="hl-needs" aria-label="What it needs">
         <h3 className="sec-h">
           <span>
-            {pf
-              ? "Photo-finish · one lane per data kind · right of the line is allowed"
-              : `What it needs · ${cell.kinds.length} data kind${cell.kinds.length === 1 ? "" : "s"}`}
+            Photo-finish · one lane per data kind · right of the line is allowed
           </span>
           <span>complexity stage {uc.stage}</span>
         </h3>
         {cell.kinds.length === 0 ? (
           <p className="hl-p">This use case declares no required data kind.</p>
-        ) : pf ? (
+        ) : (
           <>
             <FinishPicture cell={cell} sources={sources} />
             <CapTable cell={cell} sport={sport} caps={p.caps} />
           </>
-        ) : (
-          <KindRows cell={cell} sport={sport} mode={mode} caps={p.caps} srcById={srcById} />
         )}
       </section>
 
@@ -425,23 +407,9 @@ function CellBody(p: BodyProps) {
       <aside className="hl-side" aria-label="Never fetched, make next, attribution">
         <div className="hl-block">
           <h3 className="sec-h">
-            <span>{pf ? "Did not start · off-limits, never fetched" : "Never fetched"} · {never.length}</span>
+            <span>Did not start · off-limits, never fetched · {never.length}</span>
           </h3>
-          {pf ? (
-            <DnsList sources={never} empty="No off-limits source touches this cell." />
-          ) : never.length ? (
-            <ul className="hl-off">
-              {never.map((s) => (
-                <li key={s.id}>
-                  <b>{s.id}</b>
-                  {s.license}
-                  {s.notes ? ` · ${s.notes}` : ""}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="hl-p">No off-limits source touches this cell.</p>
-          )}
+          <DnsList sources={never} empty="No off-limits source touches this cell." />
         </div>
         <MakeNext {...p} />
         <div className="hl-block">
@@ -462,87 +430,7 @@ function CellBody(p: BodyProps) {
   );
 }
 
-// ------------------------------------------------------------------ On Air: the rights sheet rows
-
-function KindRows({
-  cell,
-  sport,
-  mode,
-  caps,
-  srcById,
-}: {
-  cell: HeatmapCell;
-  sport: Sport;
-  mode: Mode;
-  caps: Capability[];
-  srcById: Map<string, Source>;
-}) {
-  return (
-    <div className="hl-kinds">
-      {cell.kinds.map((k) => {
-        const ok = allowedIn(mode, k.best);
-        return (
-          <div className="hl-kind" key={k.kind}>
-            <div className="hl-kind__k">
-              <b>{kindLong(k.kind)}</b>
-              <span className="label">
-                {k.kind} · {k.tested ? "tested" : "not tested"}
-              </span>
-              <span className="hl-kind__best">
-                best: {k.best ? <LicChip cls={k.best} /> : <span className="label">none passing</span>}
-              </span>
-              <span className={`hl-verdict hl-verdict--${ok ? "ok" : "no"}`}>
-                <StatusChip
-                  status={ok ? "go" : k.best ? "ask" : "blocked"}
-                  size={13}
-                  label={ok ? "CLEARS" : k.best ? `BEST IS ${LICENCE_WORD[k.best].toUpperCase()}` : "NO PASSING SOURCE"}
-                />
-              </span>
-            </div>
-            <div className="hl-srcs">
-              {k.sources.length ? (
-                k.sources.map((s) => {
-                  const reg = srcById.get(s.id);
-                  const cap = caps.find((x) => x.sport === sport && x.kind === k.kind && x.source_id === s.id);
-                  const best = !!k.best && s.status === "pass" && s.license_class === k.best;
-                  const out = !allowedIn(mode, s.license_class);
-                  return (
-                    <div className={`hl-src${best ? " is-best" : ""}${out ? " is-out" : ""}`} key={s.id}>
-                      <i className="hl-src__dot" aria-hidden="true" />
-                      <div>
-                        <div className="hl-src__h">
-                          <b>{s.id}</b>
-                          <LicChip cls={s.license_class} />
-                          <TestChip status={s.status} />
-                          {best ? <em>best</em> : null}
-                          {out ? <span className="hl-src__out">not in this mode</span> : null}
-                        </div>
-                        {reg?.license ?? "not in the registry"}
-                        {reg?.verdict_note ? ` · ${reg.verdict_note}` : ""}
-                        {cap ? (
-                          <span className="hl-src__cap">
-                            test: {cap.detail} · {cap.rows.toLocaleString("en-US")} rows
-                            {cap.coverage_from ? ` · ${cap.coverage_from}–${cap.coverage_to ?? "now"}` : ""}
-                          </span>
-                        ) : (
-                          <span className="hl-src__cap">no capability test on record</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="hl-p">No source in the registry declares this kind for {sport}.</p>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------ Photo Finish: the tests under the picture
+// ------------------------------------------------------------------ the tests under the picture
 
 function CapTable({ cell, sport, caps }: { cell: HeatmapCell; sport: Sport; caps: Capability[] }) {
   const rows = cell.kinds.flatMap((k) =>

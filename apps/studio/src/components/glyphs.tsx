@@ -1,14 +1,12 @@
 /**
  * The status vocabulary, drawn (the font subsets carry no arrows): status glyphs (shape before
- * hue), status chips (glyph + label as text), licence chips, arrows, the logo mark, sport fields.
- * Each theme owns its glyph set: On Air draws disc / half-disc / triangle / crossed square;
- * Photo Finish draws a position relative to the finish line (bar across with a flag, bar at the
- * line with a hollow end, hatched bar short with a query dot, barred gate at the start).
+ * hue), status chips (glyph + label as text), licence chips, arrows, sport fields.
+ * The glyphs are Photo Finish positions relative to the finish line (bar across with a flag, bar
+ * at the line with a hollow end, hatched bar short with a query dot, barred gate at the start).
  */
 import type { CellStatus, LicenseClass } from "@statreel/schemas";
 import type { ReactNode } from "react";
-import { LICENCE_WORD, STATUS_WORD } from "../onair";
-import { useTheme } from "../theme";
+import { LICENCE_WORD, STATUS_WORD } from "../display";
 
 export type GlyphKind = CellStatus;
 
@@ -56,48 +54,7 @@ export function LineGlyph({ status, size = 16 }: { status: GlyphKind; size?: num
 }
 
 export function Glyph({ status, size = 16 }: { status: GlyphKind; size?: number }) {
-  const { theme } = useTheme();
-  if (theme === "photofinish") return <LineGlyph status={status} size={size} />;
-  return <DiscGlyph status={status} size={size} />;
-}
-
-/** On Air status glyph: disc / half-disc / triangle / crossed square. */
-export function DiscGlyph({ status, size = 16 }: { status: GlyphKind; size?: number }) {
-  let inner: ReactNode = null;
-  if (status === "go")
-    inner = (
-      <>
-        <circle cx="8" cy="8" r="7" fill="currentColor" />
-        <path d="M6.3 4.7 11.4 8l-5.1 3.3z" fill="var(--color-bg)" />
-      </>
-    );
-  else if (status === "data-ready")
-    inner = (
-      <>
-        <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M1.75 8a6.25 6.25 0 0 0 12.5 0z" fill="currentColor" />
-      </>
-    );
-  else if (status === "ask")
-    inner = (
-      <>
-        <path d="M8 1.7 15 14.2H1z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M8 6.2v3.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        <circle cx="8" cy="11.9" r=".95" fill="currentColor" />
-      </>
-    );
-  else
-    inner = (
-      <>
-        <rect x="1.75" y="1.75" width="12.5" height="12.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      </>
-    );
-  return (
-    <svg className={`glyph glyph--${status}`} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-      {inner}
-    </svg>
-  );
+  return <LineGlyph status={status} size={size} />;
 }
 
 /** Glyph + label. The label is literal text (GO / DATA READY / ASK / BLOCKED), never CSS-only. */
@@ -150,19 +107,6 @@ export function Arrow({ dir = "right", size = 16 }: { dir?: "right" | "left" | "
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="square"
-      />
-    </svg>
-  );
-}
-
-/** The On Air logo mark (a slanted volt plate with three rising bars). */
-export function Mark({ className = "logo__mark" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 34 24" aria-hidden="true">
-      <path d="M7 0h27l-7 24H0z" fill="currentColor" />
-      <path
-        d="M9.3 18.5l1.6-5.5h3.2l-1.6 5.5zM14.9 18.5l2.9-10h3.2l-2.9 10zM20.5 18.5l4.2-14.4h3.2l-4.2 14.4z"
-        fill="var(--color-bg)"
       />
     </svg>
   );

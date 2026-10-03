@@ -1,6 +1,5 @@
 /* Board (ADR 006): three prototype variants over one vocabulary. Colours, shapes and motion come
-   only from the semantic tokens; On Air dresses it as a floodlit broadcast wall (volt = cleared),
-   Photo Finish as a timing sheet on paper with the clay finish line under every decision.
+   only from the semantic tokens; Photo Finish dresses it as a timing sheet on paper with the clay finish line under every decision.
    Class prefix bd- (".board" belongs to the rundown). */
 
 /* groups of buttons are fieldsets (legend for screen readers); strip the UA box */
@@ -1358,88 +1357,11 @@ html.bd-modal-open {
   }
 }
 
-/* ================================================================ On Air: floodlit broadcast wall */
-[data-theme="onair"] .bd-switch__opts button {
-  clip-path: var(--control-clip);
-  padding-left: 20px;
-  padding-right: 22px;
-}
-[data-theme="onair"] .bd-switch__opts button[aria-pressed="true"] {
-  background: var(--color-brand);
-  border-color: var(--color-brand);
-  color: var(--color-brand-ink);
-}
-[data-theme="onair"] .bd-switch__opts button[aria-pressed="true"] b {
-  color: var(--color-brand-ink);
-}
-[data-theme="onair"] .bd-switch__opts button:focus-visible {
-  clip-path: none;
-}
-[data-theme="onair"] .bd-counts {
-  background: linear-gradient(180deg, var(--color-surface), var(--color-bg-raised));
-  border-color: var(--color-line-strong);
-}
-[data-theme="onair"] .bd-count dd:not(.bd-count__sub) {
-  font-size: var(--text-4xl);
-}
-[data-theme="onair"] .bd-tile__state {
-  clip-path: var(--control-clip);
-  padding-left: 13px;
-  padding-right: 15px;
-  border: 0;
-  background: color-mix(in srgb, var(--color-bg) 86%, transparent);
-}
-[data-theme="onair"] .bd-tile--accepted .bd-tile__state,
 [data-theme="photofinish"] .bd-tile--accepted .bd-tile__state {
   --bd-glyph-ink: var(--status-go);
   background: var(--status-go);
   border-color: var(--status-go);
   color: var(--status-go-ink);
-}
-[data-theme="onair"] .bd-tile--rejected .bd-tile__state {
-  --bd-glyph-ink: var(--status-blocked);
-  background: var(--status-blocked);
-  color: var(--color-bg);
-}
-[data-theme="onair"] .bd-tile--accepted .bd-tile__img {
-  box-shadow: var(--glow-brand);
-}
-[data-theme="onair"] .bd-wall__body {
-  background-image:
-    linear-gradient(var(--color-deco) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-deco) 1px, transparent 1px);
-  background-size: 64px 64px;
-  background-position: -1px -1px;
-}
-[data-theme="onair"] .bd-lb__stage,
-[data-theme="onair"] .bd-lt__loupe {
-  background:
-    radial-gradient(70% 60% at 50% 0%, color-mix(in srgb, var(--color-floodlight) 16%, transparent), transparent 70%),
-    var(--color-screen);
-}
-[data-theme="onair"] .bd-lb__top {
-  background: var(--color-bg-raised);
-}
-[data-theme="onair"] .bd-tag,
-[data-theme="onair"] .bd-case--proposed b {
-  color: var(--color-brand);
-}
-[data-theme="onair"] .bd-mx__corner,
-[data-theme="onair"] .bd-mx__ch,
-[data-theme="onair"] .bd-mx__rh {
-  background-color: var(--color-surface);
-}
-[data-theme="onair"] .bd-mx__ax--rejected {
-  background-image:
-    repeating-linear-gradient(
-      45deg,
-      color-mix(in srgb, var(--status-blocked) 22%, transparent) 0 1.5px,
-      transparent 1.5px 8px
-    ),
-    linear-gradient(var(--color-surface), var(--color-surface));
-}
-[data-theme="onair"] .bd-mx__shot {
-  background: var(--color-bg-raised);
 }
 
 /* ================================================================ Photo Finish: timing sheet, clay line */
@@ -1583,10 +1505,7 @@ html.bd-modal-open {
     min-width: 0;
     padding: 7px 10px 8px;
   }
-  [data-theme="onair"] .bd-switch__opts button {
-    padding-left: 13px;
-    padding-right: 13px;
-  }
+  
   .bd-counts {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1603,8 +1522,7 @@ html.bd-modal-open {
   .bd-count:not(:nth-child(3n + 1)) {
     border-left: 1px solid var(--color-line);
   }
-  .bd-count dd:not(.bd-count__sub),
-  [data-theme="onair"] .bd-count dd:not(.bd-count__sub) {
+  .bd-count dd:not(.bd-count__sub) {
     font-size: var(--text-2xl);
   }
   .bd-sel {

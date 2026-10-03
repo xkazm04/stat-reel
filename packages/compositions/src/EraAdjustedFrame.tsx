@@ -285,7 +285,7 @@ function Payoff({
         labelFontSize={vertical ? 28 : 26}
         theme={theme}
         fontSize={rankFs}
-        color={theme.accent}
+        color={theme.accentInk}
         width={box.width}
       />
       <div style={{ flex: "none", height: 2, background: theme.grid, width: box.width, margin: "4px 0" }} />

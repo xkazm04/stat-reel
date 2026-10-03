@@ -13,7 +13,7 @@ import { api, errorText, type ProjectDetail, qk } from "../api";
 import { LicChip, StatusChip } from "../components/glyphs";
 import { Empty } from "../components/ui";
 import { cellOf, factGroup } from "../logic";
-import { fmtValue, kindLong } from "../onair";
+import { fmtValue, kindLong } from "../display";
 
 function Dataset({ usecase, cell }: { usecase: UseCase | undefined; cell: HeatmapCell | undefined }) {
   if (!usecase) return <p className="sum-p">Use case not in the registry.</p>;

@@ -9,7 +9,7 @@ import { LicChip, TestChip } from "../components/glyphs";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useSources } from "../data";
 import { SPORTS } from "../logic";
-import { kindLong, LICENCE_WORD, pad2, verdictCounts } from "../onair";
+import { kindLong, LICENCE_WORD, pad2, verdictCounts } from "../display";
 
 type Extra = Source & {
   terms_checked_at?: string;

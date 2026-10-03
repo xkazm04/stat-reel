@@ -1,19 +1,10 @@
 /**
  * Design tokens. `tokens.css` is the source of truth for the studio UI (CSS custom properties):
- * one semantic vocabulary, two themes selected by `data-theme` on <html> (ADR 006):
- * `onair` (A/1, dark, default) and `photofinish` (A/3, light).
- * `videoTheme` is the On Air brand as plain values for Remotion compositions (the videos stay
- * `onair` for now; a per-channel video theme is future work).
+ * one semantic vocabulary, one theme: Photo Finish (ADR 009).
+ * `videoTheme` is the same brand as plain values for Remotion compositions.
  *
- * Volt means one thing everywhere in On Air: cleared to air. In Photo Finish the one signal is
- * the clay-red finish line.
+ * In Photo Finish the one signal is the clay-red finish line.
  */
-
-/** Studio UI themes (ADR 006). `onair` is dark, `photofinish` is light. */
-export const themes = ["onair", "photofinish"] as const;
-export type ThemeName = (typeof themes)[number];
-/** The scheme each theme answers (`prefers-color-scheme` picks the default). */
-export const themeScheme: Record<ThemeName, "dark" | "light"> = { onair: "dark", photofinish: "light" };
 
 export const fontFamilies = {
   display: '"Barlow Condensed", "Arial Narrow", sans-serif',
@@ -21,28 +12,18 @@ export const fontFamilies = {
   data: '"JetBrains Mono", ui-monospace, monospace',
 } as const;
 
-/** Status is a shape and a pattern before it is a hue; always labelled. */
-export const statusGlyphs = {
-  go: { glyph: "disc-play", pattern: "solid", label: "GO", color: "#d6ff3f" },
-  "data-ready": { glyph: "half-disc", pattern: "dots", label: "DATA READY", color: "#46d9ff" },
-  ask: { glyph: "triangle-bang", pattern: "hatch", label: "ASK", color: "#ffb531" },
-  blocked: { glyph: "square-cross", pattern: "crosshatch", label: "BLOCKED", color: "#ff5a6e" },
-} as const;
-
-export const licenceColors = { legal: "#d6ff3f", non_commercial: "#ffb531", paid: "#b48cff", avoid: "#ff5a6e" } as const;
-
-/** One ident colour per use case (the reel's format idents). */
+/** One ident colour per use case (the Photo Finish lanes; the studio reads them as --ident-<id>). */
 export const identColors: Record<string, string> = {
-  "counterfactual-timelines": "#b48cff",
-  "era-adjusted-rankings": "#d6ff3f",
-  "spatial-career-maps": "#3ee6a8",
-  "network-flow-timelines": "#46d9ff",
-  "distribution-races": "#ff8a3d",
-  "probability-narratives": "#ff5fa2",
-  "similarity-dna": "#8c9bff",
-  "metric-explainer-shorts": "#ffd23e",
-  "reactive-weekend-pipeline": "#ff6b5b",
-  "interactive-companion-loop": "#6be3e3",
+  "counterfactual-timelines": "#6a5be2",
+  "era-adjusted-rankings": "#0a93a3",
+  "spatial-career-maps": "#2c9a55",
+  "network-flow-timelines": "#1f73da",
+  "distribution-races": "#b83c9b",
+  "probability-narratives": "#d4820e",
+  "similarity-dna": "#d2426b",
+  "metric-explainer-shorts": "#6e8f10",
+  "reactive-weekend-pipeline": "#1899cf",
+  "interactive-companion-loop": "#566a90",
 };
 
 export type VideoTheme = {
@@ -60,19 +41,25 @@ export type VideoTheme = {
   fonts: typeof fontFamilies;
 };
 
-/** Video frames: floodlit night ground, light ink, volt for the one thing that matters. */
+/**
+ * Video frames (ADR 009, owner decision 2026-10-03): the Photo Finish palette, built from the same
+ * values as the studio tokens (theme-photofinish.css): the timing sheet as ground, graphite ink,
+ * one clay-red signal. `accent` is the signal as a stroke or fill; text in the signal colour uses
+ * `accentInk` (the brand red, AA on the sheet). All text colours reach 4.5:1 on `background`
+ * (video-theme.test.ts). Burned captions are graphite on a translucent sheet plate.
+ */
 export const videoTheme: VideoTheme = {
-  background: "#05070c",
-  surface: "#0f1524",
-  grid: "#222c43",
-  ink: "#f3f6fb",
-  inkDim: "#a3aec4",
-  inkFaint: "#7887a3",
-  accent: "#d6ff3f",
-  accentInk: "#d6ff3f",
-  captionBox: "rgba(5, 7, 12, 0.78)",
-  captionInk: "#ffffff",
-  captionActive: "#d6ff3f",
+  background: "#eceff2", // --color-bg, the timing sheet
+  surface: "#ffffff", // --color-surface
+  grid: "#c6ced5", // --color-line, hairline rules
+  ink: "#12161a", // --color-text, graphite
+  inkDim: "#38414a", // --color-text-muted
+  inkFaint: "#56616c", // --color-text-dim, still AA on the sheet
+  accent: "#e4432a", // --color-signal, the finish line
+  accentInk: "#b8321a", // --color-brand, the line as text
+  captionBox: "rgba(245, 247, 249, 0.94)", // --color-bg-raised as a translucent plate
+  captionInk: "#12161a",
+  captionActive: "#b8321a",
   fonts: fontFamilies,
 };
 

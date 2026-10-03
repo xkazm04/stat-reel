@@ -1,7 +1,7 @@
-/* StatReel studio — shared base for both themes (ADR 006). Tokens (and the @font-face rules) live in
+/* StatReel studio — shared base (ADR 006, one theme since ADR 009). Tokens (and the @font-face rules) live in
    @statreel/design-tokens/tokens.css: one semantic vocabulary, values per `data-theme`.
    Colours, control shapes and motion come only from tokens. Theme set pieces live in
-   onair.css / photofinish.css; page modules in their own files. */
+   photofinish.css; page modules in their own files. */
 
 *,
 *::before,
@@ -140,7 +140,7 @@ kbd {
   top: 8px;
 }
 
-/* ── Navigation (structure; each theme dresses it in onair.css / photofinish.css) ── */
+/* ── Navigation (structure; Photo Finish dresses it in photofinish.css) ── */
 .nav {
   position: sticky;
   top: 0;
@@ -247,71 +247,6 @@ kbd {
   100% {
     opacity: 1;
   }
-}
-
-/* theme switch: a labelled two-way control; the current theme is pressed */
-.theme-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.theme-switch__k {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-dim);
-  padding: 0;
-}
-.theme-switch__opts {
-  display: inline-flex;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--control-radius);
-  background: var(--color-bg-raised);
-}
-.theme-switch__opts button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 10px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-.theme-switch__opts button + button {
-  border-left: 1px solid var(--color-line-strong);
-}
-.theme-switch__opts button:hover {
-  color: var(--color-text);
-}
-.theme-switch__opts button[aria-pressed="true"] {
-  background: var(--color-text);
-  color: var(--color-bg);
-}
-.theme-switch__opts button:focus-visible {
-  position: relative;
-  z-index: 1;
-}
-.theme-switch__dot {
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid;
-  flex: none;
-}
-.theme-switch__dot--onair {
-  background: #05070c;
-  border-color: #d6ff3f;
-}
-.theme-switch__dot--photofinish {
-  background: linear-gradient(90deg, #eceff2 0 44%, #e4432a 44% 60%, #ffffff 60%);
-  border-color: #8f9aa5;
 }
 
 /* menu button: only below the collapse width */
@@ -427,7 +362,7 @@ kbd {
   }
 }
 
-/* ── Buttons (shape from the control tokens: a parallelogram in On Air, a ruled key in Photo Finish) ── */
+/* ── Buttons (shape from the control tokens: a ruled key in Photo Finish) ── */
 .btn {
   position: relative;
   display: inline-flex;

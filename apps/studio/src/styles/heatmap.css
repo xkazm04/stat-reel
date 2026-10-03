@@ -1,8 +1,7 @@
 /* Heatmap — two layers (ADR 006). Layer 1 (.hm): the grid alone, full height. Layer 2 (.hl): one
    cell as its own full layer over the grid, with its own scroll. Shared structure first, then the
-   On Air set pieces (A/1 rights grid, rights sheet) and the Photo Finish set pieces (A/3 finish
-   sheet: heats x lanes with bars toward the clay line; the finish picture). Classes are prefixed
-   hm- / hl- / oa- / pf- so no other module collides with them. */
+   Photo Finish set pieces (A/3 finish sheet: heats x lanes with bars toward the clay line; the
+   finish picture). Classes are prefixed hm- / hl- / pf- so no other module collides with them. */
 
 /* ================================================================ layer 1 · shared frame */
 .hm {
@@ -123,221 +122,6 @@
 }
 html.hm-layer-open {
   overflow: hidden;
-}
-
-/* ================================================================ layer 1 · On Air rights grid */
-.hm--onair {
-  background: radial-gradient(
-    90% 60% at 80% -10%,
-    color-mix(in srgb, var(--color-floodlight) 14%, var(--color-bg)) 0%,
-    var(--color-bg) 60%
-  );
-}
-.hm--onair .hm-title h1 {
-  font-size: 34px;
-  letter-spacing: 0.02em;
-}
-.hm--onair .hm-legend li {
-  height: 36px;
-  padding: 0 10px 0 8px;
-  border: 1px solid var(--color-line);
-}
-.hm--onair .hm-legend .st {
-  font-size: 14px;
-  gap: 5px;
-}
-.hm--onair .hm-legend__n {
-  font-size: 26px;
-}
-.oa-grid {
-  display: grid;
-  grid-template-columns: 132px repeat(var(--cols, 10), minmax(0, 1fr));
-  grid-template-rows: auto repeat(4, minmax(60px, 1fr));
-  gap: 4px;
-  height: 100%;
-}
-.oa-grid__row {
-  display: contents;
-}
-.oa-corner {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 0 0 8px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-dim);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  line-height: 1.4;
-}
-.oa-colh {
-  position: relative;
-  padding: 6px 6px 7px;
-  overflow: hidden;
-  border-top: 3px solid var(--art);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--art) 12%, transparent), transparent);
-  min-width: 0;
-  transition: background var(--motion-fast);
-}
-.oa-colh b {
-  display: block;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 12px;
-  color: var(--art);
-  letter-spacing: 0.06em;
-}
-.oa-colh__name {
-  display: block;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: clamp(14px, 1.02vw, 19px);
-  line-height: 1.04;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  min-height: 2.1em;
-  margin-top: 2px;
-  overflow-wrap: anywhere;
-}
-.oa-colh i {
-  display: block;
-  font-style: normal;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-dim);
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.oa-colh .hm-trend {
-  margin-top: 3px;
-  max-width: 100%;
-  overflow: hidden;
-}
-.oa-colh.hot {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--art) 30%, transparent), transparent);
-}
-.oa-rowh {
-  display: grid;
-  grid-template-columns: 36px 1fr;
-  align-content: center;
-  align-items: center;
-  gap: 6px 8px;
-  border-left: 3px solid var(--color-line-strong);
-  padding-left: 8px;
-  min-width: 0;
-  transition: border-color var(--motion-fast);
-}
-.oa-rowh .field {
-  width: 36px;
-  color: var(--color-text-dim);
-}
-.oa-rowh b {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 24px;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.oa-rowh small {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 9px;
-  line-height: 1;
-}
-.oa-rowh small .st {
-  font-size: 13px;
-  gap: 4px;
-}
-.oa-rowh.hot {
-  border-left-color: var(--color-brand);
-}
-.oa-rowh.hot .field {
-  color: var(--color-text);
-}
-.oa-cell {
-  position: relative;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-  min-width: 0;
-  transition:
-    transform var(--motion-instant) var(--ease-out),
-    border-color var(--motion-fast),
-    box-shadow var(--motion-fast);
-}
-.oa-cell .st {
-  font-size: clamp(13px, 1vw, 18px);
-  gap: 5px;
-  letter-spacing: 0.05em;
-  white-space: normal;
-  line-height: 1.05;
-}
-.oa-cell__hint {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-muted);
-  line-height: 1.15;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-.oa-cell:hover {
-  border-color: currentColor;
-  transform: translateY(-1px);
-}
-.oa-cell[aria-selected="true"] {
-  border-color: var(--color-text);
-  box-shadow: 0 0 0 2px var(--color-text);
-  z-index: 2;
-}
-.oa-cell:focus-visible {
-  box-shadow:
-    0 0 0 2px var(--color-bg),
-    0 0 0 4px var(--color-brand);
-  z-index: 3;
-  border-radius: 0;
-}
-.oa-cell--none {
-  color: var(--color-text-dim);
-  border-style: dotted;
-  font-size: 12px;
-}
-.oa-cell.flip {
-  animation: oa-flip 460ms var(--ease-wipe) both;
-  animation-delay: calc(var(--d) * 22ms);
-}
-.oa-cell.is-back {
-  animation: oa-back 900ms var(--ease-out);
-}
-@keyframes oa-flip {
-  0% {
-    transform: scaleY(1);
-  }
-  49% {
-    transform: scaleY(0.04);
-    filter: brightness(2.2);
-  }
-  100% {
-    transform: scaleY(1);
-  }
-}
-@keyframes oa-back {
-  0% {
-    box-shadow:
-      0 0 0 2px var(--color-bg),
-      0 0 0 4px var(--color-brand),
-      var(--glow-brand);
-  }
 }
 
 /* ================================================================ layer 1 · Photo Finish finish sheet */
@@ -946,72 +730,8 @@ html.hm-layer-open {
   }
 }
 
-/* ================================================================ layer 2 · On Air rights sheet */
-.hl--onair {
-  background:
-    radial-gradient(80% 60% at 0% 0%, color-mix(in srgb, var(--art) 12%, transparent), transparent 60%),
-    radial-gradient(90% 60% at 90% -10%, color-mix(in srgb, var(--color-floodlight) 12%, var(--color-bg)), var(--color-bg) 60%);
-}
-.hl--onair .hl-bar {
-  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 3px solid var(--art);
-}
-.hl--onair .hl-sweep {
-  width: 46vw;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--art) 55%, transparent) 70%, var(--art) 96%, transparent);
-  transform: skewX(-14deg) translateX(-60vw);
-}
-.hl--onair.is-sweeping .hl-sweep {
-  animation: oa-hl-sweep 820ms var(--ease-wipe) both;
-}
-@keyframes oa-hl-sweep {
-  0% {
-    opacity: 0.9;
-    transform: skewX(-14deg) translateX(-60vw);
-  }
-  100% {
-    opacity: 0;
-    transform: skewX(-14deg) translateX(120vw);
-  }
-}
-.hl--onair .hl-body {
-  margin: 16px var(--page-gutter) 40px;
-  padding: 0;
-  gap: 0;
-  border: 1px solid var(--color-line-strong);
-  border-top: 4px solid var(--art);
-  background: color-mix(in srgb, var(--color-bg-raised) 86%, transparent);
-}
-.hl--onair .hl-body > * {
-  padding: 16px 20px 20px;
-}
-.hl--onair .hl-body > * + * {
-  border-left: 1px solid var(--color-line);
-}
-.hl--onair .hl-title em {
-  font-style: normal;
-  color: var(--art);
-}
-.hl--onair .hl-sport {
-  border: 1px solid var(--color-line-strong);
-  clip-path: var(--control-clip);
-  padding: 0 12px;
-}
-.hl--onair .hl-sport[aria-pressed="true"] {
-  background: var(--color-text);
-  color: var(--color-bg);
-}
-.hl--onair .hl-sport[aria-pressed="true"] .st {
-  color: var(--color-bg);
-}
-.hl--onair .hl-status .st {
-  font-size: 24px;
-  gap: 9px;
-}
-.hl--onair .hl-why p {
-  font-weight: 500;
-}
+/* ================================================================ layer 2 · cell detail */
+
 .hl-kinds {
   display: grid;
 }
@@ -1237,10 +957,7 @@ html.hm-layer-open {
   .hl-side .hl-block:first-child {
     margin-top: 18px;
   }
-  .hl--onair .hl-body > .hl-side {
-    border-left: 0;
-    border-top: 1px solid var(--color-line);
-  }
+  
 }
 @media (max-width: 1100px) {
   .hm-layer1 {
@@ -1256,11 +973,7 @@ html.hm-layer-open {
     overflow-x: auto;
     padding-bottom: 6px;
   }
-  .oa-grid {
-    min-width: 1060px;
-    height: auto;
-    grid-template-rows: auto repeat(4, 78px);
-  }
+  
   .pf-heats {
     --rowhead: 176px;
     min-width: calc(var(--rowhead) + 4 * 236px);
@@ -1269,9 +982,7 @@ html.hm-layer-open {
   }
   /* the grid scrolls inside its own container; the row heads stay put */
   .pf-corner,
-  .pf-rowhead,
-  .oa-corner,
-  .oa-rowh {
+.pf-rowhead {
     position: sticky;
     left: 0;
     z-index: 5;
@@ -1280,19 +991,14 @@ html.hm-layer-open {
   .pf-rowhead__meta {
     display: none;
   }
-  .oa-grid {
-    grid-template-columns: 112px repeat(var(--cols, 10), minmax(0, 1fr));
-  }
+  
 }
 @media (max-width: 860px) {
   .hl-body {
     grid-template-columns: 1fr;
     gap: 24px;
   }
-  .hl--onair .hl-body > * + * {
-    border-left: 0;
-    border-top: 1px solid var(--color-line);
-  }
+  
   .hl-kind {
     grid-template-columns: 1fr;
   }
@@ -1303,14 +1009,8 @@ html.hm-layer-open {
     display: none;
   }
 }
-@media (max-height: 820px) and (min-width: 1101px) {
-  .oa-colh__name {
-    min-height: 0;
-  }
-}
+
 @media (prefers-reduced-motion: reduce) {
-  .oa-cell.flip,
-  .oa-cell.is-back,
   .pf-hc.is-back,
   .hl-body.in > *,
   .hl.is-sweeping .hl-sweep {
