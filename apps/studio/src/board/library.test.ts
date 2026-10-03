@@ -1,7 +1,7 @@
 import type { UseCase } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import type { BoardItem, CaseIdea, StyleEntry } from "../api";
-import { caseDecisionForKey, caseRows, groupStyles, inbox, nextUndecided, parseTab, styleItems } from "./library";
+import { caseDecisionForKey, caseRows, groupStyles, inbox, nextUndecided, parseTab, styleItems, visibleCaseRows, visibleStyles } from "./library";
 
 const item = (id: string, over: Partial<BoardItem> = {}): BoardItem => ({
   id, image: `items/${id}.png`, image_url: `/files/board/items/${id}.png`, video: null, video_url: null, duration_s: null,
@@ -58,6 +58,13 @@ describe("Style gallery", () => {
     ]);
   });
 
+  it("hides rejected styles (they stay in the data for the loops)", () => {
+    const all = [style("a", "accepted"), style("x", "rejected"), style("o", "open")];
+    expect(visibleStyles(all).map((s) => s.id)).toEqual(["a", "o"]);
+    expect(groupStyles(visibleStyles(all)).map((g) => g.status)).toEqual(["accepted", "open"]);
+    expect(groupStyles(all).map((g) => g.status)).not.toContain("rejected");
+  });
+
   it("puts the hero first and skips items that are gone", () => {
     const byId = new Map([item("x"), item("y"), item("z")].map((i) => [i.id, i]));
     const s = style("ink", "accepted", { item_ids: ["x", "gone", "y", "z"], hero_item_id: "y" });
@@ -89,6 +96,12 @@ describe("Use case list", () => {
     expect(by.get("ci-2")).toMatchObject({ verdict: "rejected", note: "a decade is not enough here" });
     expect(rows.map((r) => r.verdict)).toEqual([...rows.map((r) => r.verdict)].sort((a, b) =>
       ["accepted", "pending", "untested", "rejected"].indexOf(a) - ["accepted", "pending", "untested", "rejected"].indexOf(b)));
+  });
+
+  it("hides rejected rows from the display lists but keeps them in caseRows", () => {
+    const rows = caseRows([], [], [idea("ci-1"), idea("ci-2", { decision: "reject_short", status: "rejected" }), idea("ci-3", { decision: "accept", status: "accepted" })]);
+    expect(rows).toHaveLength(3);
+    expect(visibleCaseRows(rows).map((r) => r.key).sort()).toEqual(["ci-1", "ci-3"]);
   });
 
   it("puts undecided ideas in the inbox, longest timeline first", () => {

@@ -38,8 +38,12 @@ function Tally({ t, axis }: { t: AxisTally; axis: "style" | "case" }) {
   );
 }
 
-export function MatrixVariant({ items, names }: VariantProps) {
-  const L = useMemo(() => ledger(items, names), [items, names]);
+export function MatrixVariant({ items, scoped, names }: VariantProps) {
+  // tallies keep the rejections as feedback on an axis; only visible shots are drawn
+  const L = useMemo(() => {
+    const shown = new Set(items.map((i) => i.id));
+    return ledger(scoped, names, (i) => shown.has(i.id));
+  }, [items, scoped, names]);
   const [open, setOpen] = useState<string | null>(null);
   const [cur, setCur] = useState<string | null>(null);
   const shots = useRef(new Map<string, HTMLButtonElement | null>());

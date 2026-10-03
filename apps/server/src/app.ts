@@ -22,9 +22,12 @@ import type { CalendarService } from "./calendar";
 import { type BoardService, DECISIONS, type Decision } from "./board";
 import { CASE_DECISIONS, type CaseDecision, type CaseIdeas, MIN_SPAN_YEARS, type StyleLibrary, type StyleOverride } from "./library";
 import type { Db } from "./db";
+import { type GenerationGuard, noGenerationJobs } from "./generation-guard";
 
 export type AppDeps = {
   db: Db; calendar: CalendarService; board: BoardService; styles: StyleLibrary; cases: CaseIdeas; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
+  /** background generation lookups for undo (D.1); defaults to "no jobs" until the queue lands (TODO(T7)) */
+  generation?: GenerationGuard;
 };
 
 const SERVABLE = [paths.renders, paths.audio, paths.board, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
@@ -147,6 +150,19 @@ export function buildApp(d: AppDeps) {
     } catch (e) { return bad(c, e); }
   });
 
+  app.delete("/api/board/:id/decision", (c) => {
+    const id = c.req.param("id");
+    if (!d.board.get(id)) return c.json({ error: "not found" }, 404);
+    const gen = d.generation ?? noGenerationJobs;
+    if (gen.hasRunning({ kind: "item", id })) return c.json({ error: "a generation job for this item is running; cancel it first" }, 409);
+    try {
+      gen.cancelQueued({ kind: "item", id });
+      const item = d.board.undo(id);
+      d.bus.emit({ type: "board.decided", id: item.id, decision: null });
+      return c.json(item);
+    } catch (e) { return bad(c, e); }
+  });
+
   // ---- style library: verdicts from the gate + the owner's lock / retire / note / hero (ADR 008)
   app.get("/api/styles", (c) => c.json({ styles: d.styles.list(d.board.list({ status: "all" })) }));
   app.patch("/api/styles/:id", async (c) => {
@@ -176,6 +192,19 @@ export function buildApp(d: AppDeps) {
       const b = (await c.req.json()) as { decision: CaseDecision; note?: string };
       const idea = d.cases.decide(c.req.param("id"), b.decision, b.note);
       d.bus.emit({ type: "cases.decided", id: idea.id, decision: idea.decision });
+      return c.json(idea);
+    } catch (e) { return bad(c, e); }
+  });
+
+  app.delete("/api/cases/:id/decision", (c) => {
+    const id = c.req.param("id");
+    if (!d.cases.get(id)) return c.json({ error: "not found" }, 404);
+    const gen = d.generation ?? noGenerationJobs;
+    if (gen.hasRunning({ kind: "case", id })) return c.json({ error: "a generation job for this case is running; cancel it first" }, 409);
+    try {
+      gen.cancelQueued({ kind: "case", id });
+      const idea = d.cases.undo(id);
+      d.bus.emit({ type: "cases.decided", id: idea.id, decision: null });
       return c.json(idea);
     } catch (e) { return bad(c, e); }
   });

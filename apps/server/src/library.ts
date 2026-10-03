@@ -238,6 +238,15 @@ export class CaseIdeas {
     return this.get(id)!;
   }
 
+  /** Undo a decision (D.1): back to pending, decision, note and decided_at cleared. Archived ideas cannot be undone. */
+  undo(id: string): CaseIdea {
+    const cur = this.get(id);
+    if (!cur) throw new Error(`unknown case idea ${id}`);
+    if (cur.status === "archived") throw new Error(`case idea ${id} is archived`);
+    this.db.update(caseIdeas).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(caseIdeas.id, id)).run();
+    return this.get(id)!;
+  }
+
   archive(ids: string[], reason: string): number {
     let n = 0;
     for (const id of ids) {

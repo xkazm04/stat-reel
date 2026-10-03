@@ -83,6 +83,15 @@ export class BoardService {
     return this.get(id)!;
   }
 
+  /** Undo a decision (D.1): back to pending, decision, note and decided_at cleared. Archived items cannot be undone. */
+  undo(id: string): BoardItem {
+    const cur = this.get(id);
+    if (!cur) throw new Error(`unknown board item ${id}`);
+    if (cur.status === "archived") throw new Error(`board item ${id} is archived`);
+    this.db.update(boardItems).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(boardItems.id, id)).run();
+    return this.get(id)!;
+  }
+
   /** Decided items since an ISO time (exclusive), oldest first: the design skill's feedback feed. */
   feedback(since?: string): BoardItem[] {
     return this.db.select().from(boardItems).orderBy(asc(boardItems.decided_at)).all().map(hydrate)

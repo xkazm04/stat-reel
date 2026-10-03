@@ -22,8 +22,10 @@ import {
   inbox,
   KIND_LABEL,
   nextUndecided,
+  visibleCaseRows,
 } from "./library";
 import { useBoard } from "./shared";
+import { showUndo, UndoToastHost } from "./undo";
 
 const ORIGIN_WORD: Record<CaseRow["origin"], string> = { registry: "Registry", design: "From designs", idea: "Case loop" };
 
@@ -35,12 +37,22 @@ function useDecideCase() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { id: string; decision: CaseDecision; note?: string }) => api.decideCase(v.id, v.decision, v.note),
-    onSuccess: (idea) => {
+    onSuccess: (idea, v) => {
       qc.setQueryData<CasesResponse>(qk.cases, (prev) =>
         prev ? { ...prev, ideas: prev.ideas.map((i) => (i.id === idea.id ? idea : i)) } : prev,
       );
       void qc.invalidateQueries({ queryKey: qk.cases });
+      // a rejected idea leaves the lists: offer to take it back (D.1)
+      if (v.decision !== "accept") showUndo(`Rejected · ${CASE_DECISION_META[v.decision].label.toLowerCase()} · ${idea.title}`, () => api.undoCaseDecision(idea.id));
     },
+  });
+}
+
+function useUndoCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.undoCaseDecision(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.cases }),
   });
 }
 
@@ -60,7 +72,8 @@ export function CasesView() {
   const [open, setOpen] = useState<{ id: string; order: string[] } | null>(null);
   const ideas = cases.data?.ideas ?? [];
   const byId = useMemo(() => new Map(ideas.map((i) => [i.id, i])), [ideas]);
-  const rows = useMemo(() => caseRows(hm.data?.usecases ?? [], board.data?.items ?? [], ideas), [hm.data, board.data, ideas]);
+  const allRows = useMemo(() => caseRows(hm.data?.usecases ?? [], board.data?.items ?? [], ideas), [hm.data, board.data, ideas]);
+  const rows = useMemo(() => visibleCaseRows(allRows), [allRows]);
   const pending = useMemo(
     () => inbox(ideas).filter((i) => (domain === "all" || i.domain === domain) && (kind === "all" || i.kind === kind)),
     [ideas, domain, kind],
@@ -73,7 +86,7 @@ export function CasesView() {
 
   const accepted = rows.filter((r) => r.verdict === "accepted");
   const waiting = rows.filter((r) => (r.verdict === "pending" || r.verdict === "untested") && r.origin !== "idea");
-  const rejected = rows.filter((r) => r.verdict === "rejected");
+  const rejectedCount = allRows.filter((r) => r.verdict === "rejected").length;
   const openOrder = open ? open.order.map((id) => byId.get(id)).filter((i): i is CaseIdea => !!i) : [];
   const openIdea = open ? byId.get(open.id) : undefined;
 
@@ -81,7 +94,8 @@ export function CasesView() {
     <div className="bd-cases" data-testid="board-cases">
       <p className="bd-lib__intro">
         A use case is judged on its own here, without an art style. Approve stories that hold for a decade or all time
-        ({cases.data?.min_span_years ?? 10}+ years) and reveal something as the clock runs. Ideas come from{" "}
+        ({cases.data?.min_span_years ?? 10}+ years) and reveal something as the clock runs. <b className="num">{rejectedCount}</b>{" "}
+        rejected are hidden; loops still read them as feedback. Ideas come from{" "}
         <code className="mono">node .claude/skills/board/scripts/board.mjs cases --id cs-002</code>.
       </p>
 
@@ -116,7 +130,6 @@ export function CasesView() {
 
       <CaseList id="cs-acc" title="Accepted" hint="Loops build designs on these." rows={accepted} onOpen={setOpen} />
       <CaseList id="cs-wait" title="Waiting on designs" hint="Registry formats and design proposals with no verdict yet." rows={waiting} onOpen={setOpen} />
-      <CaseList id="cs-rej" title="Rejected" hint="Kept so loops do not propose them again." rows={rejected} onOpen={setOpen} />
 
       {open && openIdea ? (
         <IdeaDialog
@@ -130,6 +143,7 @@ export function CasesView() {
           }}
         />
       ) : null}
+      <UndoToastHost />
     </div>
   );
 }
@@ -257,6 +271,7 @@ function IdeaDialog({
   const dlg = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const decide = useDecideCase();
+  const undo = useUndoCase();
   const [note, setNote] = useState(idea.note ?? "");
   const idx = order.findIndex((i) => i.id === idea.id);
   const prev = idx > 0 ? order[idx - 1] : undefined;
@@ -379,10 +394,21 @@ function IdeaDialog({
         <div className="bd-lb__after" aria-live="polite">
           {decide.isError ? (
             <span className="bd-style__err">{serverError(decide.error)}</span>
+          ) : undo.isError ? (
+            <span className="bd-style__err">{serverError(undo.error)}</span>
           ) : idea.decision ? (
             <span className="bd-dim">
               Decided: {CASE_DECISION_META[idea.decision].label}
-              {allDone ? " · every idea in view is decided" : ""}
+              {allDone ? " · every idea in view is decided" : ""}{" "}
+              <button
+                type="button"
+                className="bd-linkbtn"
+                data-testid={`idea-${idea.id}-undo`}
+                disabled={undo.isPending}
+                onClick={() => undo.mutate(idea.id)}
+              >
+                Undo
+              </button>
             </span>
           ) : null}
         </div>

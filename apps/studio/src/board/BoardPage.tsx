@@ -32,9 +32,11 @@ import {
   type StatusFilter,
   VARIANTS,
   type Variant,
+  visibleItems,
 } from "./board";
 import { parseTab, TABS, type Tab } from "./library";
 import { useBoard, useCaseNames } from "./shared";
+import { UndoToastHost } from "./undo";
 import "./board.css";
 
 /** Each tab and prototype variant is its own chunk: only the one on screen is fetched. */
@@ -46,8 +48,10 @@ const MatrixVariant = lazy(() => import("./MatrixVariant").then((m) => ({ defaul
 const tabFallback = <SkeletonRows rows={4} h={120} />;
 
 export type VariantProps = {
-  /** the items after the filters, newest first */
+  /** the items after the filters, newest first, without rejected proposals (D.1) */
   items: BoardItem[];
+  /** the filtered items INCLUDING rejected ones: for tallies that keep rejections as feedback */
+  scoped: BoardItem[];
   /** every item (for context such as "3 of 6") */
   all: BoardItem[];
   names: ReadonlyMap<string, string>;
@@ -57,7 +61,6 @@ const STATUS_WORD: Record<StatusFilter, string> = {
   all: "All",
   pending: "Pending",
   accepted: "Accepted",
-  rejected: "Rejected",
 };
 
 function useVariant(): [Variant, (v: Variant) => void] {
@@ -85,7 +88,8 @@ export function BoardPage() {
   const [filter, setFilter] = useState<BoardFilter>(NO_FILTER);
   const all = board.data?.items ?? [];
   const counts = useMemo(() => countItems(all), [all]);
-  const items = useMemo(() => filterItems(all, filter), [all, filter]);
+  const scoped = useMemo(() => filterItems(all, filter), [all, filter]);
+  const items = useMemo(() => visibleItems(scoped), [scoped]);
   const styleOpts = useMemo(() => axisOptions(all, "style", names), [all, names]);
   const caseOpts = useMemo(() => axisOptions(all, "case", names), [all, names]);
   const filtered = filter.status !== "all" || filter.style !== "all" || filter.case !== "all";
@@ -210,7 +214,7 @@ export function BoardPage() {
                     data-testid={`board-filter-${s}`}
                     onClick={() => setFilter((f) => ({ ...f, status: asStatusFilter(s) }))}
                   >
-                    {STATUS_WORD[s]} <span className="num">{s === "all" ? counts.total : counts[s]}</span>
+                    {STATUS_WORD[s]} <span className="num">{s === "all" ? counts.total - counts.rejected : counts[s]}</span>
                   </button>
                 ))}
               </fieldset>
@@ -243,7 +247,7 @@ export function BoardPage() {
                 </button>
               ) : null}
               <span className="bd-filters__n num" aria-live="polite">
-                {items.length} of {all.length} shown
+                {items.length} of {counts.total - counts.rejected} shown
               </span>
             </div>
           ) : null}
@@ -257,22 +261,29 @@ export function BoardPage() {
               <br />
               Each harvested shot lands here as pending. Nothing is shown until a real loop produced it.
             </Empty>
-          ) : !items.length ? (
-            <Empty title="Nothing matches these filters" className="bd-empty">
-              {all.length} shots exist on the board.{" "}
-              <button type="button" className="bd-linkbtn" onClick={() => setFilter(NO_FILTER)}>
-                Show every shot
-              </button>
-            </Empty>
           ) : (
-            <Defer tier={2} id="board:shots" minHeight={480}>
-              <Suspense fallback={tabFallback}>
-                <V items={items} all={all} names={names} />
-              </Suspense>
-            </Defer>
+            <>
+              {!items.length ? (
+                <Empty title="Nothing matches these filters" className="bd-empty">
+                  {counts.total - counts.rejected} shots are open for review ({counts.rejected} rejected are hidden).{" "}
+                  <button type="button" className="bd-linkbtn" onClick={() => setFilter(NO_FILTER)}>
+                    Show every shot
+                  </button>
+                </Empty>
+              ) : null}
+              {/* the Wall stays mounted while its lightbox is open on a shot that just left the grid (a rejection) */}
+              {items.length || variant === 1 ? (
+                <Defer tier={2} id="board:shots" minHeight={items.length ? 480 : 0}>
+                  <Suspense fallback={tabFallback}>
+                    <V items={items} scoped={scoped} all={all} names={names} />
+                  </Suspense>
+                </Defer>
+              ) : null}
+            </>
           )}
         </>
       )}
+      <UndoToastHost />
     </main>
   );
 }

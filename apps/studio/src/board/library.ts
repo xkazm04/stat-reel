@@ -22,8 +22,11 @@ export const STYLE_GROUPS: readonly { status: StyleStatus; title: string; hint: 
   { status: "accepted", title: "Accepted", hint: "The floor loops build on. Lock one to make it a signature, retire it to drop it." },
   { status: "open", title: "Not judged yet", hint: "Only pending designs carry these styles." },
   { status: "retired", title: "Retired", hint: "Once accepted, now out of the pool. Loops do not build on them." },
-  { status: "rejected", title: "Rejected", hint: "Rejected as a style more often than accepted." },
 ];
+
+/** Rejected styles are hidden (D.1, Q3); the loops still read them from /api/styles. */
+export const visibleStyles = <T extends { status: StyleStatus }>(styles: readonly T[]): T[] =>
+  styles.filter((s) => s.status !== "rejected");
 
 export function groupStyles(styles: readonly StyleEntry[]): { status: StyleStatus; title: string; hint: string; styles: StyleEntry[] }[] {
   return STYLE_GROUPS.map((g) => ({ ...g, styles: styles.filter((s) => s.status === g.status) })).filter((g) => g.styles.length);
@@ -118,6 +121,9 @@ export function caseRows(usecases: readonly UseCase[], items: readonly BoardItem
   const rank: Record<CaseVerdict, number> = { accepted: 0, pending: 1, untested: 2, rejected: 3 };
   return rows.sort((a, b) => rank[a.verdict] - rank[b.verdict] || b.accepts - a.accepts || a.name.localeCompare(b.name));
 }
+
+/** Rejected cases and ideas are hidden from the lists (D.1); they stay in the data for /api/cases/feedback. */
+export const visibleCaseRows = (rows: readonly CaseRow[]): CaseRow[] => rows.filter((r) => r.verdict !== "rejected");
 
 export const CASE_DECISION_META: Record<CaseDecision, { label: string; key: string; hint: string }> = {
   accept: { label: "Accept", key: "a", hint: "worth a 30-90 s video over a decade or more" },

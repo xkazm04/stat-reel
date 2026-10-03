@@ -115,7 +115,12 @@ test("board: the owner's gate records accept / reject style / reject case / reje
   await page.goto("/board");
   await page.getByTestId(`board-item-${pending.id}`).click();
   await page.getByTestId("reject-style").click();
-  await expect(page.getByTestId(`board-item-${pending.id}`)).toContainText(/rejected/i);
+  // a rejected proposal leaves the grid (D.1); the decision is recorded and can be undone
+  await expect(page.getByTestId(`board-item-${pending.id}`)).toBeHidden();
   const after = await (await request.get(`${API}/api/board/${pending.id}`)).json();
   expect(after.decision).toBe("reject_style");
+  await page.getByTestId("undo-decision").click();
+  await expect(page.getByTestId(`board-item-${pending.id}`)).toBeVisible();
+  const undone = await (await request.get(`${API}/api/board/${pending.id}`)).json();
+  expect(undone).toMatchObject({ status: "pending", decision: null });
 });

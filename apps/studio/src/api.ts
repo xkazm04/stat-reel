@@ -381,6 +381,8 @@ export const api = {
       decision,
       note: note?.trim() || undefined,
     }),
+  /** Undo the owner's decision on an item: back to pending (409 while a generation job runs for it). */
+  undoBoardDecision: (id: string) => request<Omit<BoardItem, "image_url">>("DELETE", `/api/board/${enc(id)}/decision`),
   /** The style library: every style on the Board with its verdict and the owner's management. */
   styles: () => request<{ styles: StyleEntry[] }>("GET", "/api/styles"),
   /** Lock / retire (null clears), the owner's note, the hero item. */
@@ -389,6 +391,8 @@ export const api = {
   cases: () => request<CasesResponse>("GET", "/api/cases"),
   decideCase: (id: string, decision: CaseDecision, note?: string) =>
     request<CaseIdea>("POST", `/api/cases/${enc(id)}/decision`, { decision, note: note?.trim() || undefined }),
+  /** Undo the owner's decision on a case idea: back to pending (409 while a generation job runs for it). */
+  undoCaseDecision: (id: string) => request<CaseIdea>("DELETE", `/api/cases/${enc(id)}/decision`),
   /** A JSON file the server exposes under /files (e.g. a render's manifest.json). */
   file: <T>(path: string) => request<T>("GET", path),
 };
