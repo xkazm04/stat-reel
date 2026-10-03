@@ -12,7 +12,7 @@ import type { BoardItem } from "../api";
 import { identVar } from "../components/idents";
 import type { VariantProps } from "./BoardPage";
 import { type AxisTally, axisVerdict, isMoveKey, itemState, ledger, ratioOf, spatialMove } from "./board";
-import { boxesOf, Gate, ItemFacts, Shot, StateMark, shotAlt } from "./shared";
+import { boxesOf, Gate, ItemFacts, Shot, StateMark, shotAlt, useAdvanceOnRemoval, useJumpKeys } from "./shared";
 
 /** shot height in a cell (px); a narrower column scales the shot down, keeping its aspect */
 const SHOT_H = 210;
@@ -51,6 +51,28 @@ export function MatrixVariant({ items, scoped, names }: VariantProps) {
   const order = useMemo(() => L.styles.flatMap((s) => L.cases.flatMap((c) => L.cell(s.key, c.key))), [L]);
   const focusId = cur && order.some((i) => i.id === cur) ? cur : (order[0]?.id ?? null);
   const openItem = order.find((i) => i.id === open) ?? null;
+  const sectionRef = useRef<HTMLElement>(null);
+  const go = useCallback((id: string) => {
+    setCur(id);
+    shots.current.get(id)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, []);
+
+  // J / K: next / previous pending (the drawer follows when it is open, else the focus does)
+  useJumpKeys(
+    order,
+    open ?? focusId,
+    (id) => {
+      go(id);
+      if (open) setOpen(id);
+      else shots.current.get(id)?.focus();
+    },
+    sectionRef,
+  );
+  // a decision that removes the open shot (reject, or any decision under "pending") moves the drawer to its neighbour
+  useAdvanceOnRemoval(order, open, (id) => {
+    go(id);
+    setOpen(id);
+  });
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!isMoveKey(e.key) || !focusId) return;
@@ -74,7 +96,7 @@ export function MatrixVariant({ items, scoped, names }: VariantProps) {
   const cols = `minmax(200px, 240px) repeat(${L.cases.length}, minmax(220px, 1fr))`;
 
   return (
-    <section className={`bd-mx ${openItem ? "has-drawer" : ""}`} aria-label="Style by case matrix">
+    <section className={`bd-mx ${openItem ? "has-drawer" : ""}`} aria-label="Style by case matrix" ref={sectionRef}>
       <p className="bd-mx__legend">
         <span>
           <b>Rows</b> styles · <b>columns</b> use cases. A hatched row or column is an axis you rejected; an empty cell
@@ -82,7 +104,7 @@ export function MatrixVariant({ items, scoped, names }: VariantProps) {
         </span>
         <span className="bd-hint">
           <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>A</kbd> <kbd>S</kbd>{" "}
-          <kbd>C</kbd> <kbd>B</kbd> decide · <kbd>Esc</kbd> close
+          <kbd>C</kbd> <kbd>B</kbd> decide · <kbd>J</kbd> <kbd>K</kbd> next / previous pending · <kbd>Esc</kbd> close
         </span>
       </p>
       <div className="bd-mx__wrap">
@@ -173,6 +195,7 @@ function Row({
                   data-testid={`board-item-${it.id}`}
                   tabIndex={it.id === focusId ? 0 : -1}
                   aria-expanded={openId === it.id}
+                  aria-keyshortcuts="J K"
                   onClick={() => onOpen(it.id)}
                 >
                   <span

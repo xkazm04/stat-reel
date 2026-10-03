@@ -48,12 +48,25 @@ export function interpolate(
   return lerp(a, b, easing(x));
 }
 
-export type LinearScale = ((x: number) => number) & { domain: [number, number]; range: [number, number] };
+export type LinearScale = ((x: number) => number) & {
+  domain: [number, number];
+  range: [number, number];
+  /** px -> data value; a zero-width range maps back to the domain start */
+  invert: (px: number) => number;
+};
 
-export function scaleLinear(domain: readonly [number, number], range: readonly [number, number]): LinearScale {
+/** `clamp` pins output (and `invert` output) to the range (domain); off by default. */
+export function scaleLinear(
+  domain: readonly [number, number],
+  range: readonly [number, number],
+  { clamp: doClamp = false }: { clamp?: boolean } = {},
+): LinearScale {
   const [d0, d1] = domain;
   const [r0, r1] = range;
-  const f = ((x: number) => (d1 === d0 ? (r0 + r1) / 2 : r0 + ((x - d0) / (d1 - d0)) * (r1 - r0))) as LinearScale;
+  const pin = (x: number, a: number, b: number) => (doClamp ? clamp(x, Math.min(a, b), Math.max(a, b)) : x);
+  const f = ((x: number) =>
+    d1 === d0 ? (r0 + r1) / 2 : r0 + ((pin(x, d0, d1) - d0) / (d1 - d0)) * (r1 - r0)) as LinearScale;
+  f.invert = (px: number) => (r1 === r0 ? d0 : d0 + ((pin(px, r0, r1) - r0) / (r1 - r0)) * (d1 - d0));
   f.domain = [d0, d1];
   f.range = [r0, r1];
   return f;

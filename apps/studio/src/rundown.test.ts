@@ -15,9 +15,9 @@ describe("race sheet", () => {
     expect(GATE_POS(0)).toBeCloseTo(100 / 12);
     expect(laneState({ id: "p", status: "published", created_at: "1" })).toMatchObject({ stage: 5, done: true, flagged: false });
   });
-  it("flags failed / refused jobs verbatim and a render the gate refused", () => {
+  it("flags failed / refused jobs in the owner's words (error verbatim) and a render the gate refused", () => {
     const r = laneState({ id: "p", status: "scripted", created_at: "1", jobs: [job("render", "failed", "2", "ffmpeg died")] });
-    expect(r).toMatchObject({ stage: 2, flagged: true, flag: "render failed: ffmpeg died" });
+    expect(r).toMatchObject({ stage: 2, flagged: true, flag: "Render failed: ffmpeg died" });
     expect(laneState({ id: "p", status: "rendered", created_at: "1" }).flagged).toBe(true);
     // a failed job on a published project does not flag it
     expect(laneState({ id: "p", status: "published", created_at: "1", jobs: [job("metrics", "failed", "2")] }).flagged).toBe(false);

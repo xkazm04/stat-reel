@@ -28,9 +28,26 @@ describe.skipIf(!hasWarehouse)("warehouse (llm schema only, read-only)", () => {
     ["table function", "select * from read_csv('C:/x.csv')", /table function/],
     ["write", "insert into llm.x values (1)", /only SELECT/i],
     ["ddl", "drop view llm.f1_driver_era_adjusted", /only SELECT/i],
+    ["show all tables (metadata leak)", "select * from (show all tables)", /SHOW \/ DESCRIBE/],
+    ["describe of non-llm", "select * from (describe core.players)", /SHOW \/ DESCRIBE|schema 'core'/],
+    ["summarize of non-llm", "select * from (summarize core.players)", /SHOW \/ DESCRIBE|schema 'core'/],
+    ["non-llm in a nested join", "select * from llm.f1_driver_era_adjusted a join (select * from (select * from core.players) p) q on true", /schema 'core'/],
+    ["non-llm in a scalar subquery", "select (select count(*) from marts.mart_era_adjusted)", /schema 'marts'/],
     ["multiple statements", "select 1; select 2", /one statement/],
   ])("rejects %s", async (_name, sql, msg) => {
     await expect(checkReadOnlyLlmSql(wh, sql)).rejects.toThrow(msg);
+  });
+
+  it("accepts joins, subqueries and VALUES over llm", async () => {
+    const sql = "select a.fact_key from llm.f1_driver_era_adjusted a join (select 1 as x) b on true, (values (1)) v";
+    await expect(checkReadOnlyLlmSql(wh, sql)).resolves.toBeUndefined();
+  });
+
+  it("batches fact refs and keeps unknown ones out", async () => {
+    const k = "f1db:driver:juan-manuel-fangio:era-adjusted";
+    const m = await wh.facts([`${k}#rank_adjusted`, `${k}#rank_adjusted`, "f1db:driver:nobody:era-adjusted#rank_adjusted", "bad ref"]);
+    expect([...m.keys()]).toEqual([`${k}#rank_adjusted`]);
+    expect(m.get(`${k}#rank_adjusted`)).toBe(1);
   });
 
   it("caps rows and reports lineage licence class", async () => {

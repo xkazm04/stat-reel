@@ -29,7 +29,7 @@ import {
 } from "./library";
 import { JobBadge } from "./JobBadge";
 import { useBoard } from "./shared";
-import { showUndo, UndoToastHost } from "./undo";
+import { showUndo } from "./undo";
 
 const ORIGIN_WORD: Record<CaseRow["origin"], string> = { registry: "Registry", design: "From designs", idea: "Case loop" };
 
@@ -168,7 +168,6 @@ export function CasesView() {
           }}
         />
       ) : null}
-      <UndoToastHost />
     </div>
   );
 }

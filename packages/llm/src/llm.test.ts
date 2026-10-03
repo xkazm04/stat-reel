@@ -107,3 +107,28 @@ describe("record -> replay round trip (one key function for both sides)", () => 
     expect(calls).toEqual([{ project: "p-other" }]);
   });
 });
+
+describe("session limits", () => {
+  it("passes --max-budget-usd only when a cap is set (the CLI has no max-turns flag)", async () => {
+    const { claudeArgs: ca } = await import("./index");
+    expect(ca({ mcpConfigPath: "m", maxBudgetUsd: 3 })).toEqual(expect.arrayContaining(["--max-budget-usd", "3"]));
+    expect(ca({ mcpConfigPath: "m" })).not.toContain("--max-budget-usd");
+    expect(ca({ mcpConfigPath: "m", maxBudgetUsd: 3 }).some((a) => a.includes("max-turns"))).toBe(false);
+  });
+
+  it("reads env overrides and ignores invalid values", async () => {
+    const { llmLimitsFromEnv, DEFAULT_LLM_LIMITS } = await import("./index");
+    expect(llmLimitsFromEnv({})).toEqual(DEFAULT_LLM_LIMITS);
+    expect(llmLimitsFromEnv({ LLM_MAX_TURNS: "12", LLM_MAX_BUDGET_USD: "0.5", LLM_TIMEOUT_MS: "1000" })).toEqual({ maxTurns: 12, maxBudgetUsd: 0.5, timeoutMs: 1000 });
+    expect(llmLimitsFromEnv({ LLM_MAX_TURNS: "abc", LLM_MAX_BUDGET_USD: "-1", LLM_TIMEOUT_MS: "" })).toEqual(DEFAULT_LLM_LIMITS);
+  });
+
+  it("carries the CLI result subtype and maps the stop subtypes", async () => {
+    const { stopReasonFromSubtype } = await import("./index");
+    const [e] = parseStreamLine(JSON.stringify({ type: "result", subtype: "error_max_turns", is_error: true, session_id: "s", num_turns: 31 }));
+    expect(e).toMatchObject({ type: "result", ok: false, subtype: "error_max_turns", turns: 31 });
+    expect(stopReasonFromSubtype("error_max_turns")).toBe("max_turns");
+    expect(stopReasonFromSubtype("error_max_budget_usd")).toBe("max_budget");
+    expect(stopReasonFromSubtype("success")).toBeUndefined();
+  });
+});

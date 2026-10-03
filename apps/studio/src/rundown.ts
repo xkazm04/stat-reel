@@ -4,6 +4,7 @@
  * the gate did not allow it), when it last moved, and the one status line. No React, no DOM.
  */
 import { type JobLike, nextAction, STAGES, stageIndex } from "./logic";
+import { bucketCounts, jobFlag, projectState } from "./projectState";
 
 type JobRow = JobLike & { created_at: string; finished_at?: string | null; started_at?: string | null };
 export type LaneProject = { id: string; status: string; created_at: string; jobs?: JobRow[] };
@@ -24,10 +25,8 @@ export const GATE_POS = (i: number): number => ((i + 0.5) / STAGES.length) * 100
 export function laneState(p: LaneProject): LaneState {
   const stage = stageIndex(p.status);
   const last = p.jobs?.[0];
-  let flag: string | null = null;
-  if (p.status !== "published" && last && (last.status === "failed" || last.status === "refused"))
-    flag = `${last.kind} ${last.status}${last.error ? `: ${last.error}` : ""}`;
-  else if (p.status === "rendered") flag = "rendered, but the publish gate did not allow it";
+  // a failed / refused job in the owner's words, else what the status alone says (projectState.ts)
+  const flag = (p.status !== "published" && last ? jobFlag(last) : null) ?? projectState(p.status).flag;
   return { stage, at: GATE_POS(stage), done: p.status === "published", flagged: !!flag, flag };
 }
 
@@ -43,7 +42,7 @@ export const byUpdated = <T extends LaneProject>(ps: T[]): T[] =>
 
 /** Counts for the sheet's eyebrow. */
 export function sheetCounts(ps: LaneProject[]): { total: number; open: number; published: number; flagged: number } {
-  const published = ps.filter((p) => p.status === "published").length;
+  const { published } = bucketCounts(ps);
   return { total: ps.length, open: ps.length - published, published, flagged: ps.filter((p) => laneState(p).flagged).length };
 }
 

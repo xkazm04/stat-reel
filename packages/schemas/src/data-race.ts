@@ -16,14 +16,31 @@ export const DataRaceFactRef = z
   .string()
   .regex(/^[a-z0-9-]+:[^#\s]+#[a-z_]+$/, "fact ref must be '<row fact_key>#<column>'");
 
+/**
+ * Text limits are derived from the DataRace frame geometry (DataRace/parts.tsx, DataRaceFrame.tsx),
+ * because the frame clips (nowrap + overflow hidden) or wraps text instead of failing.
+ * Average advance widths in em, pessimistic for mixed-case text: Barlow Condensed 0.46 (the figure
+ * titleFontSize / nameFontSize already use; the 800 weight of the hook is set to 0.48), Inter 0.56
+ * (packages/captions AVG_CHAR_EM).
+ *
+ *   title        Barlow 800, shrinks 64 -> 40 px to fit 960 px: 960 / (40 * 0.46) = 52 chars at the
+ *                floor. 42 stays the authoring rule (49 px, still a clear headline), well inside it.
+ *   event title  Barlow 700 46 px, nowrap, card content width 840 - 44 - 28 = 768 px:
+ *                768 / (46 * 0.46) = 36.3 -> 36 chars.
+ *   fact text    Inter 500 28 px, nowrap, same 768 px: 768 / (28 * 0.56) = 48.98 -> 48 chars.
+ *   hook         Barlow 800 96 px, line-height 1.08 (104 px), 960 px wide, starts at y 400 and the
+ *                logo tiles start at y 860: 3 lines end at y ~711 (4 would reach 815, too close).
+ *                Chars per line 960 / (96 * 0.48) = 20.8 -> 20; 3 lines = 60 chars.
+ */
 export const DATA_RACE_LIMITS = {
   maxEntities: 10,
   titleMaxChars: 42,
-  eventTitleMaxChars: 42,
+  eventTitleMaxChars: 36,
+  hookMaxChars: 60,
   lifeFramesDefault: 120,
   lifeFramesMin: 105,
   lifeFramesMax: 135,
-  factTextMaxChars: 50,
+  factTextMaxChars: 48,
   /** shown as a burned badge when data_provenance is "sample" (spec D.6) */
   sampleBadgeText: "SAMPLE DATA · DESIGN PREVIEW",
 } as const;
@@ -63,7 +80,13 @@ export const DataRaceEntitySchema = z
 export type DataRaceEntity = z.infer<typeof DataRaceEntitySchema>;
 
 export const DataRaceFactSchema = z
-  .object({ text: z.string().min(1).max(DATA_RACE_LIMITS.factTextMaxChars), ref: DataRaceFactRef })
+  .object({
+    text: z
+      .string()
+      .min(1)
+      .max(DATA_RACE_LIMITS.factTextMaxChars, `fact text is one line on the card: at most ${DATA_RACE_LIMITS.factTextMaxChars} characters, shorten it`),
+    ref: DataRaceFactRef,
+  })
   .strict();
 
 export const DataRaceEventSchema = z
@@ -71,8 +94,11 @@ export const DataRaceEventSchema = z
     id: Slug,
     /** optional: the entity the card is about (its colour marks the card) */
     entity_id: Slug.optional(),
-    /** <= 42 chars, one line; may name entities, never the final ranking (rule 4; checked by checkGenerationRules) */
-    title: z.string().min(1),
+    /** <= 36 chars, one line (the card clips beyond it); may name entities, never the final ranking (rule 4; checked by checkGenerationRules) */
+    title: z
+      .string()
+      .min(1)
+      .max(DATA_RACE_LIMITS.eventTitleMaxChars, `event title is one line on the card: at most ${DATA_RACE_LIMITS.eventTitleMaxChars} characters, shorten it`),
     date_label: z.string().min(1).max(24),
     /** 1-2 short facts with refs */
     facts: z.array(DataRaceFactSchema).min(1).max(2),
@@ -107,9 +133,15 @@ export const DataRacePropsSchema = z
     format: z.literal("vertical").default("vertical"),
     data_provenance: z.enum(["real", "sample"]),
     /** one line, <= 42 chars, never names or hints at the final #1 (rule 4) */
-    title: z.string().min(1),
-    /** a question ending in "?" that does not reveal the outcome (rule 4) */
-    hook: z.string().min(1),
+    title: z
+      .string()
+      .min(1)
+      .max(DATA_RACE_LIMITS.titleMaxChars, `title is one line: at most ${DATA_RACE_LIMITS.titleMaxChars} characters, shorten it`),
+    /** a question ending in "?" that does not reveal the outcome (rule 4); <= 60 chars = 3 lines at 96 px */
+    hook: z
+      .string()
+      .min(1)
+      .max(DATA_RACE_LIMITS.hookMaxChars, `hook wraps at 96 px and would reach the logo tiles: at most ${DATA_RACE_LIMITS.hookMaxChars} characters, shorten the question`),
     /** what the bars measure, e.g. "Share of searches" */
     unit_label: z.string().min(1).max(40),
     value_format: z

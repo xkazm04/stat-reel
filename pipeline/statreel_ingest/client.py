@@ -1,8 +1,9 @@
 """EthicalClient - the only way data HTTP leaves this machine.
 
 Every request, including every redirect hop, is checked against the source registry (verdict and
-host), robots.txt (cached 24 h, obeyed; a 5xx or unreachable robots.txt means disallow), and spaced
-per host at <= 50 % of the published limit. Responses are cached with their validators so unchanged
+host), robots.txt (cached 24 h on disk, obeyed; a 5xx or unreachable robots.txt means disallow), and
+spaced per host at <= 50 % of the published limit (or the robots Crawl-delay if stricter), with the
+spacing shared across processes. A 429/503 stops the run and records when the host may be asked again. Responses are cached with their validators so unchanged
 resources are never re-downloaded, and every fetch is appended to a JSONL log.
 """
 
@@ -21,7 +22,7 @@ from protego import Protego
 
 from . import __version__
 from .registry import Registry, Source
-from .throttle import HostThrottle
+from .throttle import BackedOff, HostThrottle, atomic_write, file_lock, parse_retry_after, safe_key
 
 ROBOTS_TTL_S = 24 * 3600
 MAX_REDIRECTS = 5
@@ -33,6 +34,9 @@ class MissingContact(ValueError):
 
 class RobotsDisallowed(PermissionError):
     pass
+
+
+RateLimited = BackedOff  # raised on 429/503; carries .retry_at (wall-clock epoch seconds)
 
 
 @dataclass
@@ -61,6 +65,8 @@ class EthicalClient:
         clock: Callable[[], float] = time.time,
         sleep: Callable[[float], None] = time.sleep,
         timeout_s: float = 60.0,
+        state_dir: Path | None = None,
+        monotonic: Callable[[], float] | None = None,
     ) -> None:
         if not contact or not contact.strip():
             raise MissingContact("set an owner contact (STATREEL_CONTACT or data/registry/ingest.yaml)")
@@ -70,8 +76,13 @@ class EthicalClient:
         self.cache_dir = Path(cache_dir)
         self.log_path = Path(log_path)
         self._clock = clock
-        self._throttle = HostThrottle(clock=clock, sleep=sleep)
+        # `clock` is the wall clock (persisted timestamps, robots TTL, log). In-process spacing needs a
+        # monotonic one; tests that inject a fake wall clock get it for both.
+        mono = monotonic or (time.monotonic if clock is time.time else clock)
+        self.state_dir = Path(state_dir) if state_dir else self.cache_dir / "_state"
+        self._throttle = HostThrottle(clock=mono, sleep=sleep, state_dir=self.state_dir, wall=clock)
         self._robots: dict[str, tuple[float, Protego | None]] = {}
+        self._crawl_delay: dict[str, float] = {}
         self._http = httpx.Client(
             transport=transport, follow_redirects=False, timeout=timeout_s, headers={"user-agent": self.user_agent}
         )
@@ -110,27 +121,64 @@ class EthicalClient:
 
     def _send(self, url: str, headers: dict[str, str]) -> httpx.Response:
         host = urlsplit(url).hostname or ""
-        self._throttle.wait(host, self.source.min_interval_s())
+        origin = f"{urlsplit(url).scheme}://{urlsplit(url).netloc}"
+        interval = max(self.source.min_interval_s(), self._crawl_delay.get(origin, 0.0))
+        self._throttle.wait(host, interval)
         started = time.perf_counter()
         resp = self._http.get(url, headers=headers)
         self._log(url, resp.status_code, len(resp.content), (time.perf_counter() - started) * 1000)
+        self._stop_if_asked(host, resp)
         return resp
+
+    def _stop_if_asked(self, host: str, resp: httpx.Response, *, robots: bool = False) -> None:
+        """429/503: never hammer - persist the earliest next fetch and stop the run. A bare robots.txt
+        503 (no Retry-After) keeps its documented meaning, disallow."""
+        if resp.status_code == 429 or (resp.status_code == 503 and not (robots and "retry-after" not in resp.headers)):
+            retry_at = parse_retry_after(resp.headers.get("retry-after"), self._clock())
+            reason = f"HTTP {resp.status_code}"
+            self._throttle.record_backoff(host, retry_at, reason)
+            raise RateLimited(host, retry_at, reason)
 
     def _check_robots(self, url: str) -> None:
         parts = urlsplit(url)
         origin = f"{parts.scheme}://{parts.netloc}"
         entry = self._robots.get(origin)
         if entry is None or self._clock() - entry[0] > ROBOTS_TTL_S:
-            entry = (self._clock(), self._fetch_robots(origin))
+            entry = self._robots_from_disk(origin)
+            if entry is None:
+                fetched = self._fetch_robots(origin)
+                entry = (self._clock(), fetched)
             self._robots[origin] = entry
+            rules_now = entry[1]
+            delay = rules_now.crawl_delay(self.user_agent) if rules_now is not None else None
+            self._crawl_delay[origin] = float(delay) if delay else 0.0
         rules = entry[1]
         if rules is None:
             raise RobotsDisallowed(f"{origin}/robots.txt unavailable - treating as disallow")
         if not rules.can_fetch(url, self.user_agent):
             raise RobotsDisallowed(f"robots.txt disallows {url} for {self.user_agent}")
 
+    def _robots_path(self, origin: str) -> Path:
+        return self.state_dir / "robots" / f"{safe_key(origin)}.json"
+
+    def _robots_from_disk(self, origin: str) -> tuple[float, Protego] | None:
+        """A robots.txt fetched by an earlier run/client, if still within its TTL (usable results only)."""
+        try:
+            saved = json.loads(self._robots_path(origin).read_text(encoding="utf-8"))
+            if 0 <= self._clock() - saved["fetched_at"] <= ROBOTS_TTL_S:
+                return saved["fetched_at"], Protego.parse(saved["body"])
+        except (OSError, ValueError, KeyError):
+            pass
+        return None
+
+    def _robots_to_disk(self, origin: str, body: str) -> None:
+        path = self._robots_path(origin)
+        with file_lock(path.with_suffix(".lock")):
+            atomic_write(path, json.dumps({"fetched_at": self._clock(), "body": body}))
+
     def _fetch_robots(self, origin: str) -> Protego | None:
-        """2xx -> parse; 4xx -> no restrictions (RFC 9309 §2.3.1.3); 5xx / error -> None (disallow)."""
+        """2xx -> parse; 4xx -> no restrictions (RFC 9309 §2.3.1.3); 5xx / error -> None (disallow).
+        Usable results are persisted so later runs within the TTL do not refetch."""
         robots_url = f"{origin}/robots.txt"
         host = urlsplit(robots_url).hostname or ""
         self._throttle.wait(host, self.source.min_interval_s())
@@ -140,9 +188,12 @@ class EthicalClient:
             self._log(robots_url, resp.status_code, len(resp.content), (time.perf_counter() - started) * 1000)
         except httpx.HTTPError:
             return None
+        self._stop_if_asked(host, resp, robots=True)
         if 200 <= resp.status_code < 300:
+            self._robots_to_disk(origin, resp.text)
             return Protego.parse(resp.text)
         if 400 <= resp.status_code < 500:
+            self._robots_to_disk(origin, "")
             return Protego.parse("")
         return None
 

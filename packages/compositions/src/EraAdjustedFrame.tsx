@@ -98,7 +98,7 @@ function MethodNote({ props, L, theme }: { props: EraAdjustedInput; L: FrameLayo
         ...abs(L.method),
         fontFamily: theme.fonts.ui,
         fontSize: L.methodFontSize,
-        lineHeight: 1.26,
+        lineHeight: 1.2,
         color: theme.inkDim,
         overflow: "hidden",
       }}
@@ -282,7 +282,7 @@ function Payoff({
         suffix={(n) => ordinalSuffix(n).toUpperCase()}
         suffixScale={0.46}
         label="Era-adjusted rank"
-        labelFontSize={vertical ? 28 : 26}
+        labelFontSize={28}
         theme={theme}
         fontSize={rankFs}
         color={theme.accentInk}
@@ -304,7 +304,7 @@ function Payoff({
       <div
         style={{
           fontFamily: theme.fonts.data,
-          fontSize: vertical ? 26 : 24,
+          fontSize: 28,
           lineHeight: 1.3,
           letterSpacing: 1,
           color: theme.inkDim,

@@ -148,7 +148,8 @@ test("board: the owner's gate records accept / reject style / reject case / reje
   await expect(page.getByTestId(`board-item-${pending.id}`)).toBeHidden();
   const after = await (await request.get(`${API}/api/board/${pending.id}`)).json();
   expect(after.decision).toBe("reject_style");
-  await page.getByTestId("undo-decision").click();
+  // the undo toast lives in the open dialog (top layer), and the lightbox may already have moved to a neighbour
+  await page.getByTestId("undo-toast-undo").click();
   await expect(page.getByTestId(`board-item-${pending.id}`)).toBeVisible();
   const undone = await (await request.get(`${API}/api/board/${pending.id}`)).json();
   expect(undone).toMatchObject({ status: "pending", decision: null });

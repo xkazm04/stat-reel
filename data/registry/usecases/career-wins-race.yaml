@@ -22,5 +22,7 @@ duration_s:
   min: 60
   max: 90
 props_schema: null
-query_templates: []
+query_templates:
+- >-
+  career_wins_race_top10: select race_seq, race_date, season, round, display_name, wins_cum, rank_wins_cum, tied, fact_key from llm.f1_driver_race_cumulative where rank_wins_cum <= 10 order by race_seq, rank_wins_cum
 notes: null

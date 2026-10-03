@@ -11,7 +11,7 @@ import type { BoardDecision, BoardItem } from "../api";
 import { Arrow } from "../components/glyphs";
 import type { VariantProps } from "./BoardPage";
 import { caseOf, DECISION_META, itemState, linearMove, nextPending, styleOf } from "./board";
-import { CaseChip, Gate, ItemFacts, Shot, StateMark, shotAlt } from "./shared";
+import { CaseChip, Gate, ItemFacts, Shot, StateMark, shotAlt, useAdvanceOnRemoval, useJumpKeys } from "./shared";
 
 const frameNo = (i: number) => String(i + 1).padStart(2, "0");
 
@@ -34,6 +34,12 @@ export function LightTableVariant({ items, names }: VariantProps) {
     setCur(id);
     if (focusFrame) frames.current.get(id)?.focus();
   };
+
+  const sectionRef = useRef<HTMLElement>(null);
+  // J / K: next / previous pending shot (the loupe follows, the strip keeps focus)
+  useJumpKeys(items, currentId, (id) => go(id, true), sectionRef);
+  // a decision that removes the shot on the loupe (reject, or any decision under "pending") moves on to its neighbour
+  useAdvanceOnRemoval(items, cur, (id) => go(id, true));
 
   // keep the current frame in view on the strip (horizontal scroll only: the page never jumps)
   useEffect(() => {
@@ -92,7 +98,7 @@ export function LightTableVariant({ items, names }: VariantProps) {
   const kase = caseOf(item, names);
 
   return (
-    <section className="bd-lt" aria-label="Light table">
+    <section className="bd-lt" aria-label="Light table" ref={sectionRef}>
       <div className="bd-lt__progress">
         <div className="bd-lt__meter" role="img" aria-label={`${decided} of ${items.length} shots in view decided`}>
           {items.map((i) => (
@@ -183,7 +189,7 @@ export function LightTableVariant({ items, names }: VariantProps) {
           <span>Contact sheet</span>
           <span className="bd-hint">
             <kbd>←</kbd> <kbd>→</kbd> walk · <kbd>A</kbd> <kbd>S</kbd> <kbd>C</kbd> <kbd>B</kbd> decide ·{" "}
-            <kbd>Enter</kbd> to the gate · <kbd>Esc</kbd> back here
+            <kbd>J</kbd> <kbd>K</kbd> next / previous pending · <kbd>Enter</kbd> to the gate · <kbd>Esc</kbd> back here
           </span>
         </h2>
         {/* biome-ignore lint/a11y/noStaticElementInteractions: arrow keys move the roving focus between frame buttons */}
@@ -198,6 +204,7 @@ export function LightTableVariant({ items, names }: VariantProps) {
               className={`bd-frame bd-frame--${itemState(it)} ${it.id === currentId ? "is-cur" : ""}`}
               data-testid={`board-item-${it.id}`}
               aria-current={it.id === currentId ? "true" : undefined}
+              aria-keyshortcuts="J K"
               tabIndex={it.id === currentId ? 0 : -1}
               onClick={() => go(it.id)}
             >

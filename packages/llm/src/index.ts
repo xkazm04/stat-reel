@@ -13,12 +13,17 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+export * from "./draft-prompt";
+export * from "./limits";
+
 export type LlmEvent =
   | { type: "session"; session_id: string; tools?: string[] }
   | { type: "text"; text: string }
   | { type: "tool_call"; id: string; tool: string; input: unknown }
   | { type: "tool_result"; id: string; content: string; is_error?: boolean }
-  | { type: "result"; ok: boolean; result: string; session_id: string; cost_usd?: number; turns?: number; refusal?: boolean }
+  | { type: "result"; ok: boolean; result: string; session_id: string; cost_usd?: number; turns?: number; refusal?: boolean;
+      /** the CLI's result subtype (success | error_max_turns | error_max_budget_usd | error_during_execution) */
+      subtype?: string }
   | { type: "stderr"; text: string };
 
 export type RunOptions = {
@@ -30,6 +35,8 @@ export type RunOptions = {
   cwd?: string;
   model?: string;
   signal?: AbortSignal;
+  /** `--max-budget-usd` (the CLI has no max-turns flag; turns and wall clock are the caller's, via `signal`) */
+  maxBudgetUsd?: number;
   /** values that differ between runs (e.g. PROJECT id): templated out of fixture keys and files */
   vars?: Record<string, string>;
   onEvent: (e: LlmEvent) => void;
@@ -72,18 +79,19 @@ export function parseStreamLine(line: string): LlmEvent[] {
   if (msg.type === "result") {
     const text = String(msg.result ?? "");
     return [{ type: "result", ok: msg.subtype === "success" && !msg.is_error, result: text, session_id: msg.session_id,
-      cost_usd: msg.total_cost_usd, turns: msg.num_turns, refusal: REFUSAL.test(text) }];
+      cost_usd: msg.total_cost_usd, turns: msg.num_turns, refusal: REFUSAL.test(text), subtype: msg.subtype }];
   }
   return [];
 }
 
 /** Headless flags (verified with `claude --help`, 2026-09-29). The prompt goes on stdin. */
-export function claudeArgs(o: { mcpConfigPath: string; systemPromptFile?: string; resume?: string; model?: string }): string[] {
+export function claudeArgs(o: { mcpConfigPath: string; systemPromptFile?: string; resume?: string; model?: string; maxBudgetUsd?: number }): string[] {
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--mcp-config", o.mcpConfigPath, "--strict-mcp-config",
     "--tools", "", "--allowedTools", "mcp__statreel__*"];
   if (o.systemPromptFile) args.push("--system-prompt-file", o.systemPromptFile);
   if (o.resume) args.push("--resume", o.resume);
   if (o.model) args.push("--model", o.model);
+  if (o.maxBudgetUsd && o.maxBudgetUsd > 0) args.push("--max-budget-usd", String(o.maxBudgetUsd));
   return args;
 }
 

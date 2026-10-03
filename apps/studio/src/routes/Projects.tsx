@@ -17,6 +17,7 @@ import { useJobProgress } from "../events";
 import { MODE_LABEL, nextAction, relTime, STAGE_LABEL, STAGES } from "../logic";
 import { activeJob, fmtNum, formatLabel, pad2, pct, rundownOrder } from "../display";
 import type { ProjectsSearch } from "../router";
+import { modeWord } from "../projectState";
 import { byUpdated, GATE_POS, laneState, sayLine, sheetCounts } from "../rundown";
 
 export function ProjectsPage() {
@@ -257,7 +258,7 @@ function RaceLane({
           <span>
             <FormatIcon format={p.format} h={11} /> {formatLabel(p.format)}
           </span>
-          <span>{p.mode === "monetized" ? "monetized" : "non-commercial"}</span>
+          <span>{modeWord(p.mode)}</span>
           <span>created {relTime(p.created_at)}</span>
           {st.flag ? <span className="rs-flag">{st.flag}</span> : null}
           {pubs.length ? (

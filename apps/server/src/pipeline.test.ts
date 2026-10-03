@@ -17,6 +17,7 @@ vi.mock("@statreel/audio", async (orig) => ({
   ElevenLabsClient: class { async subscription() { return { tier: "starter" }; } },
   generateTts: (...a: unknown[]) => tts(...a),
 }));
+vi.mock("@statreel/publish", async (orig) => ({ ...(await orig<object>()), evaluatePolicy: async () => ({ allow: true, deny: [], warn: [], checks_run: [] }) }));
 const runWorker = vi.fn();
 vi.mock("./render-support", async (orig) => ({ ...(await orig<object>()), runWorker: (...a: unknown[]) => runWorker(...a) }));
 
@@ -35,7 +36,7 @@ function setup() {
   const runner = new JobRunner(db, new EventBus());
   const attachTiming = vi.fn();
   const projects = {
-    get: () => ({ id: "p1", title: "t" }), latestProps: () => propsRow, attachTiming,
+    get: () => ({ id: "p1", title: "t" }), latestProps: () => propsRow, attachTiming, advance: vi.fn(),
     latestScript: () => ({ version: 1, script: { scenes: [scene("a"), scene("b")] } }),
   };
   const pipeline = new Pipeline({ db, bus: new EventBus(), runner, projects: projects as never, wh: {} as never });
@@ -118,9 +119,16 @@ describe("render cleanup on failure / cancel", () => {
     mkdirSync(jobs, { recursive: true });
     const old = path.join(jobs, "old.json");
     writeFileSync(old, "{}");
-    const past = new Date(Date.now() - 60_000);
-    utimesSync(old, past, past);
+    const fresh = path.join(jobs, "fresh.json"); // a live process's job file
+    writeFileSync(fresh, "{}");
+    const freshRun = path.join(root, "renders", "p1", "2026-02-04T00-00-00-000Z"); // a live process's render
+    mkdirSync(freshRun, { recursive: true });
+    writeFileSync(path.join(freshRun, "raw.mp4"), "x");
+    const past = new Date(Date.now() - 86_400_000);
+    for (const f of [old, partial, path.join(partial, "raw.mp4")]) utimesSync(f, past, past);
     runner.resume();
+    expect(existsSync(fresh)).toBe(true);
+    expect(existsSync(freshRun)).toBe(true);
     expect(existsSync(partial)).toBe(false);
     expect(existsSync(done)).toBe(true);
     expect(existsSync(old)).toBe(false);
@@ -158,5 +166,37 @@ describe("provenance manifest (pipeline-honest-gate-inputs)", () => {
     const m2 = await build.call(pipeline, { projectId: "p1", video, props: { ...props, timing }, propsVersion: 2, checks: {}, maxCpsValue: 10 });
     expect(m2.audio).toEqual([]);
     expect(m2.disclosure.ai_voice).toBe(false);
+  });
+});
+
+describe("skip unchanged (pipeline-skip-unchanged)", () => {
+  it("a second produce with unchanged props + source reuses the render instead of rendering", async () => {
+    const { root, runner, pipeline } = setup();
+    const internals = pipeline as unknown as { hasher: { hash(): Promise<string> }; worker: unknown; db: { $client: { prepare: (q: string) => { run: (...a: unknown[]) => void } } } };
+    const { propsSha256 } = await import("./bundle-support");
+    const dir = path.join(root, "renders", "p1", "2026-04-01T00-00-00-000Z");
+    mkdirSync(dir, { recursive: true });
+    const video = path.join(dir, "video.mp4");
+    writeFileSync(video, "video-bytes");
+    for (const f of ["captions.srt", "captions.vtt", "thumb.png"]) writeFileSync(path.join(dir, f), "x");
+    const manifest = {
+      build: { props_sha256: propsSha256(propsRow.props), source_sha256: await internals.hasher.hash() },
+      subject: { sha256: createHash("sha256").update("video-bytes").digest("hex") }, captions: { sidecar: ["captions.srt", "captions.vtt"] },
+    };
+    writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest));
+    internals.db.$client.prepare("insert into renders (id, project_id, job_id, format, path, manifest_path, checks_json, created_at) values ('r1', 'p1', 'j0', 'vertical', ?, ?, '{}', '2026-04-01T00:00:00Z')")
+      .run(video, path.join(dir, "manifest.json"));
+    const worker = vi.fn();
+    internals.worker = worker;
+
+    const id = runner.enqueue("render", { projectId: "p1", target }, "p1");
+    await runner.idle();
+    const job = runner.get(id)!;
+    expect(job.status).toBe("succeeded");
+    expect(worker).not.toHaveBeenCalled();
+    expect(JSON.parse(job.result_json!)).toMatchObject({ reused: "r1", note: "reused render r1", policy: { allow: true } });
+    const rows = pipeline.renders("p1");
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((r) => r.id !== "r1")[0]).toMatchObject({ path: video, job_id: id });
   });
 });

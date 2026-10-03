@@ -18,11 +18,13 @@
         },
         "title": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 42
         },
         "hook": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 60
         },
         "unit_label": {
           "type": "string",
@@ -191,7 +193,8 @@
               },
               "title": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "maxLength": 36
               },
               "date_label": {
                 "type": "string",
@@ -206,7 +209,7 @@
                     "text": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 50
+                      "maxLength": 48
                     },
                     "ref": {
                       "type": "string",

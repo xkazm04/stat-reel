@@ -126,11 +126,29 @@ export function runWorker(o: RunWorkerOpts): Promise<WorkerMessage> {
 export const RUN_DIR = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
 
 /**
- * Removes `<rendersDir>/<project>/<run>` directories that never got a `manifest.json`: the manifest is
- * the last file a successful render writes, so a run without one is a crash or cancel leftover. Runs
- * with a manifest (successful, gated or not) and anything else (keyframe stills) are never touched.
+ * data/renders and data/cache/jobs are shared by every server process on the machine (dev server, e2e
+ * server, ...), so a sweep must only remove what no live process can own: nothing is written for longer
+ * than the render timeout, so anything untouched for timeout + margin is a leftover.
  */
-export function sweepPartialRuns(rendersDir: string): string[] {
+export const SWEEP_MARGIN_MS = 5 * 60_000;
+export const staleCutoffMs = (now = Date.now(), timeoutMs = renderTimeoutMs()): number => now - timeoutMs - SWEEP_MARGIN_MS;
+
+/** Newest mtime of a directory and everything inside it. */
+function newestMtime(dir: string): number {
+  let newest = statSync(dir).mtimeMs;
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    newest = Math.max(newest, e.isDirectory() ? newestMtime(p) : statSync(p).mtimeMs);
+  }
+  return newest;
+}
+
+/**
+ * Removes `<rendersDir>/<project>/<run>` directories that never got a `manifest.json` (the last file a
+ * successful render writes) AND whose newest mtime is before `cutoffMs`, so a render another live
+ * process is writing is never touched. Runs with a manifest and anything else (keyframe stills) stay.
+ */
+export function sweepPartialRuns(rendersDir: string, cutoffMs = staleCutoffMs()): string[] {
   const removed: string[] = [];
   if (!existsSync(rendersDir)) return removed;
   for (const proj of readdirSync(rendersDir, { withFileTypes: true })) {
@@ -139,7 +157,7 @@ export function sweepPartialRuns(rendersDir: string): string[] {
     for (const run of readdirSync(projDir, { withFileTypes: true })) {
       if (!run.isDirectory() || !RUN_DIR.test(run.name)) continue;
       const dir = path.join(projDir, run.name);
-      if (existsSync(path.join(dir, "manifest.json"))) continue;
+      if (existsSync(path.join(dir, "manifest.json")) || newestMtime(dir) >= cutoffMs) continue;
       rmSync(dir, { recursive: true, force: true });
       removed.push(dir);
     }
@@ -147,7 +165,7 @@ export function sweepPartialRuns(rendersDir: string): string[] {
   return removed;
 }
 
-/** Removes worker job files (`<uuid>.json`) last modified before `beforeMs`: at startup nothing owns them any more. */
+/** Removes worker job files (`<uuid>.json`) last modified before `beforeMs` (use staleCutoffMs(): a live process may own newer ones). */
 export function sweepJobFiles(dir: string, beforeMs: number): string[] {
   const removed: string[] = [];
   if (!existsSync(dir)) return removed;

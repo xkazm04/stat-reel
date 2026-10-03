@@ -14,19 +14,18 @@ import { StatusChip } from "./glyphs";
 
 export type PlayerMeta = { fps: number; durationInFrames: number };
 
-/** memo: with stable props it does not re-render while the clock ticks (the frame is not its state). */
-export const Programme = memo(function Programme({
-  props,
-  format,
-  safeZone,
-  playerRef,
-  onMeta,
-  autoPlay,
-  loop,
-  muted,
-  slate,
-  compositionName,
-}: {
+/**
+ * memo: with stable props it does not re-render while the clock ticks (the frame is not its state).
+ * The hooks that load @statreel/compositions live in the inner component, which only mounts with
+ * props: an empty slate never starts the ~286 KB composition chunk.
+ */
+export const Programme = memo(function Programme(p: ProgrammeProps) {
+  const { props, slate } = p;
+  if (!props) return <>{slate}</>;
+  return <Monitor {...p} props={props} />;
+});
+
+type ProgrammeProps = {
   props: EraAdjustedProps | null | undefined;
   format: Format;
   safeZone?: boolean;
@@ -39,7 +38,20 @@ export const Programme = memo(function Programme({
   slate: ReactNode;
   /** the use case's composition; anything but EraAdjustedSlope has no player yet */
   compositionName?: string | null;
-}) {
+};
+
+const Monitor = memo(function Monitor({
+  props,
+  format,
+  safeZone,
+  playerRef,
+  onMeta,
+  autoPlay,
+  loop,
+  muted,
+  slate,
+  compositionName,
+}: ProgrammeProps & { props: EraAdjustedProps }) {
   const comp = useComposition();
   const wantsEra = hasPlayer(compositionName);
   const inputProps = useMemo(() => {
@@ -59,7 +71,7 @@ export const Programme = memo(function Programme({
     onMeta?.(meta);
   }, [meta, onMeta]);
 
-  if (!props || !inputProps) return <>{slate}</>;
+  if (!inputProps) return <>{slate}</>;
   if (!wantsEra)
     return (
       <div className="still">

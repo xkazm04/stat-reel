@@ -16,7 +16,7 @@
  * case-loop inbox.
  */
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import type { BoardItem } from "../api";
 import { Defer, SkeletonRows } from "../components/arrive";
 import { Empty, Failure, Loading } from "../components/ui";
@@ -25,7 +25,9 @@ import {
   axisOptions,
   type BoardFilter,
   countItems,
+  DEFAULT_FILTER,
   filterItems,
+  isDefaultFilter,
   NO_FILTER,
   parseVariant,
   STATUS_FILTERS,
@@ -35,6 +37,7 @@ import {
   visibleItems,
 } from "./board";
 import { parseTab, TABS, type Tab } from "./library";
+import { filterFromSearch, searchFromFilter } from "./search";
 import { useBoard, useCaseNames } from "./shared";
 import { QueueStrip } from "./QueueStrip";
 import { UndoToastHost } from "./undo";
@@ -45,6 +48,7 @@ const CasesView = lazy(() => import("./CasesView").then((m) => ({ default: m.Cas
 const StylesView = lazy(() => import("./StylesView").then((m) => ({ default: m.StylesView })));
 const WallVariant = lazy(() => import("./WallVariant").then((m) => ({ default: m.WallVariant })));
 const LightTableVariant = lazy(() => import("./LightTableVariant").then((m) => ({ default: m.LightTableVariant })));
+const RejectedLane = lazy(() => import("./RejectedLane").then((m) => ({ default: m.RejectedLane })));
 const MatrixVariant = lazy(() => import("./MatrixVariant").then((m) => ({ default: m.MatrixVariant })));
 const tabFallback = <SkeletonRows rows={4} h={120} />;
 
@@ -62,7 +66,10 @@ const STATUS_WORD: Record<StatusFilter, string> = {
   all: "All",
   pending: "Pending",
   accepted: "Accepted",
+  rejected: "Rejected",
 };
+
+const hasAxisFilter = (f: BoardFilter) => f.style !== "all" || f.case !== "all";
 
 function useVariant(): [Variant, (v: Variant) => void] {
   const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
@@ -81,19 +88,39 @@ function useTab(): [Tab, (t: Tab) => void] {
   return [parseTab(search.tab), set];
 }
 
+/** The filters, kept in the URL (`st`, `style`, `case`); the default is the pending queue. */
+function useFilter(): [BoardFilter, (next: BoardFilter | ((f: BoardFilter) => BoardFilter)) => void] {
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const navigate = useNavigate();
+  const filter = useMemo(
+    () => filterFromSearch(search as Parameters<typeof filterFromSearch>[0]),
+    [search],
+  );
+  const set = (next: BoardFilter | ((f: BoardFilter) => BoardFilter)) => {
+    const f = typeof next === "function" ? next(filter) : next;
+    void navigate({
+      to: "/board",
+      search: { ...search, ...searchFromFilter(f) } as never,
+      replace: true,
+      resetScroll: false,
+    });
+  };
+  return [filter, set];
+}
+
 export function BoardPage() {
   const board = useBoard();
   const names = useCaseNames();
   const [variant, setVariant] = useVariant();
   const [tab, setTab] = useTab();
-  const [filter, setFilter] = useState<BoardFilter>(NO_FILTER);
+  const [filter, setFilter] = useFilter();
   const all = board.data?.items ?? [];
   const counts = useMemo(() => countItems(all), [all]);
   const scoped = useMemo(() => filterItems(all, filter), [all, filter]);
-  const items = useMemo(() => visibleItems(scoped), [scoped]);
+  const items = useMemo(() => visibleItems(scoped, filter.status), [scoped, filter.status]);
   const styleOpts = useMemo(() => axisOptions(all, "style", names), [all, names]);
   const caseOpts = useMemo(() => axisOptions(all, "case", names), [all, names]);
-  const filtered = filter.status !== "all" || filter.style !== "all" || filter.case !== "all";
+  const filtered = !isDefaultFilter(filter);
   const V = variant === 2 ? LightTableVariant : variant === 3 ? MatrixVariant : WallVariant;
 
   return (
@@ -245,12 +272,12 @@ export function BoardPage() {
                 </select>
               </label>
               {filtered ? (
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setFilter(NO_FILTER)}>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setFilter(DEFAULT_FILTER)}>
                   Clear filters
                 </button>
               ) : null}
               <span className="bd-filters__n num" aria-live="polite">
-                {items.length} of {counts.total - counts.rejected} shown
+                {items.length} of {filter.status === "rejected" ? counts.rejected : counts.total - counts.rejected} shown
               </span>
             </div>
           ) : null}
@@ -267,15 +294,30 @@ export function BoardPage() {
           ) : (
             <>
               {!items.length ? (
-                <Empty title="Nothing matches these filters" className="bd-empty">
+                <Empty
+                  title={
+                    filter.status === "rejected" && !hasAxisFilter(filter)
+                      ? "No rejected shots"
+                      : filter.status === "pending" && !hasAxisFilter(filter)
+                        ? "Nothing left to review"
+                        : "Nothing matches these filters"
+                  }
+                  className="bd-empty"
+                >
                   {counts.total - counts.rejected} shots are open for review ({counts.rejected} rejected are hidden).{" "}
                   <button type="button" className="bd-linkbtn" onClick={() => setFilter(NO_FILTER)}>
                     Show every shot
                   </button>
                 </Empty>
               ) : null}
-              {/* the Wall stays mounted while its lightbox is open on a shot that just left the grid (a rejection) */}
-              {items.length || variant === 1 ? (
+              {/* the rejected lane (SPEC D.1): one read-only list for every variant, with Undo and re-decide */}
+              {filter.status === "rejected" ? (
+                items.length ? (
+                  <Suspense fallback={tabFallback}>
+                    <RejectedLane items={items} names={names} />
+                  </Suspense>
+                ) : null
+              ) : /* the Wall stays mounted while its lightbox is open on a shot that just left the grid (a rejection) */ items.length || variant === 1 ? (
                 <Defer tier={2} id="board:shots" minHeight={items.length ? 480 : 0}>
                   <Suspense fallback={tabFallback}>
                     <V items={items} scoped={scoped} all={all} names={names} />

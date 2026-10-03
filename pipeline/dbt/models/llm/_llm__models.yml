@@ -110,3 +110,30 @@ models:
       - {name: races_held_excl_indianapolis, description: "Races held, Indianapolis 500 excluded."}
       - {name: races_scheduled, description: "Races on the calendar (future rounds included for the current season)."}
       - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_driver_race_cumulative
+    description: >-
+      Dense race-by-race cumulative career totals per driver: one row per (driver, race) from the driver's
+      first Grand Prix start to the LATEST race in the data, totals carried forward on races the driver did
+      not enter (no gaps, so a bar-chart race can step through race_seq directly). Grand Prix only - the
+      Indianapolis 500 is not a row and counts for nothing. Retired drivers stay in the series with frozen
+      totals. Shared-car and take-over wins count once per driver per race. Points are the CURRENT system
+      (25-18-15-12-10-8-6-4-2-1, no fastest-lap point, no sprints, shared cars split), not as historically
+      awarded. Source F1DB (CC BY 4.0), attribution required.
+    columns:
+      - {name: fact_key, description: "Stable id of this driver-at-race fact; cite it as <fact_key>#<column>."}
+      - {name: player_id, description: "f1db driver id (slug)."}
+      - {name: display_name, description: "Name as commonly used (use this on screen)."}
+      - {name: full_name, description: "Full legal name of the driver."}
+      - {name: race_id, description: "f1db race id."}
+      - {name: season, description: "Championship year of the race."}
+      - {name: round, description: "Round number within the season."}
+      - {name: race_date, description: "Race date; the data clock for time-evolution videos."}
+      - {name: race_seq, description: "1-based position of the race in the all-time Grand Prix sequence (Indianapolis excluded); consecutive, so it is the dense x-axis."}
+      - {name: entered, description: "True if the driver took the start in this race; false on carried-forward rows."}
+      - {name: starts_cum, description: "Grand Prix starts up to and including this race."}
+      - {name: wins_cum, description: "Race wins up to and including this race (a shared or taken-over winning car counts once for each driver)."}
+      - {name: podiums_cum, description: "Top-3 finishes up to and including this race."}
+      - {name: points_cum, description: "Career points up to and including this race under the CURRENT points system (estimate, not as awarded)."}
+      - {name: rank_wins_cum, description: "Rank among all drivers at this race by wins_cum, unique and stable: ties broken by podiums_cum, then points_cum, then driver id. 1 = most wins."}
+      - {name: tied, description: "True when another driver has the same wins_cum at this race; the rank order within the tie is then a tie-break, not a real difference in wins."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}

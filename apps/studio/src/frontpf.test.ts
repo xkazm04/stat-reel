@@ -9,7 +9,8 @@ describe("frontpf", () => {
   });
   it("counts the studio from statuses", () => {
     const c = studioCounts([{ status: "published" }, { status: "rendered" }, { status: "idea" }, { status: "scripted" }, { status: "gated" }]);
-    expect(c).toEqual({ total: 5, published: 1, refused: 1, notGated: 2 });
+    expect(c).toEqual({ total: 5, published: 1, refused: 1, gated: 1, notGated: 2 });
+    expect(c.published + c.refused + c.gated + c.notGated).toBe(c.total);
   });
   it("groups the registry by sport and verdict", () => {
     const g = registryGrid([

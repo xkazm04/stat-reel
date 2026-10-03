@@ -55,8 +55,10 @@ const rows12: SlopeRow[] = NAMES.map((name, i) => ({
   right: ADJ[i] as number,
 }));
 
-// the vertical chart zone the composition uses (885 x 580 inside the 1080x1920 safe box)
-const zone = { width: 885, height: 580, format: "vertical" as const };
+// the vertical chart zone the composition uses (885 x 600 inside the 1080x1920 safe box). Height is
+// 600, not 580: the owner rule "every readable text >= 28 px" raised the subtitle to 28 px (39c7943),
+// growing the header ~9 px, and 12 rows at the 44 px minimum gap no longer fit in 580.
+const zone = { width: 885, height: 600, format: "vertical" as const };
 const titles = { left: "As awarded", right: "Era-adjusted", leftSub: "Career points", rightSub: "Points per start" };
 
 type El = { type: unknown; props: Record<string, unknown> & { children?: ReactNode } };
@@ -191,11 +193,11 @@ describe("slopegraphLayout", () => {
           "label": "FANGIO",
           "left": [
             10,
-            525,
+            544,
           ],
           "right": [
             0,
-            83,
+            92,
           ],
         },
         {
@@ -203,11 +205,11 @@ describe("slopegraphLayout", () => {
           "label": "ASCARI",
           "left": [
             11,
-            569,
+            589,
           ],
           "right": [
             1,
-            127,
+            137,
           ],
         },
         {
@@ -215,11 +217,11 @@ describe("slopegraphLayout", () => {
           "label": "VERSTAPPEN",
           "left": [
             1,
-            127,
+            137,
           ],
           "right": [
             2,
-            171,
+            182,
           ],
         },
       ]
