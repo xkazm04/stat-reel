@@ -5,8 +5,8 @@
  * rect and routes to layer 2 (/heatmap/$usecase/$sport), which expands from it over the grid;
  * closing returns here with that cell focused. Keyboard: arrows / Home / End move, Enter opens,
  * M flips the mode, Esc closes layer 2.
- * On Air draws the A/1 rights grid (sports as rows, formats as columns); Photo Finish draws the
- * A/3 finish sheet (four heats as columns, ten lanes as rows, a bar per cell toward the line).
+ * The grid is the Photo Finish finish sheet (ADR 009): four heats as columns, ten lanes as rows,
+ * a bar per cell toward the line.
  */
 import type { CellStatus, HeatmapCell, Mode, Sport, UseCase } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +15,7 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { api, errorText, qk } from "../api";
 import { Defer } from "../components/arrive";
 import { LaneBar, ModeSwitch } from "../components/finish";
-import { Field, FormatIcon, StatusChip } from "../components/glyphs";
+import { FormatIcon, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { setLayerOrigin } from "../components/layerTransition";
 import { artStyle, Failure, Loading, Sparkline } from "../components/ui";
@@ -25,7 +25,6 @@ import { cellHint, focusKey, gridMove, parseFocus, sportCounts } from "../heatma
 import { cellOf, countStatuses, MODE_LABEL, relTime, SPORTS, trendSeries } from "../logic";
 import { formatLabel, pad2, STATUS_ORDER, STATUS_WORD, trendSummary } from "../onair";
 import type { HeatmapSearch } from "../router";
-import { useTheme } from "../theme";
 
 type OpenCell = (uc: UseCase, sport: Sport, el: HTMLElement) => void;
 type GridProps = {
@@ -48,7 +47,6 @@ export function HeatmapPage() {
   const params = useParams({ strict: false }) as { usecase?: string; sport?: string };
   const open = !!(params.usecase && params.sport);
   const mode: Mode = search.mode ?? "monetized";
-  const { theme } = useTheme();
   const hm = useHeatmap();
   const src = useSources();
   const qc = useQueryClient();
@@ -132,9 +130,8 @@ export function HeatmapPage() {
     });
   };
 
-  const pf = theme === "photofinish";
-  const rows = pf ? usecases.length : SPORTS.length;
-  const cols = pf ? SPORTS.length : usecases.length;
+  const rows = usecases.length;
+  const cols = SPORTS.length;
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-r]");
     if (!el) return;
@@ -181,29 +178,26 @@ export function HeatmapPage() {
   };
 
   return (
-    <main id="main" className={`hm hm--${theme}`} data-layer={open ? "2" : "1"}>
+    <main id="main" className="hm hm--photofinish" data-layer={open ? "2" : "1"}>
       <div className="hm-layer1" inert={open}>
         <header className="hm-head">
           <div className="hm-title">
             <p className="eyebrow">
-              {pf ? null : <i />}
-              {pf
-                ? `The finish sheet · ${SPORTS.length} heats × ${usecases.length || "—"} lanes`
-                : `${SPORTS.length} sport channels × ${usecases.length || "—"} formats`}
+              {`The finish sheet · ${SPORTS.length} heats × ${usecases.length || "—"} lanes`}
             </p>
-            <h1>{pf ? "What can cross the line" : "Rights grid"}</h1>
+            <h1>What can cross the line</h1>
           </div>
           <ul className="hm-legend" aria-label={`Status counts, ${MODE_LABEL[mode]}`}>
             {STATUS_ORDER.map((k) => (
               <li key={k} className={`st--${k}${n[k] ? "" : " is-zero"}`}>
-                <span className="hm-legend__n num">{pf ? n[k] : pad2(n[k])}</span>
+                <span className="hm-legend__n num">{n[k]}</span>
                 <StatusChip status={k} size={14} />
                 <small>{n[k] ? `of ${per}` : "none"}</small>
               </li>
             ))}
           </ul>
           <div className="hm-ctl">
-            <ModeSwitch mode={mode} onChange={setMode} label={pf ? "Line at" : "Mode"} testid />
+            <ModeSwitch mode={mode} onChange={setMode} label="Line at" testid />
             <span className="hm-ctl__k">
               <kbd>M</kbd> flips the mode
             </span>
@@ -231,7 +225,7 @@ export function HeatmapPage() {
             </div>
           </div>
         ) : (
-          <div className="hm-wrap">{pf ? <FinishSheet {...gridProps} /> : <RightsGrid {...gridProps} />}</div>
+          <div className="hm-wrap"><FinishSheet {...gridProps} /></div>
         )}
 
         <Defer tier={1} id="hm:foot" phClass="hm-foot" minHeight={48}>
@@ -295,106 +289,6 @@ function TrendLine({ series, t, w = 40 }: { series: number[]; t: ReturnType<type
 
 function cellLabel(u: UseCase, sport: string, mode: Mode, c: HeatmapCell): string {
   return `${u.name}, ${sport}, ${MODE_LABEL[mode]}: ${STATUS_WORD[c.status]}. ${c.reason}. Open the cell.`;
-}
-
-// ------------------------------------------------------------------ On Air: the rights grid
-
-function RightsGrid({
-  usecases,
-  cells,
-  mode,
-  trend,
-  cur,
-  selected,
-  changed,
-  onOpen,
-  onFocusCell,
-  register,
-  onKeyDown,
-}: GridProps) {
-  return (
-    <div
-      className="oa-grid"
-      role="grid"
-      aria-label={`Feasibility by sport and format, ${MODE_LABEL[mode]}`}
-      onKeyDown={onKeyDown}
-      style={{ ["--cols" as string]: usecases.length }}
-    >
-      <div className="oa-grid__row oa-grid__row--head" role="row">
-        <div className="oa-corner" role="columnheader">
-          <span>{SPORTS.length} sports</span>
-          <span>× {usecases.length} formats</span>
-        </div>
-        {usecases.map((u, j) => {
-          const { series, t } = trendOf(trend, u.id, mode);
-          const hot = selected?.startsWith(`${u.id}|`) || cur.startsWith(`${u.id}|`);
-          return (
-            <div
-              key={u.id}
-              className={`oa-colh${hot ? " hot" : ""}`}
-              role="columnheader"
-              style={artStyle(identVar(u.id))}
-            >
-              <b className="num">
-                {pad2(j + 1)} · {formatLabel(u.default_format)}
-              </b>
-              <span className="oa-colh__name">{u.name}</span>
-              <i>{u.requires.kinds.join("+")}</i>
-              <TrendLine series={series} t={t} />
-            </div>
-          );
-        })}
-      </div>
-      {SPORTS.map((sp, i) => {
-        const rc = sportCounts(cells, mode, sp);
-        return (
-          <div className="oa-grid__row" role="row" key={sp}>
-            <div className={`oa-rowh${cur.endsWith(`|${sp}`) ? " hot" : ""}`} role="rowheader">
-              <Field sport={sp} />
-              <b>{sp}</b>
-              <small className="num">
-                {STATUS_ORDER.filter((k) => rc[k]).map((k) => (
-                  <StatusChip key={k} status={k} size={12} label={`${rc[k]}`} />
-                ))}
-              </small>
-            </div>
-            {usecases.map((u, j) => {
-              const c = cellOf(cells, u.id, sp, mode);
-              const key = focusKey(u.id, sp);
-              if (!c)
-                return (
-                  <div key={u.id} className="oa-cell oa-cell--none" role="gridcell">
-                    no cell
-                  </div>
-                );
-              return (
-                <button
-                  type="button"
-                  key={u.id}
-                  ref={(el) => register(key, el)}
-                  role="gridcell"
-                  data-testid={`cell-${u.id}-${sp}`}
-                  data-r={i}
-                  data-c={j}
-                  data-key={key}
-                  tabIndex={cur === key ? 0 : -1}
-                  aria-selected={selected === key}
-                  aria-label={cellLabel(u, sp, mode, c)}
-                  className={`oa-cell st--${c.status} pat--${c.status}${changed.has(key) ? " flip" : ""}`}
-                  style={{ ["--d" as string]: i * 3 + j * 2 }}
-                  onFocus={() => onFocusCell(key)}
-                  onClick={(e) => onOpen(u, sp, e.currentTarget)}
-                >
-                  <StatusChip status={c.status} />
-                  <span className="oa-cell__hint">{cellHint(c)}</span>
-                </button>
-              );
-            })}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 // ------------------------------------------------------------------ Photo Finish: the finish sheet

@@ -1,6 +1,6 @@
 # 005 - "On Air" is the brand and UI baseline; the product shows real data only
 
-- Status: accepted
+- Status: superseded by [009](009-photo-finish-single-theme.md) (the "On Air" theme is removed; the real-data-only rule stands)
 - Date: 2026-09-30
 - Affects: DESIGN.md §6.1 (screens), §6.5 (typography/brand), `packages/design-tokens`, `apps/studio`,
   video theme in `packages/compositions`

@@ -1,7 +1,8 @@
-# 009: Photo Finish is the single studio theme
+# 009 - Photo Finish is the single studio theme
 
-- **Status:** proposed (draft rev. 2, 2026-10-03; owner answered Q1)
+- **Status:** accepted (2026-10-03; owner answered Q1)
 - **Date:** 2026-10-03
+- **Spec:** [`docs/specs/2026-10-03-app-refresh/SPEC.md`](../specs/2026-10-03-app-refresh/SPEC.md) (A, B)
 - **Affects:** `packages/design-tokens`, `apps/studio` (theme runtime, Nav, Wordmark, Front, Heatmap, Projects, Calendar, Board styles), `DESIGN.md` §2/§6.1/§10. Supersedes ADR 005 and supersedes ADR 006 in part.
 
 ## Context

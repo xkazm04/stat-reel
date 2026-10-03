@@ -1,8 +1,8 @@
 /**
  * 03 Rundown: every project across idea -> data ready -> scripted -> rendered -> gated -> published,
  * sorted by "needs you". Live job progress from SSE; a metrics sparkline where platform numbers
- * exist (dry-run publications have none, and say so). On Air shows a board of six columns; Photo
- * Finish shows A/3's race sheet: one lane per project, six gates, the finish line at Published.
+ * exist (dry-run publications have none, and say so). The board view is the race sheet (ADR 009):
+ * one lane per project, six gates, the finish line at Published.
  */
 import type { Mode } from "@statreel/schemas";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
@@ -11,95 +11,13 @@ import type { MetricsPublication, ProjectWithJobs } from "../api";
 import { Defer } from "../components/arrive";
 import { Arrow, FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
-import { artStyle, Empty, Failure, Loading, Sparkline } from "../components/ui";
+import { artStyle, Empty, Failure, Loading } from "../components/ui";
 import { useMetrics, useProjects } from "../data";
 import { useJobProgress } from "../events";
-import { MODE_LABEL, nextAction, relTime, STAGE_LABEL, STAGES, stageIndex } from "../logic";
+import { MODE_LABEL, nextAction, relTime, STAGE_LABEL, STAGES } from "../logic";
 import { activeJob, fmtNum, formatLabel, pad2, pct, rundownOrder } from "../onair";
 import type { ProjectsSearch } from "../router";
 import { byUpdated, GATE_POS, laneState, sayLine, sheetCounts } from "../rundown";
-import { useTheme } from "../theme";
-
-function Pips({ i }: { i: number }) {
-  return (
-    <span className="pips" aria-hidden="true">
-      {STAGES.map((s, k) => (
-        <i key={s} className={k < i ? "on" : k === i ? "now" : ""} />
-      ))}
-    </span>
-  );
-}
-
-function Card({
-  p,
-  live,
-  pubs,
-}: {
-  p: ProjectWithJobs;
-  live: Map<string, { progress: number; note?: string }>;
-  pubs: MetricsPublication[];
-}) {
-  const job = activeJob(p.jobs);
-  const next = nextAction(p.status, p.jobs[0]);
-  const lp = job ? live.get(job.id) : undefined;
-  const progress = lp?.progress ?? job?.progress ?? 0;
-  const views = pubs.flatMap((x) => x.daily.map((d) => d.views));
-  const hasNumbers = views.some((v) => typeof v === "number");
-  const dry = pubs.length > 0 && pubs.every((x) => x.mode === "dry");
-  return (
-    <Link
-      to="/studio/$projectId"
-      params={{ projectId: p.id }}
-      className="card"
-      style={artStyle(identVar(p.use_case_id))}
-    >
-      <span className="card__t">{p.title}</span>
-      <span className="card__m">
-        <span>{p.id}</span>
-        <span>{p.sport}</span>
-        <span>
-          <FormatIcon format={p.format} h={11} /> {formatLabel(p.format)}
-        </span>
-        <span>{p.mode === "monetized" ? "monetized" : "non-comm."}</span>
-      </span>
-      <span className="card__s">
-        <span className="row__stage">
-          <Pips i={stageIndex(p.status)} />
-          {STAGE_LABEL[p.status] ?? p.status}
-        </span>
-        <span className={`row__next row__next--${next.tone}`}>{next.verb}</span>
-      </span>
-      {job ? (
-        <span className="card__job" role="status">
-          <span className="bar-track">
-            <span className="bar-fill" style={{ width: pct(progress) }} />
-          </span>
-          <span className="mono">
-            {job.kind} · {job.status} · {pct(progress)}
-            {lp?.note ? ` · ${lp.note}` : ""}
-          </span>
-        </span>
-      ) : next.tone === "blocked" ? (
-        <span className="card__warn">{next.hint}</span>
-      ) : null}
-      {pubs.length ? (
-        <span className="card__met">
-          {hasNumbers ? (
-            <>
-              <Sparkline values={views} w={120} h={24} label={`Daily views of ${p.title}`} />
-              <span className="num">{fmtNum(pubs.reduce((a, x) => a + (x.views ?? 0), 0))} views</span>
-            </>
-          ) : (
-            <span className="label">
-              {dry ? "Dry-run publication · no platform numbers" : "Metrics not pulled yet"}
-            </span>
-          )}
-        </span>
-      ) : null}
-      <span className="card__age">created {relTime(p.created_at)}</span>
-    </Link>
-  );
-}
 
 export function ProjectsPage() {
   const search = useSearch({ from: "/projects" }) as ProjectsSearch;
@@ -111,8 +29,6 @@ export function ProjectsPage() {
   const projects = rundownOrder(pr.data?.projects ?? []);
   const pubsOf = (id: string) => (met.data?.publications ?? []).filter((x) => x.project_id === id);
   const needs = projects.filter((p) => ["you", "blocked"].includes(nextAction(p.status, p.jobs[0]).tone)).length;
-  const { theme } = useTheme();
-  const pf = theme === "photofinish";
 
   return (
     <main id="main" className="page rundown-page">
@@ -120,10 +36,10 @@ export function ProjectsPage() {
         <div>
           <p className="eyebrow">
             <i />
-            {pf && view === "board" ? "Rundown · the race sheet" : "Rundown"}
+            {view === "board" ? "Rundown · the race sheet" : "Rundown"}
           </p>
           <h1 className="page__title display">
-            {pf && view === "board" && projects.length
+            {view === "board" && projects.length
               ? `${projects.length} lane${projects.length === 1 ? "" : "s"}, six gates`
               : "Every video, closest to air first"}
           </h1>
@@ -136,7 +52,7 @@ export function ProjectsPage() {
         <div className="page__tools">
           <div className="seg" role="group" aria-label="View">
             <button type="button" aria-pressed={view === "board"} onClick={() => void navigate({ search: {} })}>
-              {pf ? "Race sheet" : "Board"}
+              Race sheet
             </button>
             <button
               type="button"
@@ -160,31 +76,10 @@ export function ProjectsPage() {
         <Empty title="No project yet">
           Create one from a Go cell on the <Link to="/heatmap">rights grid</Link>: open the cell, then Create project.
         </Empty>
-      ) : view === "board" && pf ? (
+      ) : view === "board" ? (
         <Defer tier={1} id="rundown:sheet" minHeight={360}>
           <RaceSheet projects={projects} live={live} pubsOf={pubsOf} />
         </Defer>
-      ) : view === "board" ? (
-        <div className="board">
-          {STAGES.map((s, si) => {
-            const col = projects.filter((p) => p.status === s);
-            return (
-              <Defer key={s} tier={si + 1} id={`rundown:${s}`} phClass="board__col" minHeight={220}>
-                <section className="board__col" aria-label={STAGE_LABEL[s]}>
-                  <h2 className="board__h">
-                    <b className="num">{pad2(col.length)}</b>
-                    {STAGE_LABEL[s]}
-                  </h2>
-                  {col.length ? (
-                    col.map((p) => <Card key={p.id} p={p} live={live} pubs={pubsOf(p.id)} />)
-                  ) : (
-                    <p className="board__none">Nothing here</p>
-                  )}
-                </section>
-              </Defer>
-            );
-          })}
-        </div>
       ) : (
         <Defer tier={1} id="rundown:list" phClass="table-wrap" minHeight={260}>
           <div className="table-wrap">
@@ -250,7 +145,7 @@ export function ProjectsPage() {
   );
 }
 
-// ------------------------------------------------------------------ Photo Finish: the race sheet
+// ------------------------------------------------------------------ the race sheet
 
 const cssv = (o: Record<string, string | number>): CSSProperties => o as CSSProperties;
 

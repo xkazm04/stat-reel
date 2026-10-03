@@ -1,6 +1,5 @@
 /**
- * Shared instruments for the licence line. Theme-aware where the concept is shared (the mode
- * switch); Photo Finish set pieces where the concept demands them: a lane bar travelling toward
+ * Shared instruments for the licence line (Photo Finish, ADR 009): the mode switch, a lane bar travelling toward
  * the clay line, source chips marked by licence class, the finish picture (one lane per required
  * kind, the line splitting what may cross in this mode) and the never-fetched (DNS) list.
  */
@@ -9,16 +8,14 @@ import { type CSSProperties, useId } from "react";
 import { barEnd, bestSource, byClass, CLASS_ORDER, finishShare, isShort, LINE } from "../finishline";
 import { MODE_LABEL } from "../logic";
 import { kindLong, LICENCE_WORD } from "../onair";
-import { useTheme } from "../theme";
 
 const css = (o: Record<string, string | number>): CSSProperties => o as CSSProperties;
 
 // ------------------------------------------------------------------ mode switch
 
 /**
- * The mode switch. On Air: a two-key segmented switch. Photo Finish: the control that moves the
- * line (a sliding key with the clay hairline at its edge). `testid` adds mode-<m> test ids (use
- * on one switch per page only).
+ * The mode switch: the control that moves the line (a sliding key with the clay hairline at its
+ * edge). `testid` adds mode-<m> test ids (use on one switch per page only).
  */
 export function ModeSwitch({
   mode,
@@ -33,11 +30,9 @@ export function ModeSwitch({
   testid?: boolean;
   className?: string;
 }) {
-  const { theme } = useTheme();
   const id = useId();
   const opts: Mode[] = ["monetized", "non_commercial"];
-  if (theme === "photofinish")
-    return (
+  return (
       <div
         className={`pf-seg ${className}`}
         data-mode={mode}
@@ -75,21 +70,6 @@ export function ModeSwitch({
         </span>
       </div>
     );
-  return (
-    <div className={`seg ${className}`} role="group" aria-label={label}>
-      {opts.map((m) => (
-        <button
-          type="button"
-          key={m}
-          aria-pressed={mode === m}
-          data-testid={testid ? `mode-${m}` : undefined}
-          onClick={() => onChange(m)}
-        >
-          {MODE_LABEL[m]}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 // ------------------------------------------------------------------ lane bar

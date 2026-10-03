@@ -16,19 +16,18 @@ import { createRoot } from "react-dom/client";
 import { EventsProvider } from "./events";
 import { queryClient } from "./queryClient";
 import { router } from "./router";
-import { ThemeProvider } from "./theme";
+import { dropStaleTheme } from "./theme";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root missing");
+dropStaleTheme();
 
 createRoot(root).render(
   <StrictMode>
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <EventsProvider>
-          <RouterProvider router={router} />
-        </EventsProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <EventsProvider>
+        <RouterProvider router={router} />
+      </EventsProvider>
+    </QueryClientProvider>
   </StrictMode>,
 );

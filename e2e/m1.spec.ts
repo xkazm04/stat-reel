@@ -17,6 +17,16 @@ test.describe.configure({ mode: "serial" });
 
 let projectId = "";
 
+test("theme: Photo Finish is the only theme and a stale stored pick is dropped (ADR 009)", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.localStorage.setItem("statreel.theme", "onair"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "photofinish");
+  expect(await page.evaluate(() => window.localStorage.getItem("statreel.theme"))).toBeNull();
+  await expect(page.getByTestId("theme-photofinish")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "StatReel, front page" })).toBeVisible();
+});
+
 test("heatmap: F1 x era-adjusted is Go in monetized mode", async ({ page }) => {
   await page.goto("/heatmap");
   await page.getByTestId("mode-monetized").click();

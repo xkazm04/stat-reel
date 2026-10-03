@@ -1,28 +1,22 @@
 <!doctype html>
-<html lang="en" data-theme="onair">
+<html lang="en" data-theme="photofinish">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#05070c" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#eceff2" />
     <title>StatReel · Studio</title>
     <meta name="description" content="StatReel turns licensed sports data into narrated, captioned data-viz videos. Every video carries its licence lineage." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 24'%3E%3Cpath d='M7 0h27l-7 24H0z' fill='%23d6ff3f'/%3E%3Cpath d='M9.3 18.5l1.6-5.5h3.2l-1.6 5.5zM14.9 18.5l2.9-10h3.2l-2.9 10zM20.5 18.5l4.2-14.4h3.2l-4.2 14.4z' fill='%2305070c'/%3E%3C/svg%3E" />
     <script>
-      /* Theme before first paint (ADR 006; same rule as src/theme.ts): a stored pick wins, else
-         prefers-color-scheme (dark -> onair, light -> photofinish). Storage may throw: guarded. */
+      /* Photo Finish is the only theme (ADR 009; same rule as src/theme.ts): drop any stale stored
+         theme pick before first paint. Storage may throw: guarded. */
       (function () {
-        var t = null;
-        try { t = window.localStorage.getItem("statreel.theme"); } catch (e) { t = null; }
-        if (t !== "onair" && t !== "photofinish") {
-          var dark = !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-          t = dark ? "onair" : "photofinish";
-        }
-        document.documentElement.setAttribute("data-theme", t);
-        if (t === "photofinish") {
-          var m = document.querySelector('meta[name="theme-color"]');
-          if (m) m.setAttribute("content", "#eceff2");
-        }
+        try {
+          var k = "statreel.theme";
+          var v = window.localStorage.getItem(k);
+          if (v !== null && v !== "photofinish") window.localStorage.removeItem(k);
+        } catch (e) {}
       })();
     </script>
   </head>

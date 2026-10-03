@@ -1,13 +1,11 @@
 /**
- * Global navigation, shared by both themes: the wordmark (each theme draws its own), eight
- * screens, the live bus tally and a labelled theme switch. Below 1100 px the links, the tally and
- * the switch collapse into a menu so the bar never scrolls sideways (390 px included).
+ * Global navigation: the wordmark, eight screens and the live bus tally. Below 1100 px the links
+ * and the tally collapse into a menu so the bar never scrolls sideways (390 px included).
  */
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
 import { useSources } from "../data";
 import { useConnectionState } from "../events";
-import { THEME_LABEL, THEME_SCHEME_WORD, type ThemeName, useTheme } from "../theme";
 import { Wordmark } from "./Wordmark";
 
 export const NAV_LINKS = [
@@ -20,35 +18,6 @@ export const NAV_LINKS = [
   { to: "/metrics", label: "Metrics", match: (p: string) => p.startsWith("/metrics") },
   { to: "/sources", label: "Sources", match: (p: string) => p.startsWith("/sources") },
 ] as const;
-
-/** The theme switch: two labelled options, the current one pressed (never icon-only). */
-export function ThemeSwitch() {
-  const { theme, setTheme } = useTheme();
-  const id = useId();
-  return (
-    <div className="theme-switch" role="group" aria-labelledby={id}>
-      <span className="theme-switch__k" id={id}>
-        Theme
-      </span>
-      <span className="theme-switch__opts">
-        {(["onair", "photofinish"] as ThemeName[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            aria-pressed={theme === t}
-            title={`${THEME_LABEL[t]} (${THEME_SCHEME_WORD[t]})`}
-            onClick={() => setTheme(t)}
-            data-testid={`theme-${t}`}
-          >
-            <i className={`theme-switch__dot theme-switch__dot--${t}`} aria-hidden="true" />
-            {THEME_LABEL[t]}
-            <span className="sr-only"> ({THEME_SCHEME_WORD[t]})</span>
-          </button>
-        ))}
-      </span>
-    </div>
-  );
-}
 
 export function Nav() {
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -111,7 +80,6 @@ export function Nav() {
             {conn === "open" ? "Live bus" : conn === "connecting" ? "Connecting bus" : "Bus offline"}
             {typeof n === "number" ? <span className="nav__tx-count">{` · ${n} sources on the registry`}</span> : null}
           </span>
-          <ThemeSwitch />
         </div>
       </div>
     </header>
