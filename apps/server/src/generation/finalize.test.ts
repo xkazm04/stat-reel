@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -94,4 +95,62 @@ describe("finalize visual_options", () => {
     await expect(fin.finalize(job, body)).rejects.toThrow(/not a PNG/);
     void p;
   });
+});
+
+describe("finalize generate_video", () => {
+  const ffmpeg = (out: string, size: string, seconds: number) =>
+    execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", `color=c=black:s=${size}:r=30`, "-t", String(seconds), "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", out]);
+
+  /** A running generate_video job with the video fixture and a (black) rendered video of the plan's length. */
+  function videoJob(size = "1080x1920", seconds = 41) {
+    insertCase(db, "ci-ddddddd4", { data_status: "staged" });
+    db.$client.prepare("update case_ideas set topic = 'energy' where id = 'ci-ddddddd4'").run();
+    const job = (queue.enqueue({ type: "generate_video", case_id: "ci-ddddddd4" }), queue.claim())!;
+    const p = jobPaths(job.id, dir);
+    mkdirSync(p.out, { recursive: true });
+    cpSync(path.join(fixtures, "generate_video"), p.work, { recursive: true });
+    writeFileSync(p.caseJson, JSON.stringify({ data_status: "staged" }));
+    const raw = path.join(p.dir, "render", "props.raw.mp4");
+    mkdirSync(path.dirname(raw), { recursive: true });
+    ffmpeg(raw, size, seconds);
+    const thumb = path.join(p.dir, "render", "props-stills", "still-00554.png");
+    mkdirSync(path.dirname(thumb), { recursive: true });
+    writeFileSync(thumb, PNG);
+    return { job, p, body: { outputs: [], result: { renders: { video: raw, thumb } } } };
+  }
+
+  it("copies the video, checks it with ffprobe, writes the manifest and the videos row under the case topic", async () => {
+    const { job, body } = videoJob();
+    const r = (await fin.finalize(job, body)) as { video_id: string };
+    const out = path.join(dir, "renders", "gen", "ci-ddddddd4", job.id);
+    for (const f of ["video.mp4", "manifest.json", "timing-plan.json", "TIMING.md", "thumb.png", "props.json"]) expect(existsSync(path.join(out, f)), f).toBe(true);
+    const m = JSON.parse(readFileSync(path.join(out, "manifest.json"), "utf8"));
+    expect(m.checks).toMatchObject({ width: 1080, height: 1920, fps: 30, video_codec: "h264", audio_codec: "none" });
+    expect(m.checks.duration_s).toBeGreaterThanOrEqual(30);
+    expect(m.composition).toBe("DataRace-vertical");
+    expect(m.data.data_provenance).toBe("real");
+    const row = db.$client.prepare("select * from videos where id = ?").get(r.video_id) as Record<string, unknown>;
+    expect(row).toMatchObject({ topic_key: "energy", topic_source: "case.topic", case_id: "ci-ddddddd4", generation_job_id: job.id, format: "vertical", path: `renders/gen/ci-ddddddd4/${job.id}/video.mp4` });
+  }, 60_000);
+
+  it("finalize twice gives one videos row", async () => {
+    const { job, body } = videoJob();
+    const a = (await fin.finalize(job, body)) as { video_id: string };
+    const b = (await fin.finalize(job, body)) as { video_id: string };
+    expect(b.video_id).toBe(a.video_id);
+    expect((db.$client.prepare("select count(*) n from videos").get() as { n: number }).n).toBe(1);
+  }, 60_000);
+
+  it("a render of the wrong size fails the ffprobe checks and records nothing", async () => {
+    const wrong = videoJob("540x960", 41);
+    await expect(fin.finalize(wrong.job, wrong.body)).rejects.toThrow(/resolution 540x960/);
+    expect((db.$client.prepare("select count(*) n from videos").get() as { n: number }).n).toBe(0);
+  }, 60_000);
+
+  it("a video needs real data: sample props are refused before anything is copied", async () => {
+    const { job, p, body } = videoJob();
+    const f = path.join(p.out, "props.json");
+    writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, "utf8")), data_provenance: "sample" }));
+    await expect(fin.finalize(job, body)).rejects.toThrow(/needs data_provenance "real"/);
+  }, 60_000);
 });

@@ -13,6 +13,7 @@ import { EventBus } from "./events";
 import { GenerationConfigSchema } from "@statreel/schemas";
 import { AssetFetcher, ownerContact } from "./generation/assets";
 import { generationDataRoot, loadGenerationConfig } from "./generation/config";
+import { makeGate } from "./generation/gate";
 import { GenerationFinalizer } from "./generation/finalize";
 import { makeGenRenderHandler } from "./generation/gen-render";
 import { makeGenerationMcpTools } from "./generation/mcp-tools";
@@ -54,10 +55,10 @@ export async function createServer() {
   relay.start();
   // renders requested by the worker share the render lane (one render at a time)
   runner.register("gen_render", makeGenRenderHandler({ dataRoot: genData }), { lane: "render" });
-  const finalizer = new GenerationFinalizer({ db, board, dataRoot: genData, boardRoot: paths.board });
+  const finalizer = new GenerationFinalizer({ db, board, dataRoot: genData, boardRoot: paths.board, bus });
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
-  const app = buildApp({ generationGuard: queueGuard(queue), db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, finalizer, mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });
+  const app = buildApp({ generationGuard: queueGuard(queue), db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, finalizer, gate: makeGate(db), mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     const root = path.relative(process.cwd(), dist);
