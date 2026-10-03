@@ -13,7 +13,7 @@ import io
 import shutil
 import tempfile
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,7 +21,8 @@ import duckdb
 
 from .. import __version__
 from ..client import EthicalClient
-from ..snapshot import Snapshot, current_snapshot, read_manifest
+from ..snapshot import (SchemaDrift, Snapshot, compare_tables, current_snapshot, describe_parquet, previous_tables,
+                        read_manifest)
 
 LATEST = "https://api.github.com/repos/f1db/f1db/releases/latest"
 ASSET_NAME = "f1db-csv.zip"
@@ -32,11 +33,16 @@ class IntegrityError(ValueError):
     pass
 
 
+class MissingAsset(LookupError):
+    pass
+
+
 @dataclass
 class IngestResult:
     snapshot_dir: Path
     downloaded: bool
     release_tag: str
+    warnings: list[str] = field(default_factory=list)  # additive drift, skipped zip members
 
 
 def _table_name(member: str) -> str:
@@ -44,7 +50,8 @@ def _table_name(member: str) -> str:
     return stem.removeprefix("f1db-").replace("-", "_")
 
 
-def ingest(client: EthicalClient, raw_root: Path, *, now: datetime | None = None) -> IngestResult:
+def ingest(client: EthicalClient, raw_root: Path, *, now: datetime | None = None,
+           accept_drift: bool = False) -> IngestResult:
     now = now or datetime.now(timezone.utc)
     release = client.get(LATEST, headers=API_HEADERS).json()
     tag = release["tag_name"]
@@ -53,7 +60,11 @@ def ingest(client: EthicalClient, raw_root: Path, *, now: datetime | None = None
     if existing and read_manifest(existing).get("release_tag") == tag:
         return IngestResult(existing, downloaded=False, release_tag=tag)
 
-    asset = next(a for a in release["assets"] if a["name"] == ASSET_NAME)
+    asset = next((a for a in release["assets"] if a["name"] == ASSET_NAME), None)
+    if asset is None:
+        have = ", ".join(sorted(a["name"] for a in release["assets"])) or "none"
+        raise MissingAsset(f"release {tag} has no asset named {ASSET_NAME} (assets: {have}); "
+                           "f1db may have renamed it - check https://github.com/f1db/f1db/releases")
     blob = client.get(asset["url"], headers={"accept": "application/octet-stream"}).content
     digest = hashlib.sha256(blob).hexdigest()
     expected = (asset.get("digest") or "").removeprefix("sha256:")
@@ -62,8 +73,12 @@ def ingest(client: EthicalClient, raw_root: Path, *, now: datetime | None = None
 
     snap = Snapshot.create(raw_root, client.source, now, tool_version=__version__)
     try:
+        warnings: list[str] = []
         with zipfile.ZipFile(io.BytesIO(blob)) as z, tempfile.TemporaryDirectory() as tmp:
             con = duckdb.connect()
+            skipped = sorted(n for n in z.namelist() if not n.endswith(".csv") and not n.endswith("/"))
+            if skipped:
+                warnings.append(f"skipped non-CSV zip members: {', '.join(skipped)}")
             for member in sorted(n for n in z.namelist() if n.endswith(".csv")):
                 src = Path(tmp) / Path(member).name
                 src.write_bytes(z.read(member))
@@ -72,14 +87,25 @@ def ingest(client: EthicalClient, raw_root: Path, *, now: datetime | None = None
                     f"copy (select * from read_csv('{src.as_posix()}', header=true, all_varchar=false, sample_size=-1)) "
                     f"to '{(snap.dir / out).as_posix()}' (format parquet)"
                 )
-                rows = con.execute(f"select count(*) from read_parquet('{(snap.dir / out).as_posix()}')").fetchone()[0]
-                snap.add_file(out, rows=rows)
+                info = describe_parquet(snap.dir / out)
+                snap.add_file(out, rows=info["rows"])
+                snap.add_table(_table_name(member), info["columns"], info["rows"])
             con.close()
+        drift_accepted: list[str] = []
+        if existing:
+            report = compare_tables(previous_tables(existing), snap.tables)
+            warnings += report.warnings
+            if report.errors:
+                if not accept_drift:
+                    raise SchemaDrift(report.errors, warnings)
+                drift_accepted = report.errors
+                warnings += [f"ACCEPTED drift: {e}" for e in report.errors]
         if client.log_path.exists():
             shutil.copyfile(client.log_path, snap.dir / "fetch_log.jsonl")
         snap.finalize(extra={"release_tag": tag, "release_published_at": release.get("published_at"),
-                             "asset": ASSET_NAME, "asset_sha256": digest})
+                             "asset": ASSET_NAME, "asset_sha256": digest,
+                             "skipped_members": skipped, "accepted_drift": drift_accepted})
     except BaseException:
         shutil.rmtree(snap.dir, ignore_errors=True)
         raise
-    return IngestResult(snap.dir, downloaded=True, release_tag=tag)
+    return IngestResult(snap.dir, downloaded=True, release_tag=tag, warnings=warnings)

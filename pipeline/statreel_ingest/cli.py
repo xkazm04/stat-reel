@@ -8,6 +8,7 @@ import sys
 from .client import EthicalClient
 from .config import Paths, owner_contact
 from .registry import Registry
+from .snapshot import SchemaDrift
 from .throttle import BackedOff
 
 INGESTERS = {"f1db": "statreel_ingest.sources.f1db"}
@@ -25,10 +26,12 @@ def cmd_ingest(args: argparse.Namespace, paths: Paths) -> int:
     client = EthicalClient(registry, args.source, contact=owner_contact(paths.repo), cache_dir=paths.http_cache,
                            log_path=paths.raw / args.source / "fetch_log.jsonl", state_dir=paths.http_state)
     try:
-        res = module.ingest(client, paths.raw)
+        res = module.ingest(client, paths.raw, accept_drift=args.accept_drift)
     finally:
         client.close()
     state = "new snapshot" if res.downloaded else "unchanged (no download)"
+    for warning in res.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     print(f"{args.source} {res.release_tag}: {state} -> {res.snapshot_dir}")
     return 0
 
@@ -58,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     ing = sub.add_parser("ingest", help="fetch a registry source into an immutable raw snapshot")
     ing.add_argument("source")
+    ing.add_argument("--accept-drift", action="store_true",
+                     help="accept removed/renamed columns, type changes and row drops vs the previous snapshot")
     tr = sub.add_parser("transform", help="dbt build + lineage + capabilities")
     tr.add_argument("--select", default=None)
     sub.add_parser("capabilities", help="re-evaluate meta.capabilities")
@@ -71,6 +76,9 @@ def main(argv: list[str] | None = None) -> int:
     except BackedOff as stop:  # 429/503: the retry time is persisted; do not hammer
         print(f"stopped: {stop}", file=sys.stderr)
         return 4
+    except SchemaDrift as drift:
+        print(f"refused: {drift}", file=sys.stderr)
+        return 5
 
 
 if __name__ == "__main__":
