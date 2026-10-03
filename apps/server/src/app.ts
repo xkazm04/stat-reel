@@ -24,7 +24,8 @@ import { CASE_DECISIONS, type CaseDecision, type CaseIdeas, MIN_SPAN_YEARS, type
 import type { Db } from "./db";
 import { TopicService } from "./topics";
 import { type GenerationGuard, noGenerationJobs } from "./generation-guard";
-import { type GenerationRouteDeps, registerGenerationRoutes } from "./generation/routes";
+import { GenerationFlow } from "./generation/flow";
+import { defaultGate, type GenerationRouteDeps, registerGenerationRoutes } from "./generation/routes";
 
 export type AppDeps = {
   db: Db; calendar: CalendarService; board: BoardService; styles: StyleLibrary; cases: CaseIdeas; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
@@ -133,6 +134,9 @@ export function buildApp(d: AppDeps) {
     try { return c.json(d.calendar.cancel(c.req.param("id"))); } catch (e) { return bad(c, e); }
   });
 
+  // board and case decisions go through the generation flow when the queue is wired (D.2)
+  const flow = d.generation ? new GenerationFlow({ db: d.db, board: d.board, cases: d.cases, queue: d.generation.queue, gate: (r) => (d.generation?.gate ?? defaultGate)({ type: "generate_video", ...r }) }) : undefined;
+
   // ---- board (design outputs + use-case backlog behind the owner's gate; ADR 006)
   const withUrls = <T extends { image: string; video: string | null }>(i: T) => ({ ...i, image_url: `/files/board/${i.image}`, video_url: i.video ? `/files/board/${i.video}` : null });
   app.get("/api/board", (c) => c.json({ items: d.board.list({ status: c.req.query("status") }).map(withUrls), decisions: DECISIONS }));
@@ -154,9 +158,9 @@ export function buildApp(d: AppDeps) {
   app.post("/api/board/:id/decision", async (c) => {
     try {
       const b = (await c.req.json()) as { decision: Decision; note?: string };
-      const item = d.board.decide(c.req.param("id"), b.decision, b.note);
-      d.bus.emit({ type: "board.decided", id: item.id, decision: item.decision });
-      return c.json(item);
+      const res = flow ? flow.decideItem(c.req.param("id"), b.decision, b.note) : { item: d.board.decide(c.req.param("id"), b.decision, b.note) };
+      d.bus.emit({ type: "board.decided", id: res.item.id, decision: res.item.decision });
+      return c.json({ ...res, item: withUrls(res.item) });
     } catch (e) { return bad(c, e); }
   });
 
@@ -167,9 +171,9 @@ export function buildApp(d: AppDeps) {
     if (gen.hasRunning({ kind: "item", id })) return c.json({ error: "a generation job for this item is running; cancel it first" }, 409);
     try {
       gen.cancelQueued({ kind: "item", id });
-      const item = d.board.undo(id);
+      const { item, restored_ids } = d.board.undoDecision(id);
       d.bus.emit({ type: "board.decided", id: item.id, decision: null });
-      return c.json(item);
+      return c.json({ ...item, restored_ids });
     } catch (e) { return bad(c, e); }
   });
 
@@ -200,9 +204,9 @@ export function buildApp(d: AppDeps) {
   app.post("/api/cases/:id/decision", async (c) => {
     try {
       const b = (await c.req.json()) as { decision: CaseDecision; note?: string };
-      const idea = d.cases.decide(c.req.param("id"), b.decision, b.note);
-      d.bus.emit({ type: "cases.decided", id: idea.id, decision: idea.decision });
-      return c.json(idea);
+      const res = flow ? flow.decideCase(c.req.param("id"), b.decision, b.note) : { idea: d.cases.decide(c.req.param("id"), b.decision, b.note) };
+      d.bus.emit({ type: "cases.decided", id: res.idea.id, decision: res.idea.decision });
+      return c.json(res);
     } catch (e) { return bad(c, e); }
   });
 

@@ -13,6 +13,8 @@ import { EventBus } from "./events";
 import { GenerationConfigSchema } from "@statreel/schemas";
 import { AssetFetcher, ownerContact } from "./generation/assets";
 import { generationDataRoot, loadGenerationConfig } from "./generation/config";
+import { GenerationFinalizer } from "./generation/finalize";
+import { makeGenRenderHandler } from "./generation/gen-render";
 import { makeGenerationMcpTools } from "./generation/mcp-tools";
 import { GenerationQueue } from "./generation/queue";
 import { queueGuard } from "./generation-guard";
@@ -50,13 +52,12 @@ export async function createServer() {
   const assets = new AssetFetcher({ config: (() => { try { return loadGenerationConfig().config.web.download; } catch { return GenerationConfigSchema.parse({}).web.download; } })(), dataRoot: genData, getJob: (id) => queue.get(id), contact: ownerContact(paths.statreelLocal) });
   const relay = new GenerationEventsRelay(db, bus);
   relay.start();
-  // renders requested by the worker share the render lane (one render at a time); the composition lands in T9/T10
-  runner.register("gen_render", async () => {
-    throw new Error("generation renders are not wired yet (DataRace composition: T9, finalize: T10)");
-  }, { lane: "render" });
+  // renders requested by the worker share the render lane (one render at a time)
+  runner.register("gen_render", makeGenRenderHandler({ dataRoot: genData }), { lane: "render" });
+  const finalizer = new GenerationFinalizer({ db, board, dataRoot: genData, boardRoot: paths.board });
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
-  const app = buildApp({ generationGuard: queueGuard(queue), db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });
+  const app = buildApp({ generationGuard: queueGuard(queue), db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, finalizer, mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {
     const root = path.relative(process.cwd(), dist);
