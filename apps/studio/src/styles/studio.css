@@ -1938,3 +1938,34 @@ button.tl-b {
     animation: none;
   }
 }
+
+/* ---- copilot-gate: transcript hardening + render-gate states ---- */
+.llm-log-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.llm-jump {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+}
+.copilot__fail {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 8px 12px;
+}
+.rg__newer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rg__retry {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
