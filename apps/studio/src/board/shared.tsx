@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { type CSSProperties, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, type BoardDecision, type BoardItem, type BoardResponse, qk, serverError } from "../api";
 import { identVar } from "../components/idents";
 import { useHeatmap } from "../data";
@@ -21,6 +21,9 @@ import {
   groupFacts,
   type ItemState,
   itemState,
+  neighbourAfterRemoval,
+  nextPending,
+  prevPending,
   provenance,
   ratioOf,
   shapeOf,
@@ -403,8 +406,72 @@ export function ItemFacts({
 
 // ------------------------------------------------------------------ the gate
 
-const typing = (t: EventTarget | null): boolean =>
+export const typing = (t: EventTarget | null): boolean =>
   t instanceof HTMLElement && !!t.closest("input, textarea, select, [contenteditable='true']");
+
+/**
+ * A flag that is true for a moment after `flash()`: the "busy" feedback for a keystroke that was
+ * dropped because a decision is still in flight (silence reads as a broken key).
+ */
+export function useFlash(ms = 1200): [boolean, () => void] {
+  const [on, setOn] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const flash = useCallback(() => {
+    clearTimeout(timer.current);
+    setOn(true);
+    timer.current = setTimeout(() => setOn(false), ms);
+  }, [ms]);
+  return [on, flash];
+}
+
+/**
+ * J / K: next / previous pending shot, the same in every variant (triage without the mouse).
+ * `current` is the shot the cursor is on (open lightbox, drawer, loupe or focused tile); `jump`
+ * moves there. Ignored while typing, with a modifier, and (when `scope` is given) while focus is
+ * on something outside the variant, such as the filters.
+ */
+export function useJumpKeys(
+  order: readonly BoardItem[],
+  current: string | null,
+  jump: (id: string) => void,
+  scope?: React.RefObject<HTMLElement | null>,
+) {
+  const live = useRef({ order, current, jump });
+  live.current = { order, current, jump };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if ((k !== "j" && k !== "k") || e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return;
+      const t = e.target;
+      if (scope?.current && t instanceof Node && t !== document.body && !scope.current.contains(t)) return;
+      const { order: o, current: c, jump: go } = live.current;
+      const id = k === "j" ? nextPending(o, c) : prevPending(o, c);
+      if (!id) return;
+      e.preventDefault();
+      go(id);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [scope]);
+}
+
+/**
+ * When the shot the cursor is on leaves `order` (a decision under the pending filter, a reject
+ * anywhere), move to its neighbour instead of letting the view collapse (ADR 006). With no
+ * neighbour left the cursor stays, so the lightbox can still show what was just decided.
+ */
+export function useAdvanceOnRemoval(order: readonly { id: string }[], id: string | null, go: (id: string) => void) {
+  const last = useRef(order);
+  const goRef = useRef(go);
+  goRef.current = go;
+  useEffect(() => {
+    if (id && !order.some((i) => i.id === id)) {
+      const n = neighbourAfterRemoval(last.current, id);
+      if (n) goRef.current(n);
+    } else last.current = order;
+  }, [order, id]);
+}
 
 /**
  * The owner's gate for one item. A / S / C / B decide while `keys` is on and focus is not in a
@@ -430,9 +497,13 @@ export function Gate({
   const [note, setNote] = useState(item.note ?? "");
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const state = itemState(item);
+  const [busy, flashBusy] = useFlash();
   const run = useRef<(d: BoardDecision) => void>(() => {});
   run.current = (d: BoardDecision) => {
-    if (decide.isPending) return;
+    if (decide.isPending) {
+      flashBusy();
+      return;
+    }
     decide.mutate({ id: item.id, decision: d, note }, { onSuccess: (saved) => onDecided?.({ ...item, ...saved }, d) });
   };
 
@@ -460,7 +531,11 @@ export function Gate({
           Your gate
         </h3>
         <span aria-live="polite" className="bd-gate__now">
-          {decide.isPending ? (
+          {busy ? (
+            <span className="bd-busy" data-testid="gate-busy">
+              Still recording the last one, press again
+            </span>
+          ) : decide.isPending ? (
             <span className="bd-dim">Recording…</span>
           ) : state === "pending" ? (
             <span className="bd-dim">Not decided yet</span>

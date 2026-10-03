@@ -15,8 +15,12 @@ import {
   ledger,
   linearMove,
   NO_FILTER,
+  neighbourAfterRemoval,
   nextPending,
   parseVariant,
+  prevPending,
+  DEFAULT_FILTER,
+  isDefaultFilter,
   provenance,
   ratioOf,
   shapeOf,
@@ -264,6 +268,31 @@ describe("keyboard", () => {
     expect(nextPending([a, b, c, d], d.id)).toBe(b.id);
     expect(nextPending([a, b, c], b.id)).toBeNull();
     expect(nextPending([a, b], null)).toBe(b.id);
+  });
+});
+
+describe("triage cursor", () => {
+  const a = item({ decision: "accept", status: "accepted" });
+  const b = item();
+  const c = item({ decision: "reject_case", status: "rejected" });
+  const d = item();
+  it("finds the previous pending item, wrapping and skipping the current one", () => {
+    expect(prevPending([a, b, c, d], d.id)).toBe(b.id);
+    expect(prevPending([a, b, c, d], b.id)).toBe(d.id);
+    expect(prevPending([a, b, c], b.id)).toBeNull();
+    expect(prevPending([a, b, d], null)).toBe(d.id);
+  });
+  it("neighbourAfterRemoval: the next item, else the previous, else null", () => {
+    expect(neighbourAfterRemoval([a, b, c], b.id)).toBe(c.id);
+    expect(neighbourAfterRemoval([a, b, c], c.id)).toBe(b.id);
+    expect(neighbourAfterRemoval([a], a.id)).toBeNull();
+    expect(neighbourAfterRemoval([a, b], "nope")).toBeNull();
+    expect(neighbourAfterRemoval([], a.id)).toBeNull();
+  });
+  it("the default queue is pending", () => {
+    expect(DEFAULT_FILTER.status).toBe("pending");
+    expect(isDefaultFilter(DEFAULT_FILTER)).toBe(true);
+    expect(isDefaultFilter(NO_FILTER)).toBe(false);
   });
 });
 

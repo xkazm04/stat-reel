@@ -123,6 +123,10 @@ export const asStatusFilter = (v: unknown): StatusFilter =>
 
 export type BoardFilter = { status: StatusFilter; style: string; case: string };
 export const NO_FILTER: BoardFilter = { status: "all", style: "all", case: "all" };
+/** What the owner lands on: the review queue. Accepted shots are a click away, not mixed into it. */
+export const DEFAULT_FILTER: BoardFilter = { ...NO_FILTER, status: "pending" };
+export const isDefaultFilter = (f: BoardFilter): boolean =>
+  f.status === DEFAULT_FILTER.status && f.style === "all" && f.case === "all";
 
 export function filterItems<T extends BoardItem>(items: readonly T[], f: BoardFilter): T[] {
   return items.filter(
@@ -436,6 +440,28 @@ export function nextPending(items: readonly BoardItem[], fromId: string | null):
     if (it && it.id !== fromId && itemState(it) === "pending") return it.id;
   }
   return null;
+}
+
+/** The previous pending item before `fromId` in list order (wrapping), never `fromId` itself. */
+export function prevPending(items: readonly BoardItem[], fromId: string | null): string | null {
+  const start = fromId ? items.findIndex((i) => i.id === fromId) : items.length;
+  for (let k = 1; k <= items.length; k++) {
+    const it = items[(start - k + items.length * 2) % items.length];
+    if (it && it.id !== fromId && itemState(it) === "pending") return it.id;
+  }
+  return null;
+}
+
+/**
+ * Where the review cursor goes when `removedId` leaves `order` (a reject under the pending filter,
+ * any decision under "pending"): the item that took its place (the next one), else the one before
+ * it, so triage keeps its position instead of jumping to the top. `order` is the list BEFORE the
+ * removal; null when the id is not in it or nothing else is left.
+ */
+export function neighbourAfterRemoval<T extends { id: string }>(order: readonly T[], removedId: string): string | null {
+  const at = order.findIndex((i) => i.id === removedId);
+  if (at < 0) return null;
+  return (order[at + 1] ?? order[at - 1])?.id ?? null;
 }
 
 // ------------------------------------------------------------------ provenance

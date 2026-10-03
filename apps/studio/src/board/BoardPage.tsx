@@ -16,7 +16,7 @@
  * case-loop inbox.
  */
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import type { BoardItem } from "../api";
 import { Defer, SkeletonRows } from "../components/arrive";
 import { Empty, Failure, Loading } from "../components/ui";
@@ -25,7 +25,9 @@ import {
   axisOptions,
   type BoardFilter,
   countItems,
+  DEFAULT_FILTER,
   filterItems,
+  isDefaultFilter,
   NO_FILTER,
   parseVariant,
   STATUS_FILTERS,
@@ -35,6 +37,7 @@ import {
   visibleItems,
 } from "./board";
 import { parseTab, TABS, type Tab } from "./library";
+import { filterFromSearch, searchFromFilter } from "./search";
 import { useBoard, useCaseNames } from "./shared";
 import { UndoToastHost } from "./undo";
 import "./board.css";
@@ -63,6 +66,8 @@ const STATUS_WORD: Record<StatusFilter, string> = {
   accepted: "Accepted",
 };
 
+const hasAxisFilter = (f: BoardFilter) => f.style !== "all" || f.case !== "all";
+
 function useVariant(): [Variant, (v: Variant) => void] {
   const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const navigate = useNavigate();
@@ -80,19 +85,39 @@ function useTab(): [Tab, (t: Tab) => void] {
   return [parseTab(search.tab), set];
 }
 
+/** The filters, kept in the URL (`st`, `style`, `case`); the default is the pending queue. */
+function useFilter(): [BoardFilter, (next: BoardFilter | ((f: BoardFilter) => BoardFilter)) => void] {
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const navigate = useNavigate();
+  const filter = useMemo(
+    () => filterFromSearch(search as Parameters<typeof filterFromSearch>[0]),
+    [search],
+  );
+  const set = (next: BoardFilter | ((f: BoardFilter) => BoardFilter)) => {
+    const f = typeof next === "function" ? next(filter) : next;
+    void navigate({
+      to: "/board",
+      search: { ...search, ...searchFromFilter(f) } as never,
+      replace: true,
+      resetScroll: false,
+    });
+  };
+  return [filter, set];
+}
+
 export function BoardPage() {
   const board = useBoard();
   const names = useCaseNames();
   const [variant, setVariant] = useVariant();
   const [tab, setTab] = useTab();
-  const [filter, setFilter] = useState<BoardFilter>(NO_FILTER);
+  const [filter, setFilter] = useFilter();
   const all = board.data?.items ?? [];
   const counts = useMemo(() => countItems(all), [all]);
   const scoped = useMemo(() => filterItems(all, filter), [all, filter]);
   const items = useMemo(() => visibleItems(scoped), [scoped]);
   const styleOpts = useMemo(() => axisOptions(all, "style", names), [all, names]);
   const caseOpts = useMemo(() => axisOptions(all, "case", names), [all, names]);
-  const filtered = filter.status !== "all" || filter.style !== "all" || filter.case !== "all";
+  const filtered = !isDefaultFilter(filter);
   const V = variant === 2 ? LightTableVariant : variant === 3 ? MatrixVariant : WallVariant;
 
   return (
@@ -242,7 +267,7 @@ export function BoardPage() {
                 </select>
               </label>
               {filtered ? (
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setFilter(NO_FILTER)}>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setFilter(DEFAULT_FILTER)}>
                   Clear filters
                 </button>
               ) : null}
@@ -264,7 +289,10 @@ export function BoardPage() {
           ) : (
             <>
               {!items.length ? (
-                <Empty title="Nothing matches these filters" className="bd-empty">
+                <Empty
+                  title={filter.status === "pending" && !hasAxisFilter(filter) ? "Nothing left to review" : "Nothing matches these filters"}
+                  className="bd-empty"
+                >
                   {counts.total - counts.rejected} shots are open for review ({counts.rejected} rejected are hidden).{" "}
                   <button type="button" className="bd-linkbtn" onClick={() => setFilter(NO_FILTER)}>
                     Show every shot

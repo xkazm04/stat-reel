@@ -10,8 +10,34 @@ import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState }
 import type { BoardItem } from "../api";
 import { Arrow } from "../components/glyphs";
 import type { VariantProps } from "./BoardPage";
-import { caseOf, groupItems, isMoveKey, itemState, justify, nextPending, ratioOf, spatialMove, styleOf } from "./board";
-import { boxesOf, CaseChip, Gate, ItemFacts, Shot, StateMark, shotAlt, useWidth } from "./shared";
+import {
+  caseOf,
+  decisionForKey,
+  groupItems,
+  isMoveKey,
+  itemState,
+  justify,
+  neighbourAfterRemoval,
+  nextPending,
+  ratioOf,
+  spatialMove,
+  styleOf,
+} from "./board";
+import {
+  boxesOf,
+  CaseChip,
+  Gate,
+  ItemFacts,
+  Shot,
+  StateMark,
+  shotAlt,
+  typing,
+  useAdvanceOnRemoval,
+  useDecide,
+  useFlash,
+  useJumpKeys,
+  useWidth,
+} from "./shared";
 
 type GroupBy = "none" | "style" | "case";
 const CAPTION = 76; // px under each image: title, style, case
@@ -34,8 +60,68 @@ export function WallVariant({ items, all, names }: VariantProps) {
   const focusId = cur && order.some((i) => i.id === cur) ? cur : (order[0]?.id ?? null);
   const gap = width < 700 ? 10 : 14;
   const target = targetHeight(width);
+  const sectionRef = useRef<HTMLElement>(null);
+  const decide = useDecide();
+  const [busy, flashBusy] = useFlash();
+  /** the tile to focus once the decided one has left the grid (or stayed: triage always moves on) */
+  const refocus = useRef<string | null>(null);
+
+  // J / K: next / previous pending, in the lightbox or on the wall
+  useJumpKeys(
+    order,
+    open ?? focusId,
+    (id) => {
+      if (open) {
+        setOpen(id);
+        setCur(id);
+      } else {
+        setCur(id);
+        tiles.current.get(id)?.focus();
+        tiles.current.get(id)?.scrollIntoView({ block: "nearest" });
+      }
+    },
+    sectionRef,
+  );
+  // the lightbox follows its shot to the neighbour when a decision removes it from the list
+  useAdvanceOnRemoval(order, open, (id) => {
+    setOpen(id);
+    setCur(id);
+  });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs after every order change
+  useEffect(() => {
+    const id = refocus.current;
+    if (!id) return;
+    const el = tiles.current.get(id);
+    if (el) {
+      refocus.current = null;
+      el.focus({ preventScroll: true });
+    }
+  }, [order]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const d = decisionForKey(e.key);
+    const tile = (e.target as HTMLElement).closest<HTMLElement>(".bd-tile");
+    if (d && tile && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !typing(e.target)) {
+      // A / S / C / B on a focused tile: decide without opening the lightbox
+      e.preventDefault();
+      const it = order.find((i) => tiles.current.get(i.id) === tile);
+      if (!it) return;
+      if (decide.isPending) {
+        flashBusy();
+        return;
+      }
+      const next = neighbourAfterRemoval(order, it.id);
+      decide.mutate(
+        { id: it.id, decision: d },
+        {
+          onSuccess: () => {
+            refocus.current = next;
+            if (next) setCur(next);
+          },
+        },
+      );
+      return;
+    }
     if (!isMoveKey(e.key) || !focusId) return;
     const from = order.findIndex((i) => i.id === focusId);
     const to = spatialMove(boxesOf(order.map((i) => tiles.current.get(i.id) ?? null)), from, e.key);
@@ -60,7 +146,7 @@ export function WallVariant({ items, all, names }: VariantProps) {
   const openItem = order.find((i) => i.id === open) ?? all.find((i) => i.id === open) ?? null;
 
   return (
-    <section className="bd-wall" aria-label="Wall of shots">
+    <section className="bd-wall" aria-label="Wall of shots" ref={sectionRef}>
       <div className="bd-wall__bar">
         <span className="label">Group</span>
         <fieldset className="seg seg--sm">
@@ -75,8 +161,14 @@ export function WallVariant({ items, all, names }: VariantProps) {
           <kbd>←</kbd>
           <kbd>→</kbd>
           <kbd>↑</kbd>
-          <kbd>↓</kbd> move · <kbd>Enter</kbd> open · in the shot <kbd>A</kbd> <kbd>S</kbd> <kbd>C</kbd> <kbd>B</kbd>{" "}
-          decide · <kbd>Esc</kbd> close
+          <kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>A</kbd> <kbd>S</kbd> <kbd>C</kbd> <kbd>B</kbd> decide (on a
+          tile or in the shot) · <kbd>J</kbd> <kbd>K</kbd> next / previous pending · <kbd>Esc</kbd> close
+          {busy ? (
+            <b className="bd-busy" role="status" data-testid="wall-busy">
+              {" "}
+              · still recording, press again
+            </b>
+          ) : null}
         </span>
       </div>
 
@@ -180,6 +272,7 @@ function WallTile({
       style={{ width: w }}
       tabIndex={focusable ? 0 : -1}
       aria-haspopup="dialog"
+      aria-keyshortcuts="A S C B J K"
       onClick={onOpen}
     >
       <span className="bd-tile__img" style={{ height: h }}>
@@ -241,6 +334,9 @@ function Lightbox({
   useEffect(() => {
     setJustDecided(null);
     dlg.current?.querySelector(".bd-lb__panel")?.scrollTo({ top: 0 });
+    // the decided shot's gate unmounted (focus fell to <body>): keep it inside the modal
+    const a = document.activeElement;
+    if (dlg.current && (!a || a === document.body || !dlg.current.contains(a))) closeBtn.current?.focus({ preventScroll: true });
   }, [item.id]);
 
   useEffect(() => {
@@ -275,7 +371,7 @@ function Lightbox({
     >
       <div className="bd-lb__top">
         <span className="label num">
-          Shot {idx + 1} of {order.length}
+          {idx >= 0 ? `Shot ${idx + 1} of ${order.length}` : "Decided · no longer in this list"}
         </span>
         <div className="bd-lb__nav">
           <button
@@ -326,9 +422,10 @@ function Lightbox({
                 ref={nextBtn}
                 type="button"
                 className="btn btn--primary btn--sm"
+                aria-keyshortcuts="J"
                 onClick={() => onGo(pendingNext)}
               >
-                Next pending <Arrow />
+                Next pending <kbd>J</kbd> <Arrow />
               </button>
             ) : (
               <span className="bd-dim">Every shot in view is decided.</span>

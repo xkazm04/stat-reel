@@ -2161,3 +2161,9 @@ html.bd-modal-open {
       ". pitch pitch";
   }
 }
+
+/* Dropped keystroke while a decision is in flight (board-triage-first): visible, never silent. */
+.bd-busy {
+  color: var(--color-signal);
+  font-weight: 600;
+}

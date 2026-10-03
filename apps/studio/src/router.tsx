@@ -13,6 +13,7 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { api, qk } from "./api";
+import { parseBoardSearch } from "./board/search";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
 import { WipeProvider } from "./components/ui";
@@ -161,6 +162,8 @@ const calendarRoute = createRoute({
 const boardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/board",
+  // filters live in the URL (board-triage-first): a reload lands on the same queue
+  validateSearch: parseBoardSearch,
   component: BoardPage,
   loader: () => warm({ queryKey: qk.board, queryFn: () => api.board() }),
 });
