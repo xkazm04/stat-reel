@@ -28,8 +28,8 @@
    - **Renders and domain writes** go through server callbacks, so renders keep one-at-a-time on the existing render lane and all board/video writes stay in the server's services.
    - SQLite runs in WAL mode with a `busy_timeout`.
 3. **The Claude Code CLI is the default executor**, behind an adapter. It's configurable (`.statreel/config.json` → `generation`, and the env vars `STATREEL_GEN_BIN`, `STATREEL_GEN_MODEL`, `GEN_MODE`, `STATREEL_GEN_WORKER`). The default model is "Sonnet 5.5", pinned by full id once probed.
-   - **Invocation:** `spawn(bin, args[], {shell:false, cwd: data/generation/<id>/work})`, prompt on stdin, print mode with `--output-format stream-json`, `--permission-mode dontAsk --permission-prompts none`.
-   - **Tools:** `Read, Write, Edit, Glob, Grep, WebSearch, WebFetch` plus `mcp__statreel__*`, with **Bash and PowerShell disallowed**; `--strict-mcp-config` and `--no-session-persistence`.
+   - **Invocation:** `spawn(bin, args[], {shell:false, cwd: data/generation/<id>/work})`, prompt on stdin, print mode with `--output-format stream-json`, `--restricted --permission-mode dontAsk --permission-prompts none`.
+   - **Tools:** `Read, Write, Edit, Glob, Grep, WebSearch, WebFetch` plus `mcp__statreel__*`, with **Bash and PowerShell disallowed**; `--strict-mcp-config` and `--no-session-persistence`. **`--restricted` is kept** (T8 probes): without it `Write`/`Read` reached outside the cwd under `dontAsk` and the repo's `CLAUDE.md` was loaded; with it the file tools are confined, settings/CLAUDE.md are ignored, and the web tools stay available because `--tools` names them.
    - The session **ends by itself** when validation is clean; a post-result kill is the safety net.
 4. **Assets from the web (Q5).** Sessions may search and fetch pages to find assets such as transparent logos. **Files are saved only through the server-side MCP tool `fetch_asset`**, which enforces:
    - https only, a host allowlist (Wikimedia by default), MIME and size caps, a per-job count cap;
@@ -63,11 +63,11 @@
 - A second process must be running (`pnpm dev`/`start` and Playwright start it), and the UI shows when the worker is offline.
 - **New exposure from the web:** prompt injection and GET-based exfiltration. Mitigated by the absence of a shell, writes confined to the job folder, a read-only data MCP, `fetch_asset` rules, an optional `fetchDomains` allowlist, and output validation.
 - **Unbounded cost and runtime** until caps are configured. Cancel is always available.
-- **Open (verify in T8):**
-  - the model id;
-  - whether `--restricted` blocks the web tools (it's dropped for now);
-  - domain-scoped `WebFetch(domain:…)` rules;
-  - file confinement under `dontAsk` without `--restricted`;
-  - prompt exit after `result` with an MCP server configured;
-  - Commons licence metadata coverage;
-  - `--system-prompt-file` for the co-pilot.
+- **Resolved in T8** (details and commands in `docs/specs/2026-10-03-app-refresh/T8-probe-results.md`):
+  - model id: `claude-sonnet-5-5` works (`sonnet` aliases to it), `claude-sonnet-5.5` does not;
+  - `--restricted` keeps WebSearch/WebFetch when `--tools` names them, so it stays; file confinement needs it;
+  - `WebFetch(domain:...)` rules work under `dontAsk`;
+  - the `mcp__statreel__*` wildcard is accepted; the CLI exits about 0.6 s after `result` with an HTTP MCP server;
+  - Commons `extmetadata` (licence, artist, credit, restrictions) is present for the two real logo files tested (n = 2);
+  - `--system-prompt-file` still works for the co-pilot.
+- **Ledger:** `fetch_asset` appends to `work/out/assets.json` (the session never writes it) and to an authoritative `data/generation/<id>/fetched-assets.json` outside the session's reach.

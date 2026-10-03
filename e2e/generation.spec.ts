@@ -43,3 +43,15 @@ test("generation: a visual_options job runs queued -> done in the worker process
   expect(existsSync(path.join(out, "variants", "v3.props.json"))).toBe(true);
   expect(JSON.parse(readFileSync(path.resolve("data", "generation", job.id, "work", "case.json"), "utf8")).title).toBe("e2e generation probe");
 });
+
+test("generation: the MCP endpoint offers fetch_asset and refuses it for a job that is not running", async ({ request }) => {
+  const rpc = async (id: number, method: string, params: object = {}) => {
+    const res = await request.post(`${API}/mcp`, { headers: { accept: "application/json, text/event-stream", "content-type": "application/json" }, data: { jsonrpc: "2.0", id, method, params } });
+    return (await res.json()) as { result?: { tools?: { name: string }[]; content?: { text: string }[] } };
+  };
+  const list = await rpc(1, "tools/list");
+  const names = list.result?.tools?.map((t) => t.name) ?? [];
+  expect(names).toEqual(expect.arrayContaining(["fetch_asset", "validate_generation_output", "get_generation_context", "compute_timing_plan"]));
+  const call = await rpc(2, "tools/call", { name: "fetch_asset", arguments: { job_id: "gj-00000000", url: "https://upload.wikimedia.org/x.svg", kind: "logo", entity: "x" } });
+  expect(JSON.parse(call.result?.content?.[0]?.text ?? "{}").ok).toBe(false);
+});
