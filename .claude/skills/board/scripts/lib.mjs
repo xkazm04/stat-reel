@@ -332,6 +332,41 @@ export function assessFrameFacts(declared, tables, ctx = {}) {
   return { ok: problems.length === 0, declared: true, problems };
 }
 
+// ---- safe box and attribution gates (were prose in the briefs; mechanical now) --------------------
+
+/** Required on screen for the whole run (CC BY 4.0 for F1DB). */
+export const ATTRIBUTION = "Data: F1DB (CC BY 4.0)";
+
+/**
+ * Margins of the critical box per format, in artboard px. Vertical: 1080 - 65 - 130 = the 885 px
+ * critical width of DESIGN.md (captions), top 270 and bottom 670 for platform UI. No landscape box is
+ * defined yet, so landscape designs are skipped (with a note) rather than judged on a made-up box.
+ */
+export const SAFE_BOX = { vertical: { top: 270, bottom: 670, left: 65, right: 130 }, landscape: null };
+const SAFE_SLACK = 2; // px: sub-pixel glyph overhang is not a violation
+
+/**
+ * Readable TEXT outside the safe box. rects are [{text, x, y, w, h, t?}] in artboard px (DOM text
+ * ranges and canvas text boxes as measured by check.mjs). Atmosphere, texture and graphics may sit in
+ * the bands outside the box; only text must not, so only text is passed in.
+ */
+export function textOutsideSafeBox(rects, format) {
+  if (!(format in FORMATS)) return { ok: false, outside: [], skipped: null, problems: [`unknown format ${format}`] };
+  const m = SAFE_BOX[format];
+  if (!m) return { ok: true, outside: [], skipped: `no ${format} safe box defined: not checked` };
+  const [W, H] = FORMATS[format];
+  const box = { l: m.left - SAFE_SLACK, t: m.top - SAFE_SLACK, r: W - m.right + SAFE_SLACK, b: H - m.bottom + SAFE_SLACK };
+  const outside = (rects ?? []).filter((r) => r.x < box.l || r.y < box.t || r.x + r.w > box.r || r.y + r.h > box.b);
+  return { ok: outside.length === 0, outside, skipped: null };
+}
+
+/** Is the required attribution on screen? texts are one frame's visible strings; whitespace-insensitive, may span text nodes. */
+export function attributionPresent(texts, required = ATTRIBUTION) {
+  const squash = (s) => String(s).replace(/\s+/g, "").toLowerCase();
+  const seen = squash((texts ?? []).map((t) => (typeof t === "string" ? t : t?.text ?? "")).join(" "));
+  return { ok: seen.includes(squash(required)) };
+}
+
 // ---- mass loops (cheap seats, many rounds) -------------------------------------------------
 
 /**

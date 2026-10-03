@@ -78,8 +78,7 @@ these style + case pairings:
 - **Beginning and end.** At t = 0 the title and the chart frame are already readable. The run ends on
   the latest data with a short hold. The cut-out comes from the middle, so the middle has to be as
   good as the ends.
-- In vertical designs, keep critical content inside the safe box (top 270, bottom 670, left 65,
-  right 130) for the whole run.
+- Vertical designs keep readable text inside the safe box for the whole run (gated by `check.mjs`).
 
 ## Deliverable, per variant (in addition to the contract below)
 
@@ -133,7 +132,7 @@ these style + case pairings:
 
 ## Hard constraints
 
-- The attribution `Data: F1DB (CC BY 4.0)` is visible for the whole run.
+- The attribution `Data: F1DB (CC BY 4.0)` stays on screen for the whole run (gated by `check.mjs`).
 - No league, team, sponsor or broadcaster marks, and no athlete photos.
 - Fonts only from `data/fonts/` (Barlow Condensed, Inter, JetBrains Mono; OFL). Numbers use tabular
   figures. No network.

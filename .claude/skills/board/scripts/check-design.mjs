@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { assessClockLabels, assessFrameFacts, assessLongevity, checkImages, dataReadySports, dataReadyUseCases, FORMATS, longevitySamples, resolveFacts, stabilityProbe, stagedSeasonRange, validateDesign } from "./lib.mjs";
+import { assessClockLabels, assessFrameFacts, assessLongevity, ATTRIBUTION, attributionPresent, checkImages, dataReadySports, dataReadyUseCases, FORMATS, longevitySamples, resolveFacts, stabilityProbe, stagedSeasonRange, textOutsideSafeBox, validateDesign } from "./lib.mjs";
 
 /** Owner rule (2026-10-01): nothing on screen is small. Every readable text is >= 28 px in the artboard. */
 export const MIN_TEXT_PX = 28;
@@ -22,8 +22,17 @@ const CANVAS_PROBE = `(() => {
         const px = parseFloat((this.font.match(/([\\d.]+)px/) || [])[1] || "10");
         const m = this.getTransform();
         const c = this.canvas;
-        const css = c.getBoundingClientRect ? c.getBoundingClientRect().height / (c.height || 1) : 1;
-        if (this.globalAlpha > 0.15) window.__textLog.push({ text: String(text).slice(0, 24), px: px * Math.hypot(m.c, m.d) * css });
+        const cr = c.getBoundingClientRect();
+        const css = cr.height / (c.height || 1);
+        // text box in viewport px (align/baseline honoured, canvas transform and CSS scale applied): safe-box gate
+        const w = this.measureText(String(text)).width;
+        const al = this.textAlign;
+        const x0 = al === "center" ? rest[0] - w / 2 : al === "right" || al === "end" ? rest[0] - w : rest[0];
+        const bl = this.textBaseline;
+        const y0 = bl === "top" || bl === "hanging" ? rest[1] : bl === "middle" ? rest[1] - px / 2 : bl === "bottom" || bl === "ideographic" ? rest[1] - px : rest[1] - px * 0.8;
+        const pts = [[x0, y0], [x0 + w, y0], [x0, y0 + px], [x0 + w, y0 + px]].map(([x, y]) => [(m.a * x + m.c * y + m.e) * (cr.width / (c.width || 1)) + cr.left, (m.b * x + m.d * y + m.f) * css + cr.top]);
+        const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+        if (this.globalAlpha > 0.15) window.__textLog.push({ text: String(text).slice(0, 48), px: px * Math.hypot(m.c, m.d) * css, x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
       } catch {}
       return orig.call(this, text, ...rest);
     };
@@ -48,7 +57,7 @@ const MEASURE_TEXT = (lineToEm) => {
     r.selectNodeContents(n);
     for (const rc of r.getClientRects()) {
       if (rc.width < 1 || rc.height < 1 || rc.right < 0 || rc.bottom < 0 || rc.left > W || rc.top > H) continue;
-      out.push({ text: text.slice(0, 24), px: rc.height / lineToEm });
+      out.push({ text: text.slice(0, 48), px: rc.height / lineToEm, x: rc.left, y: rc.top, w: rc.width, h: rc.height });
       break;
     }
   }
@@ -165,10 +174,19 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
       }
       if (mismatches) errors.push(`not seek-stable: ${mismatches} frame(s) differ when revisited (the frame must be a pure function of t)`);
       const small = new Map();
+      const frames = [];
       for (const f of [0.1, 0.3, 0.5, 0.7, 0.9]) {
-        await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); }, Math.round(meta.duration_s * f * 30) / 30);
-        for (const x of await page.evaluate(MEASURE_TEXT, LINE_TO_EM)) if (x.px < MIN_TEXT_PX - 1 && !small.has(x.text)) small.set(x.text, x.px);
+        const t = Math.round(meta.duration_s * f * 30) / 30;
+        await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); }, t);
+        const found = await page.evaluate(MEASURE_TEXT, LINE_TO_EM);
+        frames.push({ t, found });
+        for (const x of found) if (x.px < MIN_TEXT_PX - 1 && !small.has(x.text)) small.set(x.text, x.px);
       }
+      // safe box + attribution gates (lib.textOutsideSafeBox / attributionPresent): same frames, same capture
+      const box = textOutsideSafeBox(frames.flatMap(({ t, found }) => found.map((x) => ({ ...x, t }))), meta.format);
+      if (box.outside.length) errors.push(`safe box: ${box.outside.length} text item(s) outside it, e.g. ${box.outside.slice(0, 3).map((o) => `"${o.text}" at t=${o.t.toFixed(1)}s (${Math.round(o.x)},${Math.round(o.y)})`).join(", ")} - readable text stays inside the safe box (atmosphere may bleed out)`);
+      const noAttr = frames.filter(({ found }) => !attributionPresent(found.map((x) => x.text)).ok).map(({ t }) => t.toFixed(1));
+      if (noAttr.length) errors.push(`attribution "${ATTRIBUTION}" is not visible at t=${noAttr.join(", ")}s - it must be on screen for the whole run`);
       if (small.size) errors.push(`text too small: ${small.size} text item(s) under ${MIN_TEXT_PX} px, e.g. ${[...small].slice(0, 4).map(([s, px]) => `"${s}" ${px.toFixed(0)}px`).join(", ")} - every readable text must be >= ${MIN_TEXT_PX} px; drop it or enlarge it`);
     }
   } catch (e) {

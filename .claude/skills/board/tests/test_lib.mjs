@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyFeedback, assessClockLabels, assessFrameFacts, assessLongevity, dataReadySports, dataReadyUseCases, emptyLedger, excerptWindow, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, stagedSeasonRange, validateDesign, validateShot } from "../scripts/lib.mjs";
+import { applyFeedback, assessClockLabels, assessFrameFacts, assessLongevity, attributionPresent, dataReadySports, dataReadyUseCases, emptyLedger, excerptWindow, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, stagedSeasonRange, textOutsideSafeBox, validateDesign, validateShot } from "../scripts/lib.mjs";
 
 const item = (id, decision, style, useCase, note = null, proposed = null) => ({
   id, decision, note, decided_at: `2026-09-30T10:0${id.length}:00Z`, style: { id: style, name: style }, use_case_id: useCase, proposed_case: proposed,
@@ -317,4 +317,33 @@ test("a proposed case must be about a sport with data-ready cells and fit the st
   assert.deepEqual(validateDesign(out, { ...opts, period: null }), []); // range unknown (harvest pre-check): skipped
   assert.deepEqual(stagedSeasonRange({ f1_seasons: [{ season: 1950 }, { season: 2025 }] }), { from: 1950, to: 2025 });
   assert.equal(stagedSeasonRange({}), null);
+});
+
+// ---- safe box and attribution
+
+const rect = (text, x, y, w = 200, h = 40) => ({ text, x, y, w, h, t: 12 });
+
+test("safe box (vertical): text inside passes, text in the bands fails", () => {
+  // box: x 65..950, y 270..1250
+  assert.deepEqual(textOutsideSafeBox([rect("1990", 65, 300), rect("Wins", 700, 1200, 250, 50)], "vertical").outside, []);
+  const r = textOutsideSafeBox([rect("1990", 80, 300), rect("tick", 80, 100), rect("source", 80, 1300), rect("left", 20, 600), rect("right", 800, 600, 200)], "vertical");
+  assert.deepEqual(r.outside.map((o) => o.text), ["tick", "source", "left", "right"]);
+  assert.equal(r.ok, false);
+  assert.equal(textOutsideSafeBox([rect("edge", 64, 269)], "vertical").ok, true); // 2 px slack
+});
+
+test("safe box: landscape has no box defined and is skipped with a note; unknown formats fail", () => {
+  const r = textOutsideSafeBox([rect("x", 0, 0)], "landscape");
+  assert.equal(r.ok, true);
+  assert.match(r.skipped, /no landscape safe box/);
+  assert.equal(textOutsideSafeBox([], "square").ok, false);
+});
+
+test("attribution: present when the string is on screen (any spacing, any node split), missing otherwise", () => {
+  assert.equal(attributionPresent(["1990", "Data: F1DB (CC BY 4.0)"]).ok, true);
+  assert.equal(attributionPresent([{ text: "Data:" }, { text: "F1DB (CC BY 4.0)" }]).ok, true);
+  assert.equal(attributionPresent(["DATA:  F1DB  (CC BY 4.0)"]).ok, true);
+  assert.equal(attributionPresent(["1990", "Source: F1DB"]).ok, false);
+  assert.equal(attributionPresent([]).ok, false);
+  assert.equal(attributionPresent(["Data: Ergast"], "Data: Ergast").ok, true);
 });
