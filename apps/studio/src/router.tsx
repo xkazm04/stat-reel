@@ -15,6 +15,7 @@ import {
 import { useEffect, useRef } from "react";
 import { api, qk } from "./api";
 import { parseBoardSearch } from "./board/search";
+import { parseCalendarSearch } from "./calendar";
 import { PagePending } from "./components/arrive";
 import { Nav } from "./components/Nav";
 import { useNavFocus } from "./hooks/useNavFocus";
@@ -191,6 +192,7 @@ const publishRoute = createRoute({
 const calendarRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/calendar",
+  validateSearch: parseCalendarSearch, // ?project=<id> deep-links a ready video (ControlRoom)
   component: CalendarPage,
   loader: () => warm(calendarQuery, metricsQuery, heatmapQuery),
 });
