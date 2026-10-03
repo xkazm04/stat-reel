@@ -12,6 +12,19 @@ export {
   rollingDigits,
 } from "./Callout";
 export { DataClock, type DataClockProps, dataClockLabel, MIN_CLOCK_FONT } from "./DataClock";
+export {
+  fallbackColor,
+  headAt,
+  type LineRaceLayout,
+  type LineRaceOptions,
+  lineRaceLayout,
+  type RaceHead,
+  type RacePadding,
+  type RacePoint,
+  type RaceSeries,
+  type RaceSeriesLayout,
+} from "./line-race";
+export { LineRace, type LineRaceProps } from "./LineRace";
 export { hashString, seededRandom } from "./rng";
 export { lineProgress, Slopegraph, type SlopegraphLabels, type SlopegraphProps } from "./Slopegraph";
 export {
