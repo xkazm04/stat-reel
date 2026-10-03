@@ -92,7 +92,8 @@ const indexRoute = createRoute({
     mode: asMode(s.mode),
   }),
   component: FrontPhotoFinish,
-  loader: () => warm(projectsQuery, metricsQuery, heatmapQuery),
+  // what the Front reads (useProjects, useHeatmap, useSources); it never reads metrics
+  loader: () => warm(projectsQuery, sourcesQuery, heatmapQuery),
 });
 
 /**

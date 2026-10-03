@@ -254,14 +254,41 @@ function Frame({
       el.textContent = clock(0);
       return;
     }
+    // runs only while the frame is on screen and the tab is visible (mirrors useScan); the clock
+    // keeps counting from the page opening, so a pause hides time rather than losing it
     const t0 = performance.now();
     let raf = 0;
+    let visible = true;
     const tick = () => {
+      raf = 0;
       el.textContent = clock((performance.now() - t0) / 1000);
-      raf = window.requestAnimationFrame(tick);
+      if (visible && !document.hidden) raf = window.requestAnimationFrame(tick);
     };
-    raf = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(raf);
+    const start = () => {
+      if (!raf) raf = window.requestAnimationFrame(tick);
+    };
+    start();
+    const onVis = () => {
+      if (!document.hidden && visible) start();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const fr = frame.current;
+    const io =
+      fr && "IntersectionObserver" in window
+        ? new IntersectionObserver(
+            (en) => {
+              visible = !!en[0]?.isIntersecting;
+              if (visible) start();
+            },
+            { threshold: 0.02 },
+          )
+        : null;
+    if (fr) io?.observe(fr);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVis);
+      io?.disconnect();
+    };
   }, [reduced]);
 
   useScan(canvas, frame, splitRef, waysRef, lx, reduced);
