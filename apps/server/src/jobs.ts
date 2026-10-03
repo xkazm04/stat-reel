@@ -87,7 +87,7 @@ export class JobRunner {
   }
 
   /**
-   * Graceful stop: no new job starts, running jobs are aborted with cause "shutdown" and awaited up to
+   * Graceful stop: no new job starts, running jobs are aborted with cause "shutdown" (rows go back to queued, like a crash) and awaited up to
    * `timeoutMs` (a handler that ignores its signal is abandoned; resume() re-queues its row next start).
    */
   async shutdown(timeoutMs = 10_000): Promise<{ aborted: number; timedOut: boolean }> {
@@ -101,6 +101,16 @@ export class JobRunner {
     ]);
     clearTimeout(timer);
     return { aborted: running.length, timedOut };
+  }
+
+  /** Shutdown is not an owner decision: put the row back as a crash would leave it, so resume() re-runs it. */
+  private requeueInterrupted(id: string): void {
+    this.db.update(jobs).set({ status: "queued", started_at: null, progress: 0, error: "interrupted by shutdown" }).where(eq(jobs.id, id)).run();
+  }
+
+  private settleAborted(id: string, signal: AbortSignal): void {
+    if (signal.reason === "shutdown") this.requeueInterrupted(id);
+    else this.finish(id, "cancelled", null, this.cancelError(signal));
   }
 
   private cancelError(signal: AbortSignal): string {
@@ -165,10 +175,10 @@ export class JobRunner {
     const done = (async () => {
       try {
         const result = await handler(JSON.parse(next.params_json), ctx);
-        if (controller.signal.aborted) this.finish(next.id, "cancelled", null, this.cancelError(controller.signal));
+        if (controller.signal.aborted) this.settleAborted(next.id, controller.signal);
         else this.finish(next.id, "succeeded", result, null);
       } catch (err) {
-        if (controller.signal.aborted) this.finish(next.id, "cancelled", null, this.cancelError(controller.signal));
+        if (controller.signal.aborted) this.settleAborted(next.id, controller.signal);
         else if (err instanceof Refusal) this.finish(next.id, "refused", null, err.message);
         else this.finish(next.id, "failed", null, err instanceof Error ? err.message : String(err));
       } finally {

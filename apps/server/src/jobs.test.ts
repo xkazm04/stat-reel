@@ -149,8 +149,8 @@ describe("JobRunner", () => {
     log.mockRestore();
   });
 
-  it("records the cancel cause: owner by default, shutdown from shutdown()", async () => {
-    const { runner } = setup();
+  it("records the cancel cause (owner) and re-queues jobs interrupted by shutdown", async () => {
+    const { runner, db } = setup();
     const hang = async (_p: unknown, ctx: { signal: AbortSignal }) => {
       await new Promise((_, reject) => ctx.signal.addEventListener("abort", () => reject(new Error("aborted"))));
       return {};
@@ -169,11 +169,17 @@ describe("JobRunner", () => {
     await tick();
     const res = await runner.shutdown(1000);
     expect(res).toEqual({ aborted: 1, timedOut: false });
-    expect(runner.get(b)).toMatchObject({ status: "cancelled", error: "cancelled (cause: shutdown)" });
+    expect(runner.get(b)).toMatchObject({ status: "queued", error: "interrupted by shutdown", progress: 0, started_at: null });
     // nothing starts after shutdown; the row stays queued for the next process
     const c = runner.enqueue("render", {});
     await tick();
     expect(runner.get(c)?.status).toBe("queued");
+    // the next process resumes both interrupted and never-started rows
+    const next = new JobRunner(db, new EventBus());
+    next.register("render", async () => ({ ok: true }));
+    next.resume();
+    await next.idle();
+    expect([b, c].map((id) => next.get(id)?.status)).toEqual(["succeeded", "succeeded"]);
   });
 
   it("shutdown gives up on a handler that ignores its signal", async () => {
