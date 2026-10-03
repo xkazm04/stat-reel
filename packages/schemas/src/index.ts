@@ -287,7 +287,8 @@ export const ProvenanceManifestSchema = z.object({
     /** measured from the browser's font report; absent when the report was missing (the gate then denies it, never a silent 0) */
     font_fallbacks: z.number().int().nullish(),
     width: z.number().int(), height: z.number().int(), fps: z.number(), duration_s: z.number(),
-    video_codec: z.string(), audio_codec: z.string(), black_frames_s: z.number().default(0),
+    video_codec: z.string(), audio_codec: z.string(), /** measured by blackdetect; absent stays absent so the gate denies it (a default 0 would turn "not measured" into "no black frames") */
+    black_frames_s: z.number().nullish(),
   }),
   llm: z.object({ engine: z.string(), session_id: z.string().nullish() }).nullish(),
   disclosure: z.object({ ai_voice: z.boolean(), ai_music: z.boolean(), on_frame: z.boolean() }),

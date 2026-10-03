@@ -27,7 +27,7 @@ sample_manifest := {
 			"plan_tier": "starter", "generated_at": "2026-09-29T20:00:00Z", "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 		},
 	],
-	"fonts": [{"family": "Barlow Condensed", "license": "OFL-1.1", "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}],
+	"fonts": [{"family": "Barlow Condensed", "license": "OFL-1.1", "sha256": "460f141ec8f6c9a1516bfd2bd9fe71656246d7a9d04a0955faf53158d8970c4c"}],
 	"captions": {"burned_in": true, "sidecar": ["captions.srt", "captions.vtt"], "max_cps": 17.2},
 	"checks": {
 		"loudness_lufs": -14.1, "true_peak_dbtp": -2.3, "loudness_range_lu": 6.1, "safe_zone_violations": 0,
@@ -78,7 +78,7 @@ test_empty_input_denied if {
 }
 
 test_checks_run_lists_every_rule if {
-	count(publish.checks_run) == 24
+	count(publish.checks_run) == 27
 	"evidence_missing" in publish.checks_run
 	"visibility_not_private" in publish.checks_run
 	"description_missing_attribution" in publish.checks_run
@@ -382,22 +382,123 @@ test_on_frame_not_needed_without_audio if not denies(replace("/manifest/audio", 
 
 # ------------------------------------------------------------------ visibility_not_private
 
-msg_public := "visibility public requires owner approval: v1 publishes private/draft only"
+msg_public := "visibility public on youtube requires owner approval: v1 publishes private only (draft only where the platform has drafts)"
+
+msg_vis(v, platform) := sprintf("visibility %v on %v requires owner approval: v1 publishes private only (draft only where the platform has drafts)", [v, platform])
+
+visibility_denies(inp) if {
+	some m in publish.deny with input as inp
+	startswith(m, "visibility ")
+}
 
 test_visibility_negative if not denies(base, msg_public)
 
-test_visibility_draft_ok if {
-	count([m | some m in publish.deny; contains(m, "visibility")]) == 0 with input as replace("/target/visibility", "draft")
+# YouTube is private-only: the adapter throws on draft, so the gate must not wave it through.
+test_visibility_draft_denied_on_youtube if denies(replace("/target/visibility", "draft"), msg_vis("draft", "youtube"))
+
+test_visibility_draft_ok_on_tiktok if {
+	inp := patched([
+		{"op": "replace", "path": "/target/platform", "value": "tiktok"},
+		{"op": "replace", "path": "/target/visibility", "value": "draft"},
+	])
+	not visibility_denies(inp)
+}
+
+test_visibility_unlisted_denied_on_tiktok if {
+	inp := patched([
+		{"op": "replace", "path": "/target/platform", "value": "tiktok"},
+		{"op": "replace", "path": "/target/visibility", "value": "unlisted"},
+	])
+	denies(inp, msg_vis("unlisted", "tiktok"))
 }
 
 test_visibility_public_positive if denies(replace("/target/visibility", "public"), msg_public)
 
-test_visibility_unlisted_positive if {
-	denies(replace("/target/visibility", "unlisted"), "visibility unlisted requires owner approval: v1 publishes private/draft only")
+test_visibility_unlisted_positive if denies(replace("/target/visibility", "unlisted"), msg_vis("unlisted", "youtube"))
+
+test_visibility_missing_positive if denies(remove("/target/visibility"), msg_vis("<missing>", "youtube"))
+
+test_visibility_missing_platform_private_only if {
+	inp := patched([{"op": "remove", "path": "/target/platform"}, {"op": "replace", "path": "/target/visibility", "value": "draft"}])
+	denies(inp, msg_vis("draft", "<missing>"))
 }
 
-test_visibility_missing_positive if {
-	denies(remove("/target/visibility"), "visibility <missing> requires owner approval: v1 publishes private/draft only")
+# ------------------------------------------------------------------ font_not_in_allowlist
+
+lying_font_msg := "font Barlow Condensed (sha256 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) is not in the shipped-font allow-list"
+
+test_font_allowlist_negative if not denies(base, lying_font_msg)
+
+test_font_allowlist_wrong_sha_positive if {
+	denies(replace("/manifest/fonts/0/sha256", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), lying_font_msg)
+}
+
+test_font_allowlist_unknown_family_positive if {
+	inp := replace("/manifest/fonts/0/family", "Comic Sans")
+	some m in publish.deny with input as inp
+	startswith(m, "font Comic Sans (sha256 ")
+}
+
+test_font_allowlist_empty_data_denies_all if {
+	some m in publish.deny with input as base with data.statreel.fonts_allow as []
+	startswith(m, "font Barlow Condensed (sha256 ")
+}
+
+# ------------------------------------------------------------------ ai_disclosure_flag_missing
+
+msg_flag := "manifest declares AI audio but target.ai_disclosure is not set"
+
+test_ai_flag_negative if not denies(base, msg_flag)
+
+test_ai_flag_target_false_positive if denies(replace("/target/ai_disclosure", false), msg_flag)
+
+test_ai_flag_target_missing_positive if denies(remove("/target/ai_disclosure"), msg_flag)
+
+test_ai_flag_voice_only_positive if {
+	inp := patched([
+		{"op": "replace", "path": "/manifest/disclosure/ai_music", "value": false},
+		{"op": "replace", "path": "/target/ai_disclosure", "value": false},
+	])
+	denies(inp, msg_flag)
+}
+
+test_ai_flag_not_needed_without_ai if {
+	inp := patched([
+		{"op": "replace", "path": "/manifest/disclosure/ai_music", "value": false},
+		{"op": "replace", "path": "/manifest/disclosure/ai_voice", "value": false},
+		{"op": "replace", "path": "/target/ai_disclosure", "value": false},
+	])
+	not denies(inp, msg_flag)
+}
+
+# ------------------------------------------------------------------ disclosure_flags_contradict_audio
+
+test_flags_vs_audio_negative if {
+	not denies(base, "tts audio present but disclosure.ai_voice is not true")
+	not denies(base, "music audio present but disclosure.ai_music is not true")
+}
+
+test_flags_vs_audio_tts_positive if {
+	denies(replace("/manifest/disclosure/ai_voice", false), "tts audio present but disclosure.ai_voice is not true")
+}
+
+test_flags_vs_audio_music_missing_flag_positive if {
+	denies(remove("/manifest/disclosure/ai_music"), "music audio present but disclosure.ai_music is not true")
+}
+
+# ------------------------------------------------------------------ fail closed: absent `kind`, absent black_frames_s
+
+test_audio_free_plan_without_kind_positive if {
+	inp := patched([
+		{"op": "remove", "path": "/manifest/audio/1/kind"},
+		{"op": "replace", "path": "/manifest/audio/1/plan_tier", "value": "free"},
+	])
+	denies(inp, "unknown audio generated on free plan (non-commercial)")
+}
+
+test_black_frames_absent_denied if {
+	denies(remove("/manifest/checks/black_frames_s"), "missing evidence: checks.black_frames_s")
+	not publish.allow with input as remove("/manifest/checks/black_frames_s")
 }
 
 # ------------------------------------------------------------------ warn: description_missing_attribution

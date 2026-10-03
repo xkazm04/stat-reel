@@ -19,6 +19,7 @@ checks_run := [
 	"audio_free_plan_on_monetized",
 	"audio_missing_plan_tier",
 	"font_not_ofl",
+	"font_not_in_allowlist",
 	"fonts_empty",
 	"font_fallbacks",
 	"evidence_missing",
@@ -34,6 +35,8 @@ checks_run := [
 	"safe_zone_violations",
 	"ai_music_without_disclosure_flag",
 	"ai_audio_without_on_frame_disclosure",
+	"ai_disclosure_flag_missing",
+	"disclosure_flags_contradict_audio",
 	"visibility_not_private",
 	"description_missing_attribution",
 ]
@@ -62,8 +65,14 @@ duration_band_s := {"min": 30, "max": 90}
 # blackdetect runs at d=0.5 s, so a single detected stretch is already >= 0.5 s; more than 1 s in total is a defect.
 max_black_s := 1
 
-# v1 publishes private/draft only; anything else needs the owner's explicit approval.
-allowed_visibility := {"private", "draft"}
+# v1 publishes private only on YouTube (the adapter has no draft concept and never sends anything
+# else); `draft` is kept for platforms whose adapters create drafts (TikTok, later). Everything else
+# - unlisted, public, a missing/unknown platform - needs the owner's explicit approval.
+allowed_visibility("youtube") := {"private"}
+
+allowed_visibility(platform) := {"private", "draft"} if platform in {"tiktok", "instagram"}
+
+default allowed_visibility(_) := {"private"}
 
 # ------------------------------------------------------------------ helpers
 
@@ -88,6 +97,18 @@ sources := object.get(input.manifest, ["data", "sources"], [])
 audio := object.get(input.manifest, "audio", [])
 
 fonts := object.get(input.manifest, "fonts", [])
+
+# Allow-list of {family, sha256} generated from fonts/fonts.manifest.json (policy/fonts_allow.json;
+# a test pins it to the manifest). Missing data means an empty list: every font is denied.
+default fonts_allow := []
+
+fonts_allow := data.statreel.fonts_allow
+
+font_allowed(f) if {
+	some a in fonts_allow
+	a.family == f.family
+	a.sha256 == f.sha256
+}
 
 valid_plan_tier(a) if {
 	is_string(a.plan_tier)
@@ -129,7 +150,7 @@ deny contains msg if {
 	monetized
 	some a in audio
 	a.plan_tier == "free"
-	msg := sprintf("%s audio generated on free plan (non-commercial)", [a.kind])
+	msg := sprintf("%s audio generated on free plan (non-commercial)", [object.get(a, "kind", "unknown")])
 }
 
 # rule: audio_missing_plan_tier
@@ -146,6 +167,15 @@ deny contains msg if {
 	some f in fonts
 	object.get(f, "license", "unknown") != "OFL-1.1"
 	msg := sprintf("font %s is not OFL", [object.get(f, "family", "<unknown>")])
+}
+
+# rule: font_not_in_allowlist
+# A manifest that says "OFL-1.1" proves nothing by itself: the family and file hash must be one
+# the repo actually ships (fonts/fonts.manifest.json), so a lying manifest cannot pass.
+deny contains msg if {
+	some f in fonts
+	not font_allowed(f)
+	msg := sprintf("font %s (sha256 %s) is not in the shipped-font allow-list", [object.get(f, "family", "<unknown>"), object.get(f, "sha256", "<none>")])
 }
 
 # rule: fonts_empty
@@ -258,13 +288,32 @@ deny contains "AI audio used but disclosure not placed on the frame" if {
 	not input.manifest.disclosure.on_frame == true
 }
 
+# rule: ai_disclosure_flag_missing
+# The manifest says AI voice/music is in the video: the platform-side disclosure must be set.
+deny contains "manifest declares AI audio but target.ai_disclosure is not set" if {
+	some flag in ["ai_voice", "ai_music"]
+	input.manifest.disclosure[flag] == true
+	not input.target.ai_disclosure == true
+}
+
+# rule: disclosure_flags_contradict_audio
+# Generated audio assets present while the manifest's disclosure flag for that kind is not true.
+deny contains msg if {
+	some a in audio
+	kind := object.get(a, "kind", "unknown")
+	flag := {"tts": "ai_voice", "music": "ai_music"}[kind]
+	not input.manifest.disclosure[flag] == true
+	msg := sprintf("%s audio present but disclosure.%s is not true", [kind, flag])
+}
+
 # ------------------------------------------------------------------ visibility
 
 # rule: visibility_not_private
 deny contains msg if {
 	v := object.get(input, ["target", "visibility"], "<missing>")
-	not v in allowed_visibility
-	msg := sprintf("visibility %v requires owner approval: v1 publishes private/draft only", [v])
+	platform := object.get(input, ["target", "platform"], "<missing>")
+	not v in allowed_visibility(platform)
+	msg := sprintf("visibility %v on %v requires owner approval: v1 publishes private only (draft only where the platform has drafts)", [v, platform])
 }
 
 # ------------------------------------------------------------------ warnings
