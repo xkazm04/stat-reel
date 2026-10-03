@@ -25,6 +25,17 @@ export const COMPOSITIONS = [
     fps: FPS,
     defaultDurationS: DEFAULT_DURATION_S,
   },
+  {
+    id: "DataRace-vertical",
+    component: "DataRace",
+    usecase: "data-race",
+    format: "vertical",
+    width: 1080,
+    height: 1920,
+    fps: FPS,
+    /** the sample fixture (DataRace/fixture.ts): 1230 frames; real duration comes from the timing plan */
+    defaultDurationS: 41,
+  },
 ] as const satisfies readonly {
   id: string;
   component: string;

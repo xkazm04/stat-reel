@@ -58,11 +58,11 @@ function mulberry32(seed: number): () => number {
 /** Invented geometric marks, drawn here (own work, sample only). Three entities get one; the rest use the wordmark. */
 const LOGO_SVGS: Record<string, string> = {
   lumen:
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="#fff"/><circle cx="32" cy="32" r="9" fill="#e4432a"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="24" fill="#e4432a"/><circle cx="32" cy="32" r="10" fill="#fff"/></svg>',
   zephyr:
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M10 18h44L22 46h32v6H10v-6l32-28H10z" fill="#fff"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M10 18h44L22 46h32v6H10v-6l32-28H10z" fill="#8a4fd6"/></svg>',
   prism:
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 8 58 54H6z" fill="#fff"/><path d="M32 22 46 46H18z" fill="#3a4bd1"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 8 58 54H6z" fill="#3a4bd1"/><path d="M32 24 46 48H18z" fill="#fff"/></svg>',
 };
 const logoPath = (id: string) => `data/assets/logos/sample-${id}.svg`;
 const dataUri = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -100,7 +100,8 @@ const EVENTS = [
   { id: "free-tier", period: 14, entity: "quill", title: "Quill opens a free tier", date: "MAR 2020", fact: ["Sign-ups triple in a month", "sample:event:free-tier#signups"] },
   { id: "merger", period: 38, entity: "pixelo", title: "Pixelo and Tango merge", date: "MAR 2022", fact: ["Two catalogues become one", "sample:event:merger#catalogues"] },
   { id: "outage", period: 55, entity: "voxa", title: "Voxa goes dark for a day", date: "AUG 2023", fact: ["A 19 h outage", "sample:event:outage#hours"] },
-  { id: "launch", period: 66, entity: "ember", title: "Ember ships its mobile app", date: "JUL 2024", fact: ["1.2 M installs in week one", "sample:event:launch#installs"] },
+  { id: "launch", period: 57, entity: "ember", title: "Ember ships its mobile app", date: "OCT 2023", fact: ["1.2 M installs in week one", "sample:event:launch#installs"] },
+  { id: "price-hike", period: 59, entity: "lumen", title: "Lumen raises its price", date: "DEC 2023", fact: ["Up 20 % for new users", "sample:event:price-hike#percent"] },
   { id: "rebrand", period: 78, entity: "zephyr", title: "Zephyr rebrands overnight", date: "JUL 2025", fact: ["New name, same service", "sample:event:rebrand#rename"] },
 ] as const;
 
@@ -117,7 +118,7 @@ export function buildSampleDataRace(): SampleDataRace {
     periods,
     entities: SERIES.map((s) => s[0]),
     values,
-    events: EVENTS.map((e) => ({ id: e.id, period: e.period, label: e.title, dwell: 40, spread: 1.5 })),
+    events: EVENTS.map((e) => ({ id: e.id, period: e.period, label: e.title, dwell: 24, spread: 1.2 })),
     opts: { unit: "month", timelineFrames: 960, rankSmooth: 1, orderLabel: "ORDER: 3-MO AVG" },
   });
   const winnerId = plan.orders[plan.orders.length - 1]?.[0] ?? "prism";
@@ -156,7 +157,7 @@ export function buildSampleDataRace(): SampleDataRace {
     spotlight: {
       facts: [
         { label: "Monthly users", value_text: `${last.toFixed(1)} M`, ref: `sample:app:${winnerId}#users` },
-        { label: "Months in the top 3", value_text: "41", ref: `sample:app:${winnerId}#months_top3` },
+        { label: "Months in the top 3", value_text: "41", ref: `sample:app:${winnerId}#months_in_top` },
       ],
     },
     timing_plan_sha256: planSha256(plan),

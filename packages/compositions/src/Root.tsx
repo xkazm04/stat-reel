@@ -1,12 +1,15 @@
 /** Remotion root: one <Composition> per use case x format. */
-import { EraAdjustedPropsSchema } from "@statreel/schemas";
+import { EraAdjustedPropsSchema, DataRacePropsSchema, resolveDataRaceRenderProps } from "@statreel/schemas";
 import type { ReactElement } from "react";
 import { type CalculateMetadataFunction, Composition } from "remotion";
 import type { z } from "zod";
 import { COMPOSITIONS, defaultPropsFor, durationInFramesFor, eraPropsObjectSchema } from "./compositions";
+import { DataRace, parseDataRaceRenderProps } from "./DataRace/DataRace";
+import { buildSampleDataRace } from "./DataRace/fixture";
 import { EraAdjustedSlope } from "./EraAdjustedSlope";
 
 type SchemaInput = z.input<typeof eraPropsObjectSchema>;
+type DataRaceSchemaInput = z.input<typeof DataRacePropsSchema>;
 
 /**
  * Remotion takes the plain ZodObject as `schema`; the refinements (hook first, vertical ends on a
@@ -26,23 +29,51 @@ export const calculateEraMetadata: CalculateMetadataFunction<SchemaInput> = ({ p
   };
 };
 
+/** DataRace: the duration is the timing plan's total (hook + data time + the fixed 210-frame ending). */
+export const calculateDataRaceMetadata: CalculateMetadataFunction<DataRaceSchemaInput> = ({ props, compositionId }) => {
+  try {
+    const parsed = parseDataRaceRenderProps(props);
+    return { durationInFrames: parsed.timing_plan.sections.total, props: parsed };
+  } catch (err) {
+    throw new Error(`${compositionId}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+const sampleRace = buildSampleDataRace();
+const sampleRaceProps = resolveDataRaceRenderProps(DataRacePropsSchema.parse(sampleRace.props), sampleRace.plan);
+
 export function Root(): ReactElement {
   return (
     <>
-      {COMPOSITIONS.map((c) => (
-        <Composition
-          key={c.id}
-          id={c.id}
-          component={EraAdjustedSlope}
-          schema={eraPropsObjectSchema}
-          defaultProps={defaultPropsFor(c.format)}
-          calculateMetadata={calculateEraMetadata}
-          width={c.width}
-          height={c.height}
-          fps={c.fps}
-          durationInFrames={durationInFramesFor(undefined, c.fps)}
-        />
-      ))}
+      {COMPOSITIONS.map((c) =>
+        c.component === "DataRace" ? (
+          <Composition
+            key={c.id}
+            id={c.id}
+            component={DataRace}
+            schema={DataRacePropsSchema}
+            defaultProps={sampleRaceProps as DataRaceSchemaInput}
+            calculateMetadata={calculateDataRaceMetadata}
+            width={c.width}
+            height={c.height}
+            fps={c.fps}
+            durationInFrames={sampleRace.plan.sections.total}
+          />
+        ) : (
+          <Composition
+            key={c.id}
+            id={c.id}
+            component={EraAdjustedSlope}
+            schema={eraPropsObjectSchema}
+            defaultProps={defaultPropsFor(c.format)}
+            calculateMetadata={calculateEraMetadata}
+            width={c.width}
+            height={c.height}
+            fps={c.fps}
+            durationInFrames={durationInFramesFor(undefined, c.fps)}
+          />
+        ),
+      )}
     </>
   );
 }
