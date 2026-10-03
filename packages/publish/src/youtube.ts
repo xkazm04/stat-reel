@@ -8,6 +8,7 @@
  * In BOTH modes uploads are private only (CLAUDE.md: private/draft unless the owner approves).
  */
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { mkdir, open, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname } from "node:path";
 import type { TokenProvider } from "./oauth";
@@ -57,6 +58,16 @@ export interface UploadVideoRequest {
   /** status.selfDeclaredMadeForKids (default false) */
   madeForKids?: boolean;
   defaultLanguage?: string;
+}
+
+/** Caller-side hooks that make an upload idempotent across crashes (API-NOTES.md, "Idempotent uploads"). */
+export interface UploadVideoOptions {
+  /** a session URI a previous run reported via `onSession`: probe it and continue instead of creating a second video */
+  resumeSessionUri?: string;
+  /** called once per new session (before any byte is sent) so the caller can persist it per render */
+  onSession?: (sessionUri: string) => void | Promise<void>;
+  /** manifest.subject.sha256: the file is hashed (streaming) and the upload is refused before any request on mismatch */
+  expectedSha256?: string;
 }
 
 export interface UploadVideoResult {
@@ -152,12 +163,19 @@ const MIME: Record<string, string> = {
   ".vtt": "application/octet-stream",
 };
 
+/** sha256 of a file, streamed (a render can be hundreds of MB; never held whole in memory). */
+async function sha256File(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
 async function fileRef(file: string): Promise<FileRef> {
-  const [info, buf] = await Promise.all([stat(file), readFile(file)]);
+  const [info, sha256] = await Promise.all([stat(file), sha256File(file)]);
   return {
     file: basename(file),
     bytes: info.size,
-    sha256: createHash("sha256").update(buf).digest("hex"),
+    sha256,
     contentType: MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
   };
 }
@@ -207,6 +225,25 @@ export function videoInsertBody(req: UploadVideoRequest) {
   };
 }
 
+/** The resumable session is gone (404/410): the server forgot it, a fresh one is needed. */
+class SessionGoneError extends Error {
+  constructor(readonly status: number) {
+    super(`resumable session expired (${status})`);
+  }
+}
+
+const RETRY_CAP_MS = 64_000;
+const RETRYABLE_403 = new Set(["quotaExceeded", "rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded"]);
+
+/** Retry-After as ms (delta-seconds or an HTTP date); null when absent/unparseable. */
+export function retryAfterMs(header: string | null, now = Date.now()): number | null {
+  if (!header) return null;
+  const secs = Number(header);
+  if (Number.isFinite(secs) && secs >= 0) return secs * 1000;
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? null : Math.max(0, at - now);
+}
+
 export class YouTubeClient {
   readonly mode: PublishMode;
   readonly plan: PlannedRequest[] = [];
@@ -227,11 +264,16 @@ export class YouTubeClient {
 
   // ---------------------------------------------------------------- videos.insert (resumable)
 
-  async uploadVideo(req: UploadVideoRequest): Promise<UploadVideoResult> {
+  async uploadVideo(req: UploadVideoRequest, options: UploadVideoOptions = {}): Promise<UploadVideoResult> {
     const body = videoInsertBody(req); // throws on non-private before anything else
     validateSnippet(req);
     const ref = await fileRef(req.file);
     if (ref.bytes === 0) throw new Error(`video file is empty: ${req.file}`);
+    if (options.expectedSha256 !== undefined && options.expectedSha256.toLowerCase() !== ref.sha256) {
+      throw new Error(
+        `refusing to upload ${ref.file}: sha256 ${ref.sha256} does not match the manifest's subject.sha256 ${options.expectedSha256}`,
+      );
+    }
     const initUrl = `${YT_UPLOAD}/videos?uploadType=resumable&part=snippet,status&notifySubscribers=false`;
     const bodyText = JSON.stringify(body);
     const initHeaders = {
@@ -260,11 +302,28 @@ export class YouTubeClient {
       return { id: dryVideoId(ref.sha256, req.title), privacyStatus: "private", mode: "dry" };
     }
 
-    const init = await this.send("POST", initUrl, initHeaders, bodyText);
-    await this.ensureOk(init, "videos.insert (init)");
-    const session = init.headers.get("location");
-    if (!session) throw new YouTubeApiError("resumable session URI missing (no Location header)", init.status);
-    const video = (await this.uploadChunks(session, req.file, ref)) as YouTubeVideo;
+    let resume = options.resumeSessionUri;
+    let video: YouTubeVideo | undefined;
+    for (let restarts = 0; !video; restarts++) {
+      try {
+        let session = resume;
+        let offset = 0;
+        let done: unknown;
+        if (session) {
+          const probe = await this.probeSession(session, ref);
+          if ("resource" in probe) done = probe.resource;
+          else offset = probe.offset;
+        } else {
+          session = await this.createSession(initUrl, initHeaders, bodyText);
+          await options.onSession?.(session);
+        }
+        video = (done ?? (await this.uploadChunks(session, req.file, ref, offset))) as YouTubeVideo;
+      } catch (err) {
+        // A forgotten session (404/410) restarts with a fresh one, once; anything else is the caller's.
+        if (!(err instanceof SessionGoneError) || restarts >= 1) throw err;
+        resume = undefined;
+      }
+    }
     const privacy = video.status?.privacyStatus;
     if (privacy !== "private") {
       throw new YouTubeApiError(
@@ -275,10 +334,32 @@ export class YouTubeClient {
     return { id: video.id, privacyStatus: "private", mode: "live", resource: video };
   }
 
-  private async uploadChunks(session: string, path: string, ref: FileRef): Promise<unknown> {
+  /** videos.insert (init) with the same retry policy as the chunks (429, quota 403, 5xx, network). */
+  private async createSession(url: string, headers: Record<string, string>, bodyText: string): Promise<string> {
+    for (let attempt = 1; ; attempt++) {
+      let res: Response;
+      try {
+        res = await this.send("POST", url, headers, bodyText);
+      } catch (err) {
+        await this.backoff(attempt, err, null);
+        continue;
+      }
+      const wait = await this.retryable(res);
+      if (wait !== undefined) {
+        await this.backoff(attempt, new YouTubeApiError(`videos.insert (init) ${res.status}`, res.status), wait);
+        continue;
+      }
+      await this.ensureOk(res, "videos.insert (init)");
+      const session = res.headers.get("location");
+      if (!session) throw new YouTubeApiError("resumable session URI missing (no Location header)", res.status);
+      return session;
+    }
+  }
+
+  private async uploadChunks(session: string, path: string, ref: FileRef, startOffset = 0): Promise<unknown> {
     const fh = await open(path, "r");
     try {
-      let offset = 0;
+      let offset = startOffset;
       let attempt = 0;
       while (offset < ref.bytes) {
         const end = Math.min(offset + this.chunkSize, ref.bytes) - 1;
@@ -298,7 +379,7 @@ export class YouTubeClient {
             buf,
           );
         } catch (err) {
-          const r = await this.retryOrResume(session, ref, ++attempt, err);
+          const r = await this.retryOrResume(session, ref, ++attempt, err, null);
           if ("resource" in r) return r.resource;
           offset = r.offset;
           continue;
@@ -309,18 +390,22 @@ export class YouTubeClient {
           attempt = 0;
           continue;
         }
-        if (res.status >= 500) {
+        if (res.status === 404 || res.status === 410) throw new SessionGoneError(res.status);
+        const wait = await this.retryable(res);
+        if (wait !== undefined) {
           const r = await this.retryOrResume(
             session,
             ref,
             ++attempt,
             new YouTubeApiError(`chunk upload ${res.status}`, res.status),
+            wait,
           );
           if ("resource" in r) return r.resource;
           offset = r.offset;
           continue;
         }
         await this.ensureOk(res, "videos.insert (upload)");
+        throw new YouTubeApiError(`chunk upload: unexpected status ${res.status}`, res.status);
       }
       throw new YouTubeApiError("upload finished without a video resource", 0);
     } finally {
@@ -328,26 +413,68 @@ export class YouTubeClient {
     }
   }
 
-  /** Backoff, then ask the session how much it has (`Content-Range: bytes * /total`). */
+  /**
+   * Ask the session how much it has (`Content-Range: bytes * /total`). 404/410 -> SessionGoneError;
+   * 429/quota 403/5xx/network -> backoff and ask again (bounded by maxRetries).
+   */
+  private async probeSession(session: string, ref: FileRef): Promise<{ offset: number } | { resource: unknown }> {
+    for (let attempt = 1; ; attempt++) {
+      let res: Response;
+      try {
+        res = await this.send("PUT", session, { "Content-Length": "0", "Content-Range": `bytes */${ref.bytes}` });
+      } catch (err) {
+        await this.backoff(attempt, err, null);
+        continue;
+      }
+      if (res.status === 308) return { offset: nextOffset(res.headers.get("range")) };
+      if (res.status === 200 || res.status === 201) return { resource: await res.json() };
+      if (res.status === 404 || res.status === 410) throw new SessionGoneError(res.status);
+      const wait = await this.retryable(res);
+      if (wait !== undefined) {
+        await this.backoff(attempt, new YouTubeApiError(`resume status ${res.status}`, res.status), wait);
+        continue;
+      }
+      await this.ensureOk(res, "videos.insert (resume status)");
+      throw new YouTubeApiError(`resume status: unexpected status ${res.status}`, res.status);
+    }
+  }
+
+  /** Backoff, then probe the session for the committed offset. */
   private async retryOrResume(
     session: string,
     ref: FileRef,
     attempt: number,
     err: unknown,
+    retryAfter: number | null,
   ): Promise<{ offset: number } | { resource: unknown }> {
+    await this.backoff(attempt, err, retryAfter);
+    return this.probeSession(session, ref);
+  }
+
+  /**
+   * Sleep min(cap, max(2^attempt s, Retry-After)) or throw `err` once the retry budget is spent.
+   * Retry-After is honoured but never beyond the cap, so a hostile header cannot stall a job.
+   */
+  private async backoff(attempt: number, err: unknown, retryAfter: number | null): Promise<void> {
     if (attempt > (this.opts.maxRetries ?? 5)) throw err;
-    await this.sleep(Math.min(2 ** attempt * 1000, 64_000));
-    let res: Response;
+    await this.sleep(Math.min(Math.max(2 ** attempt * 1000, retryAfter ?? 0), RETRY_CAP_MS));
+  }
+
+  /**
+   * Is this response worth retrying? 5xx, 429 and the 403 quota/rate-limit reasons are. Returns the
+   * Retry-After wait in ms (0 when absent); undefined means "not retryable" (the caller fails).
+   */
+  private async retryable(res: Response): Promise<number | undefined> {
+    const after = retryAfterMs(res.headers.get("retry-after")) ?? 0;
+    if (res.status >= 500 || res.status === 429) return after;
+    if (res.status !== 403) return undefined;
     try {
-      res = await this.send("PUT", session, { "Content-Length": "0", "Content-Range": `bytes */${ref.bytes}` });
-    } catch (statusErr) {
-      return this.retryOrResume(session, ref, attempt + 1, statusErr);
+      const json = (await res.clone().json()) as { error?: { errors?: Array<{ reason?: string }> } };
+      const reason = json.error?.errors?.[0]?.reason;
+      return reason && RETRYABLE_403.has(reason) ? after : undefined;
+    } catch {
+      return undefined;
     }
-    if (res.status === 308) return { offset: nextOffset(res.headers.get("range")) };
-    if (res.status === 200 || res.status === 201) return { resource: await res.json() };
-    if (res.status >= 500) return this.retryOrResume(session, ref, attempt + 1, err);
-    await this.ensureOk(res, "videos.insert (resume status)");
-    return { offset: 0 };
   }
 
   // ---------------------------------------------------------------- captions.insert (multipart)

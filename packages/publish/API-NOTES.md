@@ -69,3 +69,12 @@ Sources: https://developers.google.com/identity/protocols/oauth2/native-app · h
 - Code exchange: `client_id`, `code`, `code_verifier`, `grant_type=authorization_code` and `redirect_uri`, plus `client_secret`, which Google issues for desktop clients.
 - Refresh: `client_id`, `grant_type=refresh_token`, `refresh_token` and (optionally) `client_secret`. The response has `access_token`, `expires_in`, `scope` and `token_type` (and `refresh_token` on the first exchange).
 - **Refresh tokens expire after 7 days while the consent screen is External and in "Testing" status**, unless the only scopes requested are name, email and profile. Until the app is published or verified, the owner will have to reconnect every week (`invalid_grant`).
+
+## Idempotent uploads (adapter contract)
+`uploadVideo(req, { resumeSessionUri?, onSession?, expectedSha256? })`:
+- `onSession(uri)` fires once per new resumable session, before any byte is sent. The caller persists it per render; after a crash it passes it back as `resumeSessionUri`, and the adapter probes it (`Content-Range: bytes */TOTAL`) and sends only the missing bytes (or returns the finished video on 200/201). Without this a retried upload creates a second private video.
+- A `404`/`410` on a session (probe or chunk) means the server forgot it: the adapter creates a fresh session and re-sends, **once** (a second 404/410 throws). Fresh sessions are reported through `onSession` again, so the caller must overwrite the stored URI.
+- Retried with backoff `min(64 s, max(2^n s, Retry-After))`, up to `maxRetries` (default 5): network errors, `5xx`, `429`, and `403` whose first error reason is `quotaExceeded`, `rateLimitExceeded`, `userRateLimitExceeded` or `dailyLimitExceeded`. Any other `403` (e.g. `forbidden`) fails immediately. The Video Uploads bucket is 100/day, so a quota retry that outlives the cap surfaces as a `YouTubeApiError` (status 403, reason set) for the caller to defer.
+- `expectedSha256` (pass `manifest.subject.sha256`): the file is hashed as a stream (no whole-file buffer) and the upload is refused, before any request, when it differs. The same streaming hash feeds the dry-run id.
+- Publish gate note: `policy/publish.rego` allows `private` only for `youtube` (this adapter throws on anything else); `draft` stays allowed for platforms with drafts (TikTok, later); `unlisted` and `public` are denied everywhere.
+- Tests: `OPA_REQUIRED=1` makes `policy.test.ts` fail instead of skip when the opa binary is missing; `node scripts/check.mjs --only opa` runs `opa test policy`.

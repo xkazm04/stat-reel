@@ -11,6 +11,7 @@ import {
   dryVideoId,
   nextOffset,
   publishModeFromEnv,
+  retryAfterMs,
   type UploadVideoRequest,
   YouTubeApiError,
   YouTubeClient,
@@ -247,6 +248,154 @@ describe("live mode (mocked fetch)", () => {
     const err = await yt.getVideo("a").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(YouTubeApiError);
     expect((err as YouTubeApiError).reason).toBe("quotaExceeded");
+  });
+});
+
+describe("idempotent uploads (mocked fetch)", () => {
+  const session = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=abc";
+  const okVideo = () =>
+    new Response(JSON.stringify({ id: "vid1", status: { privacyStatus: "private", uploadStatus: "uploaded" } }), {
+      status: 200,
+    });
+  const harness = (responses: Array<Response | Error>, extra: { maxRetries?: number } = {}) => {
+    const calls: Array<{ url: string; method: string; range?: string }> = [];
+    const sleeps: number[] = [];
+    const f = vi.fn(async (url: string, init: RequestInit) => {
+      const h = init.headers as Record<string, string>;
+      calls.push({ url, method: String(init.method), range: h["Content-Range"] });
+      const r = responses.shift();
+      if (!r) throw new Error("unexpected request");
+      if (r instanceof Error) throw r;
+      return r;
+    });
+    const yt = new YouTubeClient({
+      mode: "live",
+      tokenProvider: tokens,
+      fetch: f as unknown as typeof fetch,
+      chunkSize: 4 * CHUNK_QUANTUM, // the whole sample file in one chunk
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+      ...extra,
+    });
+    return { yt, calls, sleeps, f };
+  };
+
+  it("reports a new session via onSession before any byte is sent", async () => {
+    const { yt, calls } = harness([new Response(null, { status: 200, headers: { Location: session } }), okVideo()]);
+    const seen: string[] = [];
+    await yt.uploadVideo(req(), {
+      onSession: (uri) => {
+        seen.push(uri);
+        expect(calls).toHaveLength(1); // only the init POST so far
+      },
+    });
+    expect(seen).toEqual([session]);
+  });
+
+  it("resumes a stored session: probes it, sends only the missing bytes, creates no second video", async () => {
+    const { yt, calls } = harness([
+      new Response(null, { status: 308, headers: { Range: `bytes=0-${CHUNK_QUANTUM - 1}` } }),
+      okVideo(),
+    ]);
+    const onSession = vi.fn();
+    const r = await yt.uploadVideo(req(), { resumeSessionUri: session, onSession });
+    expect(r.id).toBe("vid1");
+    expect(onSession).not.toHaveBeenCalled();
+    expect(calls.every((c) => c.method === "PUT" && c.url === session)).toBe(true);
+    expect(calls[0]?.range).toBe(`bytes */${videoBytes.length}`);
+    expect(calls[1]?.range).toBe(`bytes ${CHUNK_QUANTUM}-${videoBytes.length - 1}/${videoBytes.length}`);
+  });
+
+  it("returns the finished video when the stored session says the upload already completed", async () => {
+    const { yt, calls } = harness([okVideo()]);
+    const r = await yt.uploadVideo(req(), { resumeSessionUri: session });
+    expect(r.id).toBe("vid1");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("restarts with a fresh session, once, when the stored session is gone (410)", async () => {
+    const fresh = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=new";
+    const { yt, calls } = harness([
+      new Response("gone", { status: 410 }),
+      new Response(null, { status: 200, headers: { Location: fresh } }),
+      okVideo(),
+    ]);
+    const onSession = vi.fn();
+    const r = await yt.uploadVideo(req(), { resumeSessionUri: session, onSession });
+    expect(r.id).toBe("vid1");
+    expect(onSession).toHaveBeenCalledExactlyOnceWith(fresh);
+    expect(calls.map((c) => c.method)).toEqual(["PUT", "POST", "PUT"]);
+    expect(calls[2]?.url).toBe(fresh);
+  });
+
+  it("does not restart twice: a second 404 on the fresh session throws", async () => {
+    const { yt } = harness([
+      new Response("gone", { status: 404 }),
+      new Response(null, { status: 200, headers: { Location: session } }),
+      new Response("gone", { status: 404 }),
+    ]);
+    await expect(yt.uploadVideo(req(), { resumeSessionUri: session })).rejects.toThrow(/session expired/);
+  });
+
+  it("retries a 429 honouring Retry-After (capped), then succeeds", async () => {
+    const { yt, sleeps } = harness([
+      new Response(null, { status: 200, headers: { Location: session } }),
+      new Response("slow down", { status: 429, headers: { "Retry-After": "30" } }),
+      new Response(null, { status: 308 }), // status probe: nothing committed
+      okVideo(),
+    ]);
+    const r = await yt.uploadVideo(req());
+    expect(r.id).toBe("vid1");
+    expect(sleeps).toEqual([30_000]);
+  });
+
+  it("caps a hostile Retry-After at 64 s", async () => {
+    const { yt, sleeps } = harness([
+      new Response(null, { status: 200, headers: { Location: session } }),
+      new Response("x", { status: 429, headers: { "Retry-After": "86400" } }),
+      new Response(null, { status: 308 }),
+      okVideo(),
+    ]);
+    await yt.uploadVideo(req());
+    expect(sleeps).toEqual([64_000]);
+  });
+
+  it("retries 403 quotaExceeded up to maxRetries, then surfaces the error", async () => {
+    const quota = () =>
+      new Response(JSON.stringify({ error: { message: "quota", errors: [{ reason: "quotaExceeded" }] } }), {
+        status: 403,
+      });
+    const { yt, sleeps, f } = harness([quota(), quota(), quota()], { maxRetries: 2 });
+    await expect(yt.uploadVideo(req())).rejects.toMatchObject({ status: 403 });
+    expect(sleeps).toEqual([2000, 4000]);
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry a 403 with another reason (forbidden)", async () => {
+    const { yt, f } = harness([
+      new Response(JSON.stringify({ error: { errors: [{ reason: "forbidden" }] } }), { status: 403 }),
+    ]);
+    await expect(yt.uploadVideo(req())).rejects.toMatchObject({ status: 403, reason: "forbidden" });
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a file whose sha256 differs from expectedSha256 before any request", async () => {
+    const { yt, f } = harness([]);
+    await expect(yt.uploadVideo(req(), { expectedSha256: "0".repeat(64) })).rejects.toThrow(/does not match/);
+    expect(f).not.toHaveBeenCalled();
+    const good = createHash("sha256").update(videoBytes).digest("hex");
+    const ok = harness([new Response(null, { status: 200, headers: { Location: session } }), okVideo()]);
+    await expect(ok.yt.uploadVideo(req(), { expectedSha256: good.toUpperCase() })).resolves.toMatchObject({
+      id: "vid1",
+    });
+  });
+
+  it("parses Retry-After seconds and dates", () => {
+    expect(retryAfterMs("12")).toBe(12_000);
+    expect(retryAfterMs("Thu, 01 Jan 1970 00:00:10 GMT", 4_000)).toBe(6_000);
+    expect(retryAfterMs(null)).toBeNull();
+    expect(retryAfterMs("soon")).toBeNull();
   });
 });
 
