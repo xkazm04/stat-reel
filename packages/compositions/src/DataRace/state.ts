@@ -94,6 +94,35 @@ function planCache(plan: TimingPlan): PlanCache {
   return c;
 }
 
+/**
+ * The visual axis maximum. It used to follow the current leader (peak * 1.08), so the whole chart
+ * rescaled when the leader shrank, while the plan scored motion against `strategy.axis_max` and
+ * the renderer never read it. Now one value for the whole run: the explicit prop, else the plan's
+ * axis (the largest value in the data). A pure function of the props, so it can never shrink
+ * mid-run and any frame is still seek-stable.
+ */
+export function axisMaxFor(props: DataRaceRenderProps): number {
+  return Math.max(props.axis_max ?? props.timing_plan.strategy.axis_max, 1e-9);
+}
+
+const tickRank = (n: number): number => (n === 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0);
+
+/** "Nice" gridline values up to `max`: 3-4 ticks at 1/2/2.5/5 x 10^k where possible, else 2. */
+export function niceTicks(max: number): number[] {
+  if (!(max > 0)) return [];
+  const e0 = Math.floor(Math.log10(max / 4));
+  let best: number[] = [];
+  for (const e of [e0 - 1, e0, e0 + 1]) {
+    for (const m of [1, 2, 2.5, 5]) {
+      const step = m * 10 ** e;
+      const n = Math.floor(max / step + 1e-9);
+      if (n < 2 || n > 4) continue;
+      if (tickRank(n) > tickRank(best.length)) best = Array.from({ length: n }, (_, i) => Number((step * (i + 1)).toPrecision(12)));
+    }
+  }
+  return best;
+}
+
 export const phaseAt = (plan: TimingPlan, frame: number): { phase: Phase; phaseFrame: number } => {
   const s = plan.sections;
   if (frame < s.timeline_end) return { phase: "timeline", phaseFrame: frame };
@@ -138,8 +167,7 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
     }
     return { id: e.id, pos, value, presence };
   });
-  const peak = Math.max(0, ...rows.map((r) => r.value * r.presence));
-  const axisMax = props.axis_max ?? Math.max(peak * 1.08, 1e-9);
+  const axisMax = axisMaxFor(props);
 
   // cards
   const sorted = orderedEvents(props);

@@ -19,7 +19,8 @@ import { calculateDataRaceMetadata } from "../Root";
 import { renderTimingMd } from "../timing/index";
 import { DataRaceFrame } from "./DataRaceFrame";
 import { buildSampleDataRace } from "./fixture";
-import { CARD, type DataRaceRenderProps, dataRaceState, orderedEvents, phaseAt } from "./state";
+import { LABEL_RIGHT, L, formatValue, textWidth, valueLabelLayout } from "./parts";
+import { CARD, type DataRaceRenderProps, axisMaxFor, dataRaceState, niceTicks, orderedEvents, phaseAt } from "./state";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.resolve(here, "..", "..", "fixtures");
@@ -179,6 +180,62 @@ describe("race", () => {
   });
 });
 
+describe("axis: one fixed scale with nice gridline ticks (ADR scale-and-axis-design)", () => {
+  it("the axis max never shrinks, over every frame of the sample fixture", () => {
+    let prev = 0;
+    for (let f = 0; f < plan.sections.total; f++) {
+      const a = dataRaceState(props, f).axisMax;
+      expect(a, `frame ${f}`).toBeGreaterThanOrEqual(prev);
+      prev = a;
+    }
+    expect(axisMaxFor(props)).toBe(plan.strategy.axis_max);
+    expect(axisMaxFor({ ...props, axis_max: 123 })).toBe(123);
+  });
+
+  it("niceTicks gives 3-4 round values <= max (2 only where no round step fits)", () => {
+    for (const max of [0.7, 1, 4.2, 9.3, 23, 47.7, 98, 1234, 250000]) {
+      const t = niceTicks(max);
+      expect(t.length, `max ${max}`).toBeGreaterThanOrEqual(2);
+      expect(t.length, `max ${max}`).toBeLessThanOrEqual(4);
+      expect(Math.max(...t)).toBeLessThanOrEqual(max);
+      expect([...t].sort((a, b) => a - b)).toEqual(t);
+    }
+    expect(niceTicks(20.4)).toEqual([5, 10, 15, 20]);
+    expect(niceTicks(0)).toEqual([]);
+  });
+
+  it("draws 3-4 labelled gridlines at >= 28 px with tabular figures, on theme colours", () => {
+    const html = markup(midFrame);
+    const ticks = [...html.matchAll(/data-tick="([\d.]+)"><div style="[^"]*"><\/div><div style="([^"]*)"/g)];
+    expect(ticks.length).toBeGreaterThanOrEqual(3);
+    expect(ticks.length).toBeLessThanOrEqual(4);
+    for (const m of ticks) {
+      expect(Number(/font-size:(\d+)px/.exec(m[2] as string)?.[1])).toBeGreaterThanOrEqual(28);
+      expect(m[2]).toContain("tabular-nums");
+      expect(m[2]).toContain(`color:${videoTheme.inkFaint}`);
+    }
+    expect(html).toContain(`background:${videoTheme.grid}`);
+  });
+
+  it("the value label never crosses the icon column (x 965), even for a long prefix/suffix at full width", () => {
+    const longest = { decimals: 1, prefix: "US$ ", suffix: " million per year" };
+    for (const barW of [6, 200, L.barMaxW]) {
+      for (const fmt of [longest, { decimals: 1, prefix: "", suffix: " M" }]) {
+        const text = formatValue(12345.6, fmt);
+        const lay = valueLabelLayout(barW, text);
+        expect(L.marginX + lay.left + lay.width, `${barW} ${text}`).toBeLessThanOrEqual(LABEL_RIGHT);
+      }
+    }
+    expect(valueLabelLayout(100, "5.0 M").plate).toBe(false);
+    expect(valueLabelLayout(L.barMaxW, formatValue(1, longest)).plate).toBe(true);
+    expect(textWidth("5.0 M", 30)).toBeGreaterThan(0);
+    const wide = { ...props, value_format: longest };
+    const html = markup(plan.sections.timeline_end - 1, wide);
+    for (const m of html.matchAll(/data-value="" style="left:([\d.]+)px;[^"]*width:(\d+)px/g))
+      expect(L.marginX + Number(m[1]) + Number(m[2])).toBeLessThanOrEqual(LABEL_RIGHT);
+  });
+});
+
 describe("ending: spotlight (60) -> like & subscribe (60) -> Powered by StatReel (90)", () => {
   const s = plan.sections;
   const which = (f: number) => (markup(f).match(/data-ending="([a-z-]+)"/) ?? [])[1];
@@ -262,11 +319,11 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
-        "hook0": "6ef86efbc1436572",
+        "hook0": "e98284f4ea227527",
         "like": "a3864ee6bfbc7a30",
-        "mid45": "72930ea446a56658",
+        "mid45": "257f034817829855",
         "poweredEnd": "5cbbd46a858efedd",
-        "spotlight": "6e3a2fe3c0105310",
+        "spotlight": "a3ea6e4f65cef402",
       }
     `);
   });

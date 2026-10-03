@@ -7,7 +7,7 @@ import { videoTheme } from "@statreel/design-tokens";
 import { DATA_RACE_LIMITS } from "@statreel/schemas";
 import type { ReactElement } from "react";
 import { LikeSubscribe, PoweredBy, WinnerSpotlight } from "./ending";
-import { BarRow, EventStack, L, LogoTile, TNUM } from "./parts";
+import { AxisTicks, BarRow, EventStack, L, LogoTile, TNUM } from "./parts";
 import { type DataRaceRenderProps, dataRaceState } from "./state";
 
 const T = videoTheme;
@@ -48,6 +48,7 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
                 {plan.strategy.order_label}
               </div>
             ) : null}
+            <AxisTicks axisMax={st.axisMax} rows={props.entities.length} format={props.value_format} />
             <div style={{ position: "absolute", left: L.barX - 2, top: L.barsTop, width: 3, height: L.rowH * props.entities.length, background: T.grid }} />
             {st.rows.map((row) => {
               const entity = byId.get(row.id);

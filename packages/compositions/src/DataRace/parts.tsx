@@ -6,7 +6,7 @@
 import { videoTheme } from "@statreel/design-tokens";
 import type { DataRaceProps } from "@statreel/schemas";
 import type { CSSProperties, ReactElement } from "react";
-import type { CardState, RaceRow } from "./state";
+import { type CardState, type RaceRow, niceTicks } from "./state";
 
 type Entity = DataRaceProps["entities"][number];
 type Event = DataRaceProps["events"][number];
@@ -78,6 +78,49 @@ export function LogoTile({ entity, size, radius }: { entity: Entity; size: numbe
   );
 }
 
+/** Right edge of anything the end of a bar draws: the platform icon column starts at ~x 965. */
+export const LABEL_RIGHT = 965;
+/** Bold 30 px tabular glyphs are at most ~0.62 em wide; a deliberately pessimistic estimate. */
+export const textWidth = (text: string, size: number): number => Math.ceil(text.length * size * 0.62);
+
+/**
+ * Where the value label sits, relative to the row (row x = marginX). It follows the bar end, but a
+ * long prefix/suffix or a bar near full width would cross x 965, so it is shifted left to stay
+ * inside and gets a plate so it stays readable where it overlaps the bar tip.
+ */
+export function valueLabelLayout(barW: number, text: string, size = 30): { left: number; width: number; plate: boolean } {
+  const width = textWidth(text, size);
+  const natural = L.barX - L.marginX + barW + 14;
+  const max = LABEL_RIGHT - L.marginX - width;
+  return natural <= max ? { left: natural, width, plate: false } : { left: max, width, plate: true };
+}
+
+/** Gridlines and their labels, behind the rows. Values come from `niceTicks` (grow-free: the axis is fixed). */
+export function AxisTicks({ axisMax, rows, format }: { axisMax: number; rows: number; format: ValueFormat | undefined }): ReactElement {
+  const ticks = niceTicks(axisMax);
+  const step = ticks[0] ?? 1;
+  const decimals = Math.max(0, Math.min(3, -Math.floor(Math.log10(step) + 1e-9)));
+  const bottom = L.barsTop + L.rowH * rows;
+  return (
+    <>
+      {ticks.map((v) => {
+        const x = L.barX + (v / axisMax) * L.barMaxW;
+        const label = formatValue(v, { prefix: "", suffix: "", ...format, decimals });
+        const w = textWidth(label, 28);
+        const left = Math.min(x - w / 2, LABEL_RIGHT - w);
+        return (
+          <div key={v} data-tick={v}>
+            <div style={{ position: "absolute", left: x - 1, top: L.barsTop, width: 2, height: bottom - L.barsTop, background: T.grid }} />
+            <div style={{ position: "absolute", left, top: bottom + 6, width: w, height: 36, display: "flex", justifyContent: "center", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 600, fontSize: 28, color: T.inkFaint, whiteSpace: "nowrap", ...TNUM }}>
+              {label}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function nameFontSize(name: string, width: number): number {
   return Math.max(28, Math.min(36, Math.floor(width / (Math.max(1, name.length) * 0.46))));
 }
@@ -86,6 +129,8 @@ export function BarRow({ entity, row, axisMax, format }: { entity: Entity; row: 
   if (row.presence <= 0.001) return null;
   const w = Math.max(6, Math.min(1, row.value / axisMax) * L.barMaxW);
   const top = L.barsTop + row.pos * L.rowH;
+  const text = formatValue(row.value, format);
+  const label = valueLabelLayout(w, text);
   return (
     <div data-row={entity.id} style={{ position: "absolute", left: L.marginX, top, width: L.width - 2 * L.marginX, height: L.rowH, opacity: row.presence }}>
       <div style={{ position: "absolute", left: 0, top: (L.rowH - L.tile) / 2 }}>
@@ -98,9 +143,10 @@ export function BarRow({ entity, row, axisMax, format }: { entity: Entity; row: 
       </div>
       <div style={{ position: "absolute", left: L.barX - L.marginX, top: (L.rowH - L.barH) / 2, width: w, height: L.barH, borderRadius: 10, background: entity.color }} />
       <div
-        style={{ position: "absolute", left: L.barX - L.marginX + w + 14, top: 0, height: L.rowH, display: "flex", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 700, fontSize: 30, color: T.ink, whiteSpace: "nowrap", ...TNUM }}
+        data-value=""
+        style={{ position: "absolute", left: label.left, top: (L.rowH - 44) / 2, width: label.width, height: 44, display: "flex", alignItems: "center", justifyContent: label.plate ? "flex-end" : "flex-start", fontFamily: T.fonts.data, fontWeight: 700, fontSize: 30, color: T.ink, whiteSpace: "nowrap", background: label.plate ? T.surface : undefined, borderRadius: 8, ...TNUM }}
       >
-        {formatValue(row.value, format)}
+        {text}
       </div>
     </div>
   );
