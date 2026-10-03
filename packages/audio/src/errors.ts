@@ -105,6 +105,20 @@ export class TakeRejected extends AudioError {
   }
 }
 
+/**
+ * A music request that the API would reject (documented limits) caught before any paid call.
+ * `failed`, never `refused`: the plan is ours to fix; `fix` says what to change.
+ */
+export class InvalidMusicRequest extends AudioError {
+  readonly state: AudioErrorState = "failed";
+  constructor(
+    readonly field: string,
+    readonly fix: string,
+  ) {
+    super(`invalid music request (${field}): ${fix}. No ElevenLabs call was made.`);
+  }
+}
+
 export class UnknownPlanTier extends AudioError {
   readonly state: AudioErrorState = "failed";
   constructor(readonly tier: string) {

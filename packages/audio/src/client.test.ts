@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildMusicRequest, buildTtsRequest, ElevenLabsClient } from "./client";
-import { AudioRefused, AuthError, jobStatusFor, ProviderError, QuotaError } from "./errors";
+import { AudioRefused, AuthError, InvalidMusicRequest, jobStatusFor, ProviderError, QuotaError } from "./errors";
 
 const KEY = "sk-test-secret";
 
@@ -65,7 +65,7 @@ describe("request builders", () => {
       ],
     };
     const r = buildMusicRequest({ compositionPlan: plan, musicLengthMs: 10_000, forceInstrumental: true });
-    expect(r.body).toEqual({ composition_plan: plan, model_id: "music_v2" });
+    expect(r.body).toEqual({ composition_plan: plan, model_id: "music_v2" }); // plan already guards vocals
     expect(() => buildMusicRequest({ compositionPlan: plan, musicLengthMs: 9_000, forceInstrumental: true })).toThrow(
       /sum/,
     );
@@ -73,6 +73,68 @@ describe("request builders", () => {
     expect(() =>
       buildMusicRequest({ compositionPlan: lyrical as typeof plan, musicLengthMs: 10_000, forceInstrumental: true }),
     ).toThrow(/instrumental/);
+  });
+
+  describe("composition plan guardrails (no network)", () => {
+    const section = (duration_ms: number, section_name = "s") => ({
+      section_name,
+      positive_local_styles: [],
+      negative_local_styles: [],
+      duration_ms,
+      lines: [],
+    });
+    const planOf = (...ms: number[]) => ({
+      positive_global_styles: ["ambient"],
+      negative_global_styles: [] as string[],
+      sections: ms.map((d) => section(d)),
+    });
+    const build = (p: ReturnType<typeof planOf>) =>
+      buildMusicRequest({
+        compositionPlan: p,
+        musicLengthMs: p.sections.reduce((a, s) => a + s.duration_ms, 0),
+        forceInstrumental: true,
+      });
+
+    it("accepts sections exactly at the 3000 and 120000 ms limits", () => {
+      expect(() => build(planOf(3000, 120_000))).not.toThrow();
+    });
+
+    it("rejects a section under 3000 ms or over 120000 ms before any call, as a failed job", () => {
+      for (const bad of [planOf(2999, 10_000), planOf(120_001)]) {
+        let err: unknown;
+        try {
+          build(bad);
+        } catch (e) {
+          err = e;
+        }
+        expect(err).toBeInstanceOf(InvalidMusicRequest);
+        expect((err as InvalidMusicRequest).message).toMatch(/3000 to 120000/);
+        expect(jobStatusFor(err)).toBe("failed");
+      }
+    });
+
+    it("rejects an empty or over-long section name", () => {
+      const p = planOf(5000);
+      p.sections[0] = section(5000, "");
+      expect(() => build(p)).toThrow(InvalidMusicRequest);
+      p.sections[0] = section(5000, "x".repeat(101));
+      expect(() => build(p)).toThrow(InvalidMusicRequest);
+    });
+
+    it("sends a vocals guard in negative_global_styles without mutating the caller's plan", () => {
+      const p = planOf(5000);
+      const body = build(p).body as { composition_plan: { negative_global_styles: string[] } };
+      expect(body.composition_plan.negative_global_styles).toEqual(["vocals"]);
+      expect(p.negative_global_styles).toEqual([]);
+      const own = { ...planOf(5000), negative_global_styles: ["sung lyrics", "noise"] };
+      const kept = build(own).body as { composition_plan: { negative_global_styles: string[] } };
+      expect(kept.composition_plan.negative_global_styles).toEqual(["sung lyrics", "noise"]);
+    });
+
+    it("sends no prompt-only fields with a plan", () => {
+      const body = build(planOf(5000)).body as Record<string, unknown>;
+      expect(Object.keys(body).sort()).toEqual(["composition_plan", "model_id"]);
+    });
   });
 
   it("music length is bounded to 3000-600000 ms", () => {

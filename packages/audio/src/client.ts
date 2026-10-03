@@ -6,13 +6,18 @@
  * never appears in request objects, cache keys or error messages.
  */
 import type { CharAlignment } from "@statreel/schemas";
-import { AudioRefused, AuthError, ProviderError, type ProviderErrorInit, QuotaError } from "./errors";
+import { AudioRefused, AuthError, InvalidMusicRequest, ProviderError, type ProviderErrorInit, QuotaError } from "./errors";
 
 export const DEFAULT_BASE_URL = "https://api.elevenlabs.io";
 export const DEFAULT_OUTPUT_FORMAT = "mp3_44100_128";
 export const DEFAULT_MUSIC_MODEL = "music_v2";
 export const MUSIC_MIN_MS = 3000;
 export const MUSIC_MAX_MS = 600_000;
+/** per-section duration limits of a composition plan (API-NOTES.md, Music compose) */
+export const MUSIC_SECTION_MIN_MS = 3000;
+export const MUSIC_SECTION_MAX_MS = 120_000;
+const SECTION_NAME_MAX = 100;
+const VOCAL_STYLE = /vocal|lyric|sing/i;
 const MAX_RETRIES_429 = 3;
 
 export interface VoiceSettings {
@@ -118,12 +123,30 @@ export function buildMusicRequest(p: MusicParams): ProviderRequest {
   if (p.compositionPlan !== undefined) {
     if (p.prompt !== undefined) throw new Error("prompt and compositionPlan are mutually exclusive");
     const plan = p.compositionPlan;
+    for (const [i, s] of plan.sections.entries()) {
+      const where = `compositionPlan.sections[${i}]`;
+      if (!Number.isInteger(s.duration_ms) || s.duration_ms < MUSIC_SECTION_MIN_MS || s.duration_ms > MUSIC_SECTION_MAX_MS)
+        throw new InvalidMusicRequest(
+          `${where}.duration_ms`,
+          `section '${s.section_name}' is ${s.duration_ms} ms; the API accepts whole milliseconds from ${MUSIC_SECTION_MIN_MS} to ${MUSIC_SECTION_MAX_MS}. Merge short sections or split long ones`,
+        );
+      if (s.section_name.length < 1 || s.section_name.length > SECTION_NAME_MAX)
+        throw new InvalidMusicRequest(`${where}.section_name`, `must be 1-${SECTION_NAME_MAX} characters`);
+    }
     const sum = plan.sections.reduce((s, x) => s + x.duration_ms, 0);
     if (sum !== len) throw new Error(`composition plan sections sum to ${sum} ms, expected musicLengthMs ${len}`);
     if (plan.sections.some((s) => s.lines.length > 0))
       throw new Error("composition plan must be instrumental: sections may not carry lines");
-    // the API documents music_length_ms / force_instrumental as prompt-only; a plan sets length via sections
-    return { method: "POST", endpoint, body: { composition_plan: plan, model_id } };
+    // the API documents music_length_ms / force_instrumental as prompt-only; a plan sets length via sections.
+    // Instrumental then rests on empty `lines`, backed by the documented negative_global_styles list.
+    const negative = plan.negative_global_styles.some((x) => VOCAL_STYLE.test(x))
+      ? plan.negative_global_styles
+      : [...plan.negative_global_styles, "vocals"];
+    return {
+      method: "POST",
+      endpoint,
+      body: { composition_plan: { ...plan, negative_global_styles: negative }, model_id },
+    };
   }
   if (typeof p.prompt !== "string" || p.prompt.trim() === "") throw new Error("music prompt must be non-empty");
   return {
