@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseWorkerLine, renderTimeoutMs, runWorker, STDERR_CAP, sweepJobFiles, sweepPartialRuns, TailBuffer } from "./render-support";
+import { parseWorkerLine, renderTimeoutMs, runWorker, STDERR_CAP, staleCutoffMs, sweepJobFiles, sweepPartialRuns, TailBuffer } from "./render-support";
 
 const node = (script: string, o: Partial<Parameters<typeof runWorker>[0]> = {}) =>
   runWorker({ cmd: process.execPath, args: ["-e", script], timeoutMs: 10_000, ...o });
@@ -67,6 +67,33 @@ describe("runWorker", () => {
 });
 
 describe("startup sweeps", () => {
+  const age = (p: string, ms: number) => {
+    const t = new Date(Date.now() - ms);
+    utimesSync(p, t, t);
+  };
+  const DAY = 86_400_000;
+
+  it("sweepPartialRuns removes only old run dirs without a manifest; a fresh one (a live render) survives", () => {
+    const root = tmp();
+    const live = path.join(root, "p1", "2026-03-02T10-00-00-000Z");
+    mkdirSync(live, { recursive: true });
+    writeFileSync(path.join(live, "raw.mp4"), "being written");
+    expect(sweepPartialRuns(root)).toEqual([]);
+    expect(existsSync(live)).toBe(true);
+    // old dir, but a file inside is still being written: also survives
+    const busy = path.join(root, "p1", "2026-03-02T11-00-00-000Z");
+    mkdirSync(busy, { recursive: true });
+    writeFileSync(path.join(busy, "raw.mp4"), "fresh file");
+    age(busy, DAY);
+    expect(sweepPartialRuns(root)).toEqual([]);
+    expect(existsSync(busy)).toBe(true);
+    // everything old: removed
+    age(path.join(busy, "raw.mp4"), DAY);
+    age(live, DAY);
+    age(path.join(live, "raw.mp4"), DAY);
+    expect(sweepPartialRuns(root).sort()).toEqual([busy, live].sort());
+  });
+
   it("sweepPartialRuns removes only run dirs without a manifest", () => {
     const root = tmp();
     const partial = path.join(root, "p1", "2026-03-01T10-00-00-000Z");
@@ -76,6 +103,7 @@ describe("startup sweeps", () => {
     writeFileSync(path.join(partial, "raw.mp4"), "x");
     writeFileSync(path.join(ok, "manifest.json"), "{}");
     writeFileSync(path.join(ok, "video.mp4"), "v");
+    for (const d of [partial, ok, stills]) for (const f of [d, ...(existsSync(d) ? readdirSync(d).map((n) => path.join(d, n)) : [])]) age(f, DAY);
     expect(sweepPartialRuns(root)).toEqual([partial]);
     expect(existsSync(partial)).toBe(false);
     expect(existsSync(path.join(ok, "video.mp4"))).toBe(true);
@@ -89,9 +117,8 @@ describe("startup sweeps", () => {
     const fresh = path.join(dir, "fresh.json");
     writeFileSync(old, "{}");
     writeFileSync(fresh, "{}");
-    const past = new Date(Date.now() - 120_000);
-    utimesSync(old, past, past);
-    expect(sweepJobFiles(dir, Date.now() - 60_000)).toEqual([old]);
+    age(old, DAY);
+    expect(sweepJobFiles(dir, staleCutoffMs())).toEqual([old]);
     expect(existsSync(fresh)).toBe(true);
   });
 });

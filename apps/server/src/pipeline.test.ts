@@ -119,9 +119,16 @@ describe("render cleanup on failure / cancel", () => {
     mkdirSync(jobs, { recursive: true });
     const old = path.join(jobs, "old.json");
     writeFileSync(old, "{}");
-    const past = new Date(Date.now() - 60_000);
-    utimesSync(old, past, past);
+    const fresh = path.join(jobs, "fresh.json"); // a live process's job file
+    writeFileSync(fresh, "{}");
+    const freshRun = path.join(root, "renders", "p1", "2026-02-04T00-00-00-000Z"); // a live process's render
+    mkdirSync(freshRun, { recursive: true });
+    writeFileSync(path.join(freshRun, "raw.mp4"), "x");
+    const past = new Date(Date.now() - 86_400_000);
+    for (const f of [old, partial, path.join(partial, "raw.mp4")]) utimesSync(f, past, past);
     runner.resume();
+    expect(existsSync(fresh)).toBe(true);
+    expect(existsSync(freshRun)).toBe(true);
     expect(existsSync(partial)).toBe(false);
     expect(existsSync(done)).toBe(true);
     expect(existsSync(old)).toBe(false);

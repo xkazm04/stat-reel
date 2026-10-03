@@ -33,7 +33,7 @@ import type { ProjectService } from "./projects";
 import type { PipelineApi } from "./tools";
 import { createSourceHasher, findReusableRender, gcBundles, propsSha256 } from "./bundle-support";
 import { referencedAudioFiles, manifestBuildInfo } from "./manifest-support";
-import { parseFontsReport, renderTimeoutMs, runWorker, sweepJobFiles, sweepPartialRuns } from "./render-support";
+import { parseFontsReport, renderTimeoutMs, runWorker, staleCutoffMs, sweepJobFiles, sweepPartialRuns } from "./render-support";
 import type { Warehouse } from "./warehouse";
 
 const execFileP = promisify(execFile);
@@ -87,11 +87,12 @@ export class Pipeline implements PipelineApi {
     this.runner.register("render", (p, ctx) => this.renderJob(p as { projectId: string; target: PublishTarget }, ctx));
     this.runner.register("publish", (p, ctx) => this.publishJob(p as { projectId: string; title?: string; description?: string; tags?: string[] }, ctx));
     this.runner.register("metrics", (_p, ctx) => this.metricsJob(ctx));
-    // a crash or kill leaves partial run dirs and worker job files; nothing is running yet when resume() calls this
-    const startedAt = Date.now();
+    // a crash or kill leaves partial run dirs and worker job files; other server processes share these dirs,
+    // so only leftovers older than the render timeout (+ margin) are removed
     this.runner.onStartup(() => {
-      sweepPartialRuns(paths.renders);
-      sweepJobFiles(path.join(paths.data, "cache", "jobs"), startedAt);
+      const cutoff = staleCutoffMs();
+      sweepPartialRuns(paths.renders, cutoff);
+      sweepJobFiles(path.join(paths.data, "cache", "jobs"), cutoff);
     });
   }
 
