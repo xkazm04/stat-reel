@@ -95,9 +95,9 @@ export class ProjectService {
     const facts = await this.wh.facts(refs.map((r) => r.t.fact_key!));
     for (const { scene, t } of refs) {
       const f = facts.get(t.fact_key!);
-      const shown = Number(t.display.replace(/[^\d.\-]/g, ""));
+      const shown = parseDisplayed(t.display);
       if (f === undefined) errors.push(`${scene}: '${t.display}' cites unknown fact ${t.fact_key}`);
-      else if (typeof f === "number" && !Number.isNaN(shown) && !matchesDisplayed(f, shown)) errors.push(`${scene}: '${t.display}' shows ${shown} but ${t.fact_key} = ${f}`);
+      else if (typeof f === "number" && !Number.isNaN(shown) && !matchesDisplayed(f, shown, t.display)) errors.push(`${scene}: '${t.display}' shows ${shown} but ${t.fact_key} = ${f}`);
     }
     const perScene = script.scenes.map((s) => ({ scene_id: s.scene_id, words: sceneSpokenText(s).split(/\s+/).filter(Boolean).length }));
     const words = perScene.reduce((a, s) => a + s.words, 0);
@@ -121,12 +121,19 @@ export class ProjectService {
   }
 }
 
-/** A displayed figure may be rounded ("47%" for 0.4706, "17.1" for 17.118) but not changed. */
-function matchesDisplayed(fact: number, shown: number): boolean {
-  const candidates = [fact, fact * 100];
-  return candidates.some((c) => {
-    const decimals = (String(shown).split(".")[1] ?? "").length;
-    return Math.abs(Number(c.toFixed(decimals)) - shown) < 1e-9;
-  });
+/** Numeric value of a displayed token. U+2212 / en dash minus are normalised to "-": the sign is part of the figure. */
+export function parseDisplayed(display: string): number {
+  return Number(display.replace(/[−–‒]/g, "-").replace(/[^\d.\-]/g, ""));
 }
 
+/**
+ * A displayed figure may be rounded ("47%" for 0.4706, "17.1" for 17.118) but not changed, and its sign
+ * must match. The x100 reading ("42" for a 0.42 share) is only offered for fractions: |fact| <= 1 and
+ * non-integer, or an integer 0/1 that the display marks with "%". A rank 1 shown as "100" therefore fails.
+ */
+export function matchesDisplayed(fact: number, shown: number, display = ""): boolean {
+  const candidates = [fact];
+  if (Math.abs(fact) <= 1 && (!Number.isInteger(fact) || display.includes("%"))) candidates.push(fact * 100);
+  const decimals = (String(shown).split(".")[1] ?? "").length;
+  return candidates.some((c) => Math.abs(Number(c.toFixed(decimals)) - shown) < 1e-9);
+}

@@ -3,7 +3,7 @@ import { sampleEraProps, sampleScript } from "@statreel/schemas";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { paths } from "./config";
 import { openDb } from "./db";
-import { ProjectService } from "./projects";
+import { ProjectService, matchesDisplayed, parseDisplayed } from "./projects";
 import { Warehouse } from "./warehouse";
 
 describe.skipIf(!existsSync(paths.warehouse))("ProjectService", () => {
@@ -82,5 +82,25 @@ describe.skipIf(!existsSync(paths.warehouse))("ProjectService", () => {
     const r = await svc.writeScript(p.id, long);
     expect(r.version).toBeNull();
     expect(r.errors.join("\n")).toMatch(/too long.*measured/);
+  });
+});
+
+describe("displayed-figure matching (pure)", () => {
+  const ok = (fact: number, display: string) => matchesDisplayed(fact, parseDisplayed(display), display);
+  it("keeps the sign: a U+2212 minus is a minus", () => {
+    expect(ok(3, "−3")).toBe(false);
+    expect(ok(-3, "−3")).toBe(true);
+    expect(ok(-3, "-3")).toBe(true);
+  });
+  it("accepts x100 only for fractions", () => {
+    expect(ok(0.42, "42%")).toBe(true);
+    expect(ok(0.4706, "47%")).toBe(true);
+    expect(ok(1, "100")).toBe(false);
+    expect(ok(1, "100%")).toBe(true);
+    expect(ok(2, "200")).toBe(false);
+  });
+  it("still allows rounding", () => {
+    expect(ok(17.118, "17.1")).toBe(true);
+    expect(ok(17.118, "18")).toBe(false);
   });
 });

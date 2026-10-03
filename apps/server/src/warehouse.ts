@@ -2,9 +2,11 @@
  * Read-only access to warehouse.duckdb for the app and the LLM.
  *
  * The LLM's `query` tool may read ONLY the `llm` schema (DESIGN §5.4). Enforced at the parser:
- * `json_serialize_sql` rejects anything but a single SELECT; the AST is walked and every BASE_TABLE
- * must be `llm.<view>` (or a CTE name), and TABLE_FUNCTIONs (read_csv, read_parquet, ...) are
- * refused. The connection is opened READ_ONLY with external access disabled as a second wall.
+ * `json_serialize_sql` rejects anything but a single SELECT; the AST is walked and every FROM-clause
+ * node must be on an ALLOWLIST of ref types (BASE_TABLE = `llm.<view>` or a CTE name; SUBQUERY and
+ * JOIN are recursed into; EMPTY/VALUES carry no table). Anything else - TABLE_FUNCTION (read_csv, ...),
+ * SHOW_REF (`show all tables`, `describe`, `summarize`, which list every schema) or a ref type this
+ * guard does not know - is refused, so a new DuckDB node type fails closed. The connection is opened READ_ONLY with external access disabled as a second wall.
  */
 import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 
@@ -50,17 +52,38 @@ export async function checkReadOnlyLlmSql(wh: Warehouse, sql: string): Promise<v
     const map = (n.cte_map as { map?: { key: string }[] } | undefined)?.map;
     for (const e of map ?? []) ctes.add(e.key.toLowerCase());
   });
-  walk(ast.statements as Ast, (n) => {
-    if (n.type === "TABLE_FUNCTION") throw new Error("table functions (read_csv, read_parquet, ...) are not allowed");
-    if (n.type === "BASE_TABLE") {
-      const schema = String(n.schema_name ?? "").toLowerCase();
-      const table = String(n.table_name ?? "").toLowerCase();
-      if (!schema) {
-        if (ctes.has(table)) return;
-        throw new Error(`table '${table}' must be qualified as llm.${table}`);
+  const checkRef = (ref: Record<string, unknown>): void => {
+    switch (ref.type) {
+      case "BASE_TABLE": {
+        const schema = String(ref.schema_name ?? "").toLowerCase();
+        const table = String(ref.table_name ?? "").toLowerCase();
+        if (!schema) {
+          if (ctes.has(table)) return;
+          throw new Error(`table '${table}' must be qualified as llm.${table}`);
+        }
+        if (schema !== "llm" || (ref.catalog_name && ref.catalog_name !== "")) throw new Error(`schema '${schema}' is not readable; use llm.* views`);
+        return;
       }
-      if (schema !== "llm" || (n.catalog_name && n.catalog_name !== "")) throw new Error(`schema '${schema}' is not readable; use llm.* views`);
+      case "JOIN":
+        checkRef(ref.left as Record<string, unknown>);
+        checkRef(ref.right as Record<string, unknown>);
+        return;
+      case "SUBQUERY": // its inner SELECT is visited by the walk below
+      case "EMPTY": // `select 1`
+      case "EXPRESSION_LIST": // VALUES (...)
+        return;
+      case "TABLE_FUNCTION":
+        throw new Error("table functions (read_csv, read_parquet, ...) are not allowed");
+      case "SHOW_REF":
+        throw new Error("SHOW / DESCRIBE / SUMMARIZE are not allowed (they list every schema); query llm.* views, or call describe_views for the catalogue");
+      default:
+        throw new Error(`FROM-clause node '${String(ref.type)}' is not allowed; select from llm.* views, subqueries, joins and CTEs only`);
     }
+  };
+  walk(ast.statements as Ast, (n) => {
+    if (n.from_table && typeof n.from_table === "object") checkRef(n.from_table as Record<string, unknown>);
+    // Backstop for table nodes reached outside a from_table slot (e.g. a CTE body's own refs are covered above).
+    if (n.type === "TABLE_FUNCTION" || n.type === "SHOW_REF" || n.type === "BASE_TABLE") checkRef(n);
   });
 }
 
@@ -145,21 +168,39 @@ export class Warehouse {
 
   /** Resolve `<row fact_key>#<column>` against every llm view that has a fact_key column. */
   async fact(ref: string): Promise<number | string | undefined> {
-    const [rowKey, column] = ref.split("#");
-    if (!rowKey || !column || !/^[a-z_]+$/.test(column)) return undefined;
-    for (const view of await this.factViews()) {
-      if (!view.columns.includes(column)) continue;
-      const rows = await this.rows(`select "${column}" as v from llm."${view.name}" where fact_key = ?`, [rowKey]);
-      if (rows.length) return rows[0]!.v as number | string;
-    }
-    return undefined;
+    return (await this.facts([ref])).get(ref);
   }
 
+  /** Batched: one query per (view, column) group instead of one per ref. */
   async facts(refs: string[]): Promise<Map<string, number | string>> {
     const out = new Map<string, number | string>();
-    for (const r of new Set(refs)) {
-      const v = await this.fact(r);
-      if (v !== undefined) out.set(r, v);
+    const byColumn = new Map<string, Map<string, string[]>>(); // column -> rowKey -> refs
+    for (const ref of new Set(refs)) {
+      const [rowKey, column] = ref.split("#");
+      if (!rowKey || !column || !/^[a-z_]+$/.test(column)) continue;
+      const rowsOf = byColumn.get(column) ?? new Map<string, string[]>();
+      rowsOf.set(rowKey, [...(rowsOf.get(rowKey) ?? []), ref]);
+      byColumn.set(column, rowsOf);
+    }
+    const views = await this.factViews();
+    for (const [column, rowsOf] of byColumn) {
+      let pending = [...rowsOf.keys()];
+      for (const view of views) {
+        if (!pending.length) break;
+        if (!view.columns.includes(column)) continue;
+        const found = await this.rows(
+          `select fact_key as k, "${column}" as v from llm."${view.name}" where fact_key in (${pending.map(() => "?").join(",")})`,
+          pending,
+        );
+        const seen = new Set<string>();
+        for (const r of found) {
+          const k = String(r.k);
+          if (seen.has(k)) continue; // first row wins, as before
+          seen.add(k);
+          for (const ref of rowsOf.get(k) ?? []) out.set(ref, r.v as number | string);
+        }
+        pending = pending.filter((k) => !seen.has(k));
+      }
     }
     return out;
   }
