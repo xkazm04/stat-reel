@@ -1,12 +1,25 @@
 import path from "node:path";
 import { defineConfig } from "@playwright/test";
+import { preflightProblems } from "./scripts/e2e-preflight.mjs";
 
 // Ports are overridable so the suite can run next to a developer's own `pnpm dev` (8787 / 5173).
 const apiPort = process.env.E2E_API_PORT ?? "8787";
 const studioPort = process.env.E2E_STUDIO_PORT ?? "5173";
 const e2eData = path.resolve("data", "e2e");
-// a fresh app DB per run (Windows keeps an open SQLite file locked, so it is never deleted in place)
-const runDb = path.join(e2eData, `app-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`);
+// a fresh app DB per run (Windows keeps an open SQLite file locked, so it is never deleted in place). The path is
+// pinned in the env so every re-evaluation of this config (each worker loads it again) and globalSetup's pruning
+// agree on which DB is "current".
+process.env.E2E_RUN_DB ??= path.join(e2eData, `app-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`);
+const runDb = process.env.E2E_RUN_DB;
+
+// Fail fast, before any webServer starts (Playwright starts webServer ahead of globalSetup, so this cannot live
+// there): a taken port, or a missing ffprobe / Chrome, becomes one named error instead of a raw "already used".
+// Workers inherit E2E_PREFLIGHT_DONE and skip it; they would otherwise see the servers this run just started.
+if (!process.env.E2E_PREFLIGHT_DONE && !process.argv.includes("--list") && !process.env.E2E_SKIP_PREFLIGHT) {
+  const problems = preflightProblems({ apiPort, studioPort });
+  if (problems.length > 0) throw new Error(`\n${problems.join("\n")}\n`);
+  process.env.E2E_PREFLIGHT_DONE = "1";
+}
 
 export default defineConfig({
   testDir: "e2e",
