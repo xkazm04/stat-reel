@@ -36,6 +36,7 @@ import {
 } from "./board";
 import { parseTab, TABS, type Tab } from "./library";
 import { useBoard, useCaseNames } from "./shared";
+import { QueueStrip } from "./QueueStrip";
 import { UndoToastHost } from "./undo";
 import "./board.css";
 
@@ -131,6 +132,8 @@ export function BoardPage() {
         </nav>
         ) : null}
       </header>
+
+      <QueueStrip />
 
       <nav className="bd-tabs" aria-label="Board sections">
         {TABS.map((o) => (

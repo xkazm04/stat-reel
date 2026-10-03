@@ -1,6 +1,6 @@
 # 010: Background generation queue (dedicated worker process, Claude Code CLI)
 
-- **Status:** accepted, implementing (T7 queue core, T8 Claude runner; draft rev. 2, 2026-10-03, owner answered Q4–Q7)
+- **Status:** accepted, implemented through T11 (T7 queue core, T8 Claude runner, T10 visuals + badges, T11 data-gated video; draft rev. 2, 2026-10-03, owner answered Q4–Q7)
 - **Date:** 2026-10-03
 - **Affects:**
   - `apps/server`: `db.ts` (`generation_jobs`, `generation_job_events`, `worker_lease`, `board_items.case_idea_id`, `busy_timeout`); `generation/*` (including `worker-main.ts`, `assets.ts`); `jobs.ts` (render lanes); `mcp.ts` tools; `/api/generation/*`;
@@ -71,3 +71,11 @@
   - Commons `extmetadata` (licence, artist, credit, restrictions) is present for the two real logo files tested (n = 2);
   - `--system-prompt-file` still works for the co-pilot.
 - **Ledger:** `fetch_asset` appends to `work/out/assets.json` (the session never writes it) and to an authoritative `data/generation/<id>/fetched-assets.json` outside the session's reach.
+- **Resolved in T10/T11:**
+  - **Finalize is split.** The worker validates (`validateDataRaceOutputs`, the function behind the MCP tool `validate_generation_output`), then asks the server for renders through `gen_render` jobs on the shared render lane (a still at `round(0.45 x total frames)` per variant, or the full video plus a thumbnail), then calls `finalize`, which only re-validates, copies files and writes rows, so no HTTP call outlives the undici timeout during a long render.
+  - **Board transitions** run in one SQLite transaction with the decision (`GenerationFlow`): accept a case enqueues `visual_options`; rejecting an accepted case cancels its jobs; accepting a variant archives its pending siblings as `superseded by <id>` (undo, and rejecting the accepted variant, restore them by that note), runs the gate and enqueues `generate_video`. Responses are `{idea, job?}` and `{item, archived_ids?, job?, gate?}`.
+  - **Data gate** (`generation/gate.ts`): `data_status` staged/registry, every case source in `data/registry/sources.yaml` with a verdict other than `avoid` (matched by `registry_id`, name or host), and an accepted design whose `source.data_provenance` is `real`. It fails closed, also when the registry cannot be read. All six accepted cases are `new-source` today, so every real video stays `data_blocked`.
+  - **Provenance rule in the validator:** a `new-source` or `guess` case may only carry `sample` props (the composition burns the badge); a video needs `real`. A staged case may still produce sample previews.
+  - **Variants differ only in what the props schema carries** (entity colours, labels, axis): `DataRaceProps` has no palette, background or chart-form field, so "three distinct looks" is enforced as three distinct colour sets.
+  - **Logos fetched and verified by the Commons API** are promoted to `data/assets/logos/` + `LEDGER.json` at finalize; `model-declared` assets are not (they wait for owner review).
+  - **Generated videos** go to `data/renders/gen/<case>/<job>/` with `manifest.json` (ffprobe checks: 1080x1920, 30 fps, h264, 30-90 s and equal to the timing plan) and a `videos` row under the case topic. The manifest is a generation manifest, not the publish-gate provenance manifest: publishing stays a separate owner action.

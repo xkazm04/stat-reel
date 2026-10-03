@@ -1,0 +1,239 @@
+/* Generation badges, queue strip and log drawer (SPEC D.11). Photo Finish tokens only; every state also has a glyph and words. */
+
+.jb {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.jb--compact {
+  padding: 2px 7px;
+  font-size: 12px;
+}
+.jb__main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+.jb__glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+.jb__label {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.jb__detail {
+  flex: 1 1 100%;
+  color: var(--color-text-dim);
+  max-width: 62ch;
+}
+.jb__actions {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+}
+.jb__err {
+  flex: 1 1 100%;
+  color: var(--status-blocked);
+}
+.jb--queued,
+.jb--waiting {
+  border-style: dashed;
+}
+.jb--running {
+  border-color: var(--color-signal);
+}
+.jb--ready {
+  border-color: var(--status-go);
+}
+.jb--ready .jb__glyph,
+.jb--done .jb__glyph {
+  color: var(--status-go);
+}
+.jb--done {
+  border-color: var(--status-go);
+  background: var(--status-go-wash);
+}
+.jb--failed,
+.jb--blocked {
+  border-color: var(--status-blocked);
+  background: var(--status-blocked-wash);
+}
+.jb--failed .jb__glyph,
+.jb--blocked .jb__glyph {
+  color: var(--status-blocked);
+}
+.jb--cancelled {
+  border-style: dotted;
+  color: var(--color-text-dim);
+}
+/* indeterminate bar: a sliding segment, static under reduced motion */
+.jb__bar {
+  width: 44px;
+  height: 3px;
+  background: var(--color-line);
+  position: relative;
+  overflow: hidden;
+}
+.jb__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: var(--color-signal);
+  animation: jb-slide 1.4s var(--ease-linear, linear) infinite;
+}
+@keyframes jb-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jb__bar::after {
+    animation: none;
+    width: 100%;
+  }
+}
+
+/* "Generated · v2 · SAMPLE DATA" on tiles */
+.gm {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid var(--color-line-strong);
+  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.gm--sample {
+  border-color: var(--color-signal);
+}
+.gm b {
+  color: var(--color-brand);
+  font-weight: 700;
+}
+.bd-tile__gen {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+}
+.bd-tile__job {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+/* queue strip */
+.jq {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 0 0 14px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: 14px;
+}
+.jq--active {
+  border-color: var(--color-signal);
+}
+.jq--offline {
+  border-color: var(--status-blocked);
+  background: var(--status-blocked-wash);
+}
+.jq__dot {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+.jq__text {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.jq__hint {
+  color: var(--color-text-dim);
+}
+.jq__jobs {
+  margin-left: auto;
+}
+.jq__jobs summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+.jq__jobs ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.jq__jobs li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: baseline;
+}
+
+/* log drawer */
+.jlog {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-modal, 60);
+  width: min(720px, calc(100vw - 32px));
+  max-height: 60vh;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-panel);
+  font-size: 13px;
+}
+.jlog__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-line);
+}
+.jlog__head .btn {
+  margin-left: auto;
+}
+.jlog__live {
+  font-family: var(--font-mono);
+  color: var(--color-signal);
+}
+.jlog__err {
+  margin: 0;
+  padding: 6px 12px;
+  color: var(--status-blocked);
+}
+.jlog__body {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.5;
+}

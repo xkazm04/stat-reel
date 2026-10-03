@@ -44,8 +44,11 @@ export function useCaseNames(): ReadonlyMap<string, string> {
 export function useDecide() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { id: string; decision: BoardDecision; note?: string }) =>
-      api.decideBoard(v.id, v.decision, v.note),
+    mutationFn: async (v: { id: string; decision: BoardDecision; note?: string }) => {
+      const r = await api.decideBoard(v.id, v.decision, v.note);
+      void qc.invalidateQueries({ queryKey: qk.generation }); // an accepted variant queues its video (or is data-blocked), siblings are archived
+      return r.item;
+    },
     onSuccess: (item, v) => {
       qc.setQueryData<BoardResponse>(qk.board, (prev) =>
         prev ? { ...prev, items: prev.items.map((i) => (i.id === item.id ? { ...i, ...item } : i)) } : prev,

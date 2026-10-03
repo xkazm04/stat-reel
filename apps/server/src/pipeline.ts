@@ -421,26 +421,34 @@ export class Pipeline implements PipelineApi {
     return { policyDir: paths.policy, opaBin: process.env.OPA_BIN ?? (process.platform === "win32" ? path.join(repoRoot, ".tools", "opa.exe") : "opa") };
   }
 
-  private async worker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1, signal: AbortSignal | undefined = ctx?.signal): Promise<Record<string, unknown>> {
-    const full = { ...job, entry: ENTRY, bundleDir: path.join(paths.data, "cache", "bundle", sourceHash()) };
-    // props with word timings exceed the Windows command-line limit (32K): pass the job as a file
-    const jobFile = path.join(paths.data, "cache", "jobs", `${randomUUID()}.json`);
-    mkdirSync(path.dirname(jobFile), { recursive: true });
-    writeFileSync(jobFile, JSON.stringify(full));
-    let last = 0;
-    try {
-      return await runWorker({
-        cmd: renderNode(), args: [WORKER, jobFile], cwd: path.join(repoRoot, "apps", "server"), signal, timeoutMs: renderTimeoutMs(),
-        onNote: (note) => ctx?.progress(last, note),
-        onMessage: (msg) => {
-          if (msg.type !== "progress" || !ctx) return;
-          last = Math.min(scale, (msg.stage === "bundle" ? 0.05 : 0.05 + 0.95 * (msg.progress ?? 0)) * scale);
-          ctx.progress(last, msg.stage);
-        },
-      });
-    } finally {
-      rmSync(jobFile, { force: true });
-    }
+  private worker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1, signal: AbortSignal | undefined = ctx?.signal): Promise<Record<string, unknown>> {
+    return runRenderWorker(job, ctx, scale, signal);
+  }
+}
+
+/**
+ * Runs one render job in the x64 render worker child process (ADR 004) and resolves with its `done`
+ * message. Shared by the produce pipeline and the generation `gen_render` handler.
+ */
+export async function runRenderWorker(job: Record<string, unknown>, ctx: JobContext | undefined, scale = 1, signal: AbortSignal | undefined = ctx?.signal): Promise<Record<string, unknown>> {
+  const full = { ...job, entry: ENTRY, bundleDir: path.join(paths.data, "cache", "bundle", sourceHash()) };
+  // props with word timings exceed the Windows command-line limit (32K): pass the job as a file
+  const jobFile = path.join(paths.data, "cache", "jobs", `${randomUUID()}.json`);
+  mkdirSync(path.dirname(jobFile), { recursive: true });
+  writeFileSync(jobFile, JSON.stringify(full));
+  let last = 0;
+  try {
+    return await runWorker({
+      cmd: renderNode(), args: [WORKER, jobFile], cwd: path.join(repoRoot, "apps", "server"), signal, timeoutMs: renderTimeoutMs(),
+      onNote: (note) => ctx?.progress(last, note),
+      onMessage: (msg) => {
+        if (msg.type !== "progress" || !ctx) return;
+        last = Math.min(scale, (msg.stage === "bundle" ? 0.05 : 0.05 + 0.95 * (msg.progress ?? 0)) * scale);
+        ctx.progress(last, msg.stage);
+      },
+    });
+  } finally {
+    rmSync(jobFile, { force: true });
   }
 }
 

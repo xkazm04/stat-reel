@@ -1,6 +1,6 @@
 /**
  * Generation queue, fake mode (ADR 010, T7): the worker process (GEN_MODE=fake, third webServer) takes
- * a queued job through running to done and writes data/generation/<id>/. No UI yet (T10); the API is the
+ * a queued job through running to done and writes data/generation/<id>/ (the UI flow is in generation-board.spec.ts); the API is the
  * surface. Skipped in live runs: those never enqueue fake jobs.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -12,6 +12,7 @@ const API = `http://127.0.0.1:${process.env.E2E_API_PORT ?? "8787"}`;
 test.skip(!!process.env.E2E_LIVE, "fake-mode generation test");
 
 test("generation: a visual_options job runs queued -> done in the worker process", async ({ request }) => {
+  test.setTimeout(8 * 60_000);
   const idea = await (await request.post(`${API}/api/cases`, { data: {
     title: "e2e generation probe", pitch: "A decade-long probe", domain: "f1", arc: "rise and fall", insight: "probe", why_lasts: "probe",
     tension: { expectation: "steady", reality: "volatile", strength: "moderate" },
@@ -31,7 +32,7 @@ test("generation: a visual_options job runs queued -> done in the worker process
   expect(again.status()).toBe(200);
   expect((await again.json()).job.id).toBe(job.id); // one row on a double POST
 
-  await expect.poll(async () => (await (await request.get(`${API}/api/generation/jobs/${job.id}`)).json()).job.status, { timeout: 60_000 }).toBe("done");
+  await expect.poll(async () => (await (await request.get(`${API}/api/generation/jobs/${job.id}`)).json()).job.status, { timeout: 5 * 60_000 }).toBe("done");
   const detail = await (await request.get(`${API}/api/generation/jobs/${job.id}`)).json();
   expect(detail.log_tail.join("\n")).toContain("finalize ok");
   const events = detail.events.map((e: { type: string }) => e.type);

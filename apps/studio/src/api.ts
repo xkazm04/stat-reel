@@ -3,8 +3,10 @@
  * Vite proxies /api, /events, /files and /mcp to 127.0.0.1:8787; `pnpm start` serves both.
  */
 import type {
+  CaseStage,
   EraAdjustedProps,
   Format,
+  GenerationJob,
   HeatmapCell,
   Mode,
   PolicyResult,
@@ -206,8 +208,18 @@ export type BoardDecision = (typeof BOARD_DECISIONS)[number];
 export type BoardStatus = "pending" | "accepted" | "rejected";
 export type BoardStyle = { id: string; name: string; notes?: string };
 export type BoardProposedCase = { name: string; pitch: string; requires?: string[] };
+/** POST /api/board/:id/decision: the item, the siblings an accepted variant archived, the video job or the data gate's refusal (D.9). */
+export type BoardDecided = {
+  item: BoardItem;
+  archived_ids?: string[];
+  restored_ids?: string[];
+  job?: GenerationJob;
+  gate?: { ok: boolean; reason?: string };
+};
 export type BoardItem = {
   id: string;
+  /** the case idea a generated design belongs to (ADR 010); null for registry designs */
+  case_idea_id?: string | null;
   /** path under data/board (e.g. items/loop-001-A1.png) */
   image: string;
   /** same-origin URL of the shot (/files/board/<image>); for a clip this is its poster frame */
@@ -303,6 +315,25 @@ export type CaseIdea = {
 };
 export type CasesResponse = { ideas: CaseIdea[]; decisions: CaseDecision[]; min_span_years: number };
 
+/** GET /api/generation/overview: the worker, the recent jobs and the derived stage of every accepted case (D.2, D.11). */
+export type GenerationOverview = {
+  worker: { online: boolean; pid: number | null; heartbeat_at: string | null; queued: number; running: number };
+  jobs: (GenerationJob & { queue_position?: number })[];
+  cases: Record<
+    string,
+    {
+      title: string;
+      stage: CaseStage;
+      gate: { ok: boolean; reason?: string } | null;
+      visual_job_id: string | null;
+      video_job_id: string | null;
+      accepted_item_id: string | null;
+      videos: number;
+    }
+  >;
+  running: { job: GenerationJob; title: string } | null;
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -383,12 +414,27 @@ export const api = {
   boardItem: (id: string) => request<BoardItem>("GET", `/api/board/${enc(id)}`),
   /** The owner's gate: accept | reject_style | reject_case | reject_both, with an optional note (the reply has no image_url). */
   decideBoard: (id: string, decision: BoardDecision, note?: string) =>
-    request<Omit<BoardItem, "image_url">>("POST", `/api/board/${enc(id)}/decision`, {
+    request<BoardDecided>("POST", `/api/board/${enc(id)}/decision`, {
       decision,
       note: note?.trim() || undefined,
     }),
-  /** Undo the owner's decision on an item: back to pending (409 while a generation job runs for it). */
-  undoBoardDecision: (id: string) => request<Omit<BoardItem, "image_url">>("DELETE", `/api/board/${enc(id)}/decision`),
+  /** Undo the owner's decision on an item: back to pending, its archived siblings restored (409 while a generation job runs for it). */
+  undoBoardDecision: (id: string) =>
+    request<Omit<BoardItem, "image_url"> & { restored_ids?: string[] }>("DELETE", `/api/board/${enc(id)}/decision`),
+  /** Generation queue (ADR 010): one call for every badge, plus the log, retry, cancel and manual enqueue. */
+  generationOverview: () => request<GenerationOverview>("GET", "/api/generation/overview"),
+  generationJob: (id: string) => request<{ job: GenerationJob; stage: string | null; log_tail: string[] }>("GET", `/api/generation/jobs/${enc(id)}`),
+  retryGeneration: (id: string) => request<{ job: GenerationJob }>("POST", `/api/generation/jobs/${enc(id)}/retry`),
+  cancelGeneration: (id: string) => request<{ job: GenerationJob }>("POST", `/api/generation/jobs/${enc(id)}/cancel`),
+  /** The manual "Generate video" button: runs the same data gate (409 `{gate}` when it fails). */
+  generateVideo: (case_id: string, board_item_id: string) =>
+    request<{ job: GenerationJob; existing?: boolean }>("POST", "/api/generation/jobs", { type: "generate_video", case_id, board_item_id }),
+  /** The log from `offset` on, and the offset to continue from (header X-Next-Offset). */
+  generationLog: async (id: string, offset: number): Promise<{ text: string; next: number }> => {
+    const res = await fetch(`/api/generation/jobs/${enc(id)}/log?offset=${offset}`);
+    if (!res.ok) throw new ApiError(res.status, null, `GET log: ${res.status}`);
+    return { text: await res.text(), next: Number(res.headers.get("x-next-offset") ?? offset) };
+  },
   /** The style library: every style on the Board with its verdict and the owner's management. */
   styles: () => request<{ styles: StyleEntry[] }>("GET", "/api/styles"),
   /** Lock / retire (null clears), the owner's note, the hero item. */
@@ -396,7 +442,7 @@ export const api = {
   /** Case ideas from the case loop (text only, no art style). */
   cases: () => request<CasesResponse>("GET", "/api/cases"),
   decideCase: (id: string, decision: CaseDecision, note?: string) =>
-    request<CaseIdea>("POST", `/api/cases/${enc(id)}/decision`, { decision, note: note?.trim() || undefined }),
+    request<{ idea: CaseIdea; job?: GenerationJob; existing?: boolean }>("POST", `/api/cases/${enc(id)}/decision`, { decision, note: note?.trim() || undefined }),
   /** Undo the owner's decision on a case idea: back to pending (409 while a generation job runs for it). */
   undoCaseDecision: (id: string) => request<CaseIdea>("DELETE", `/api/cases/${enc(id)}/decision`),
   /** The controlled topic list (active topics). */
@@ -421,6 +467,7 @@ export const qk = {
   board: ["board"] as const,
   styles: ["styles"] as const,
   cases: ["cases"] as const,
+  generation: ["generation"] as const,
   topics: ["topics"] as const,
   file: (path: string) => ["file", path] as const,
   health: ["health"] as const,

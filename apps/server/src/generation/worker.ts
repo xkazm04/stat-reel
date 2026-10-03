@@ -12,6 +12,7 @@ import { acquireLease, heartbeatLease, type LeaseOptions, releaseLease } from ".
 import { jobPaths } from "./paths";
 import { buildCaseData, configSnapshot, prepareDirs, writeCaseJson } from "./prepare";
 import type { GenerationQueue } from "./queue";
+import type { RenderStep } from "./render-steps";
 import { type GenerationValidator, stubValidator } from "./validator";
 
 export type WorkerDeps = {
@@ -21,6 +22,8 @@ export type WorkerDeps = {
   engine: GenerationEngine;
   callbacks: ServerCallbacks;
   validator?: GenerationValidator;
+  /** renders requested from the server before finalize (stills / video); absent = nothing to render (unit tests) */
+  renderStep?: RenderStep;
   dataRoot: string;
   /** server reachable? (checked before each claim; the job stays queued while it is down) */
   health: () => Promise<boolean>;
@@ -190,7 +193,14 @@ export class GenerationWorker {
       queue.update(job.id, { phase: "finalize", progress_note: "validating outputs" });
       const v = await (this.d.validator ?? stubValidator).validate({ type: job.type, paths: jp });
       if (!v.ok) throw new GenerationError("validation", v.errors.slice(0, 5).join("; "));
-      const fin = await this.callServer(() => this.d.callbacks.finalize(job.id, { outputs: v.outputs, result: run.result }));
+      let rendered: Record<string, unknown> = {};
+      if (this.d.renderStep) {
+        queue.update(job.id, { phase: "render", progress_note: "rendering" });
+        rendered = await this.d.renderStep({ job, paths: jp, signal: controller.signal, note: (n) => queue.update(job.id, { progress_note: n }), log: logLine });
+        if (reason) throw new GenerationError("cancelled", "aborted");
+        queue.update(job.id, { phase: "finalize", progress_note: "saving results" });
+      }
+      const fin = await this.callServer(() => this.d.callbacks.finalize(job.id, { outputs: v.outputs, result: { ...run.result, ...rendered } }));
       logLine(`finalize ok: ${v.outputs.length} outputs`);
       return queue.finish(job.id, "done", { result: { ...run.result, outputs: v.outputs, ...fin } });
     } catch (e) {
