@@ -156,6 +156,7 @@ export const boardItems = sqliteTable("board_items", {
   note: text("note"),
   decided_at: text("decided_at"),
   created_at: text("created_at").notNull(),
+  case_idea_id: text("case_idea_id"),
 });
 export const boardStyles = sqliteTable("board_styles", {
   id: text("id").primaryKey(),
@@ -196,6 +197,47 @@ export const caseIdeas = sqliteTable("case_ideas", {
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value_json: text("value_json").notNull(),
+});
+
+// ---- generation queue (ADR 010): written by the server (enqueue/cancel/retry) and the worker process
+export const generationJobs = sqliteTable("generation_jobs", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  case_id: text("case_id").notNull(),
+  board_item_id: text("board_item_id"),
+  dedupe_key: text("dedupe_key").notNull(),
+  status: text("status").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  max_attempts: integer("max_attempts").notNull().default(2),
+  params_json: text("params_json").notNull().default("{}"),
+  result_json: text("result_json"),
+  error: text("error"),
+  error_kind: text("error_kind"),
+  log_path: text("log_path"),
+  output_dir: text("output_dir"),
+  pid: integer("pid"),
+  phase: text("phase"),
+  progress_note: text("progress_note"),
+  last_tool: text("last_tool"),
+  cancel_requested_at: text("cancel_requested_at"),
+  heartbeat_at: text("heartbeat_at"),
+  created_at: text("created_at").notNull(),
+  started_at: text("started_at"),
+  finished_at: text("finished_at"),
+  updated_at: text("updated_at").notNull(),
+});
+export const generationJobEvents = sqliteTable("generation_job_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  job_id: text("job_id").notNull(),
+  at: text("at").notNull(),
+  type: text("type").notNull(),
+  data_json: text("data_json").notNull().default("{}"),
+});
+export const workerLease = sqliteTable("worker_lease", {
+  id: text("id").primaryKey(),
+  pid: integer("pid").notNull(),
+  host: text("host").notNull(),
+  heartbeat_at: text("heartbeat_at").notNull(),
 });
 
 const DDL = `
@@ -240,14 +282,35 @@ create table if not exists case_ideas (id text primary key, title text not null,
   decided_at text, created_at text not null);
 `;
 
+const GENERATION_DDL = `
+create table if not exists generation_jobs (id text primary key,
+  type text not null check (type in ('visual_options','generate_video')),
+  case_id text not null, board_item_id text, dedupe_key text not null,
+  status text not null check (status in ('queued','running','done','failed','cancelled')),
+  attempts integer not null default 0, max_attempts integer not null default 2, params_json text not null default '{}',
+  result_json text, error text, error_kind text, log_path text, output_dir text, pid integer,
+  phase text, progress_note text, last_tool text, cancel_requested_at text, heartbeat_at text,
+  created_at text not null, started_at text, finished_at text, updated_at text not null);
+create unique index if not exists generation_jobs_active on generation_jobs(dedupe_key) where status in ('queued','running');
+create index if not exists generation_jobs_status on generation_jobs(status, created_at);
+create index if not exists generation_jobs_case on generation_jobs(case_id, created_at);
+create table if not exists generation_job_events (id integer primary key autoincrement, job_id text not null, at text not null,
+  type text not null, data_json text not null default '{}');
+create index if not exists generation_job_events_job on generation_job_events(job_id, id);
+create table if not exists worker_lease (id text primary key, pid integer not null, host text not null, heartbeat_at text not null);
+`;
+
 export type Db = BetterSQLite3Database<Record<string, never>> & { $client: Database.Database };
 
 export function openDb(file: string): Db {
   if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
   const sqlite = new Database(file);
+  // two writers (server + generation worker, ADR 010): wait for the lock instead of failing
+  sqlite.pragma("busy_timeout = 5000");
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(DDL);
+  sqlite.exec(GENERATION_DDL);
   // additive migrations for databases created before a column existed
   const addColumn = (table: string, column: string, type: string) => {
     const cols = (sqlite.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
@@ -255,6 +318,7 @@ export function openDb(file: string): Db {
   };
   addColumn("board_items", "video", "text");
   addColumn("board_items", "duration_s", "real");
+  addColumn("board_items", "case_idea_id", "text");
   addColumn("case_ideas", "beats_json", "text not null default '[]'");
   for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
   return drizzle(sqlite) as Db;
