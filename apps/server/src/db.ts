@@ -4,6 +4,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { migrateTopics } from "./topics-migrate";
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
@@ -14,6 +15,8 @@ export const projects = sqliteTable("projects", {
   mode: text("mode").notNull(),
   status: text("status").notNull(),
   created_at: text("created_at").notNull(),
+  /** topics.key (ADR 011); null until chosen */
+  topic: text("topic"),
 });
 export const projectProps = sqliteTable("project_props", {
   project_id: text("project_id").notNull(),
@@ -192,6 +195,33 @@ export const caseIdeas = sqliteTable("case_ideas", {
   note: text("note"),
   decided_at: text("decided_at"),
   created_at: text("created_at").notNull(),
+  /** topics.key (ADR 011); null until chosen or implied by an unambiguous domain */
+  topic: text("topic"),
+});
+/** The controlled list of broad domains a video belongs to (ADR 011); DDL and seed live in topics-migrate.ts. */
+export const topics = sqliteTable("topics", {
+  key: text("key").primaryKey(),
+  label: text("label").notNull(),
+  family: text("family").notNull(),
+  sort: integer("sort").notNull().default(0),
+  active: integer("active").notNull().default(1),
+  created_at: text("created_at").notNull(),
+});
+/** One row per finished MP4: the ledger the topic heatmap reads (ADR 011). */
+export const videos = sqliteTable("videos", {
+  id: text("id").primaryKey(),
+  topic_key: text("topic_key").notNull(),
+  topic_label: text("topic_label").notNull(),
+  topic_source: text("topic_source").notNull(),
+  case_id: text("case_id"),
+  project_id: text("project_id"),
+  render_id: text("render_id"),
+  generation_job_id: text("generation_job_id"),
+  title: text("title").notNull(),
+  format: text("format").notNull(),
+  duration_s: real("duration_s"),
+  path: text("path").notNull(),
+  created_at: text("created_at").notNull(),
 });
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
@@ -257,6 +287,7 @@ export function openDb(file: string): Db {
   addColumn("board_items", "duration_s", "real");
   addColumn("case_ideas", "beats_json", "text not null default '[]'");
   for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
+  migrateTopics(sqlite); // topics + videos tables, seed, topic columns, backfills (ADR 011); idempotent
   return drizzle(sqlite) as Db;
 }
 

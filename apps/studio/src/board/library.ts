@@ -3,7 +3,7 @@
  * retire) and the Use cases list (registry formats, cases accepted through designs, case ideas from
  * the text-only case loop). No React here; covered by library.test.ts.
  */
-import type { UseCase } from "@statreel/schemas";
+import { DOMAIN_TOPIC, type Topic, type UseCase } from "@statreel/schemas";
 import type { BoardItem, CaseDecision, CaseIdea, StyleEntry, StyleStatus } from "../api";
 import { slug } from "./board";
 
@@ -22,8 +22,11 @@ export const STYLE_GROUPS: readonly { status: StyleStatus; title: string; hint: 
   { status: "accepted", title: "Accepted", hint: "The floor loops build on. Lock one to make it a signature, retire it to drop it." },
   { status: "open", title: "Not judged yet", hint: "Only pending designs carry these styles." },
   { status: "retired", title: "Retired", hint: "Once accepted, now out of the pool. Loops do not build on them." },
-  { status: "rejected", title: "Rejected", hint: "Rejected as a style more often than accepted." },
 ];
+
+/** Rejected styles are hidden (D.1, Q3); the loops still read them from /api/styles. */
+export const visibleStyles = <T extends { status: StyleStatus }>(styles: readonly T[]): T[] =>
+  styles.filter((s) => s.status !== "rejected");
 
 export function groupStyles(styles: readonly StyleEntry[]): { status: StyleStatus; title: string; hint: string; styles: StyleEntry[] }[] {
   return STYLE_GROUPS.map((g) => ({ ...g, styles: styles.filter((s) => s.status === g.status) })).filter((g) => g.styles.length);
@@ -119,6 +122,9 @@ export function caseRows(usecases: readonly UseCase[], items: readonly BoardItem
   return rows.sort((a, b) => rank[a.verdict] - rank[b.verdict] || b.accepts - a.accepts || a.name.localeCompare(b.name));
 }
 
+/** Rejected cases and ideas are hidden from the lists (D.1); they stay in the data for /api/cases/feedback. */
+export const visibleCaseRows = (rows: readonly CaseRow[]): CaseRow[] => rows.filter((r) => r.verdict !== "rejected");
+
 export const CASE_DECISION_META: Record<CaseDecision, { label: string; key: string; hint: string }> = {
   accept: { label: "Accept", key: "a", hint: "worth a 30-90 s video over a decade or more" },
   reject_not_interesting: { label: "Not interesting", key: "n", hint: "it may hold up, but it is not worth working with" },
@@ -157,6 +163,23 @@ export const DATA_STATUS_LABEL: Record<CaseIdea["data_status"], string> = {
   "new-source": "New source - needs your approval",
   guess: "Data guessed, not verified",
 };
+
+/** The topic an idea resolves to on its own: its picked topic, else the unambiguous domain mapping (ADR 011). */
+export const ideaTopic = (i: Pick<CaseIdea, "topic" | "domain">): { key: string; source: "case.topic" | "case.domain" } | null =>
+  i.topic ? { key: i.topic, source: "case.topic" } : DOMAIN_TOPIC[i.domain] ? { key: DOMAIN_TOPIC[i.domain]!, source: "case.domain" } : null;
+
+/** `sports` and `geoeconomy` ideas have no default: accepting one needs a picked topic first. */
+export const needsTopic = (i: Pick<CaseIdea, "topic" | "domain">): boolean => ideaTopic(i) === null;
+
+/** Pickable topics (never the reserved fallback), grouped by family in list order, for a <select>. */
+export function topicGroups(topics: readonly Topic[]): { family: Topic["family"]; topics: Topic[] }[] {
+  const out = new Map<Topic["family"], Topic[]>();
+  for (const t of [...topics].sort((a, b) => a.sort - b.sort)) {
+    if (t.key === "unassigned" || !t.active) continue;
+    out.set(t.family, [...(out.get(t.family) ?? []), t]);
+  }
+  return [...out].map(([family, list]) => ({ family, topics: list }));
+}
 
 /** Pending ideas first, then by span (longer timelines first). */
 export function inbox(ideas: readonly CaseIdea[]): CaseIdea[] {

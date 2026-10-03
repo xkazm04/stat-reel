@@ -7,9 +7,10 @@ import {
 } from "@statreel/schemas";
 import { type Db, now, projectProps, projects, scripts } from "./db";
 import { loadRegistry } from "./registry";
+import { TopicService } from "./topics";
 import type { Warehouse } from "./warehouse";
 
-export type NewProject = { title: string; use_case_id: string; sport: string; format: string; mode: string };
+export type NewProject = { title: string; use_case_id: string; sport: string; format: string; mode: string; topic?: string | null };
 export const SCHEMA_VERSION = "era-adjusted@1";
 /** Narrator speech rate MEASURED on rendered TTS (voice "Daniel", 2026-09-29: 99-127 wpm, figures slow it). */
 export const NARRATOR_WPM = { min: 115, max: 128 };
@@ -21,7 +22,8 @@ export class ProjectService {
   constructor(private readonly db: Db, private readonly wh: Warehouse, private readonly usecases: UseCase[] = loadRegistry().usecases) {}
 
   create(p: NewProject) {
-    const row = { id: `p-${randomUUID().slice(0, 8)}`, ...p, status: "idea", created_at: now() };
+    if (p.topic) new TopicService(this.db).assertPickable(p.topic);
+    const row = { id: `p-${randomUUID().slice(0, 8)}`, ...p, topic: p.topic ?? null, status: "idea", created_at: now() };
     this.db.insert(projects).values(row).run();
     return row;
   }

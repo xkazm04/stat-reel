@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { asc, desc, eq } from "drizzle-orm";
 import type { BoardItem } from "./board";
 import { boardStyles, caseIdeas, type Db, now } from "./db";
+import { TopicService } from "./topics";
 
 // ---------------------------------------------------------------- styles
 
@@ -148,6 +149,8 @@ export type NewCaseIdea = {
   /** guess: where the data might come from */
   data_guess?: string | null;
   feasibility?: (typeof FEASIBILITY)[number] | null;
+  /** topics.key (ADR 011): one of the controlled list; the case brief emits it, create() rejects unknown keys */
+  topic?: string | null;
 };
 export type CaseIdea = Omit<NewCaseIdea, "source"> & {
   id: string; span_years: number; source: Record<string, unknown> | null;
@@ -163,7 +166,7 @@ const hydrate = (r: typeof caseIdeas.$inferSelect): CaseIdea => ({
   requires: parse(r.requires_json, []), sources: parse(r.sources_json, []), evidence: parse(r.evidence_json, []),
   data_status: r.data_status as DataStatus, source: parse(r.source_json, null), status: r.status,
   kind: (r.kind as CaseKind | null) ?? "observed", method: r.method, data_guess: r.data_guess,
-  feasibility: (r.feasibility as NewCaseIdea["feasibility"]) ?? null,
+  feasibility: (r.feasibility as NewCaseIdea["feasibility"]) ?? null, topic: r.topic ?? null,
   decision: r.decision as CaseDecision | null, note: r.note, decided_at: r.decided_at, created_at: r.created_at,
 });
 
@@ -199,10 +202,16 @@ export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
 }
 
 export class CaseIdeas {
-  constructor(private readonly db: Db) {}
+  private readonly topics: TopicService;
+  constructor(private readonly db: Db) {
+    this.topics = new TopicService(db);
+  }
 
   create(c: NewCaseIdea): CaseIdea {
     const errors = validateCaseIdea(c);
+    if (c.topic !== undefined && c.topic !== null) {
+      try { this.topics.assertPickable(c.topic); } catch (e) { errors.push(`topic: ${e instanceof Error ? e.message : String(e)}`); }
+    }
     if (errors.length) throw new Error(errors.join("; "));
     const row = {
       id: `ci-${randomUUID().slice(0, 8)}`, title: c.title.trim(), pitch: c.pitch.trim(), domain: c.domain, arc: c.arc.trim(),
@@ -210,7 +219,7 @@ export class CaseIdeas {
       unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), timeline_json: JSON.stringify(c.timeline),
       span_years: c.timeline.years_to - c.timeline.years_from, chart_ideas_json: JSON.stringify(c.chart_ideas ?? []),
       requires_json: JSON.stringify(c.requires ?? []), sources_json: JSON.stringify(c.sources ?? []), evidence_json: JSON.stringify(c.evidence ?? []),
-      kind: c.kind ?? "observed", method: c.method?.trim() || null, data_guess: c.data_guess?.trim() || null, feasibility: c.feasibility ?? null,
+      topic: c.topic ?? null, kind: c.kind ?? "observed", method: c.method?.trim() || null, data_guess: c.data_guess?.trim() || null, feasibility: c.feasibility ?? null,
       data_status: c.data_status, source_json: c.source ? JSON.stringify(c.source) : null, status: "pending", decision: null, note: null,
       decided_at: null, created_at: now(),
     };
@@ -230,11 +239,27 @@ export class CaseIdeas {
     return r ? hydrate(r) : undefined;
   }
 
+  /** The owner picks (or with null clears) the topic of an idea; only an active key of the controlled list is accepted. */
+  setTopic(id: string, topic: string | null): CaseIdea {
+    if (!this.get(id)) throw new Error(`unknown case idea ${id}`);
+    this.topics.setCaseTopic(id, topic);
+    return this.get(id)!;
+  }
+
   decide(id: string, decision: CaseDecision, note?: string): CaseIdea {
     if (!CASE_DECISIONS.includes(decision)) throw new Error(`decision must be one of ${CASE_DECISIONS.join(", ")}`);
     if (!this.get(id)) throw new Error(`unknown case idea ${id}`);
     this.db.update(caseIdeas).set({ status: decision === "accept" ? "accepted" : "rejected", decision, note: note?.trim() || null, decided_at: now() })
       .where(eq(caseIdeas.id, id)).run();
+    return this.get(id)!;
+  }
+
+  /** Undo a decision (D.1): back to pending, decision, note and decided_at cleared. Archived ideas cannot be undone. */
+  undo(id: string): CaseIdea {
+    const cur = this.get(id);
+    if (!cur) throw new Error(`unknown case idea ${id}`);
+    if (cur.status === "archived") throw new Error(`case idea ${id} is archived`);
+    this.db.update(caseIdeas).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(caseIdeas.id, id)).run();
     return this.get(id)!;
   }
 

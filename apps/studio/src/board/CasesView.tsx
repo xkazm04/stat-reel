@@ -8,7 +8,7 @@
  * decided ideas - grouped by verdict.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { api, CASE_DECISIONS, type CaseDecision, type CaseIdea, type CasesResponse, qk, serverError } from "../api";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useHeatmap } from "../data";
@@ -20,10 +20,15 @@ import {
   DATA_STATUS_LABEL,
   DOMAIN_LABEL,
   inbox,
+  ideaTopic,
   KIND_LABEL,
+  needsTopic,
   nextUndecided,
+  topicGroups,
+  visibleCaseRows,
 } from "./library";
 import { useBoard } from "./shared";
+import { showUndo, UndoToastHost } from "./undo";
 
 const ORIGIN_WORD: Record<CaseRow["origin"], string> = { registry: "Registry", design: "From designs", idea: "Case loop" };
 
@@ -35,12 +40,39 @@ function useDecideCase() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { id: string; decision: CaseDecision; note?: string }) => api.decideCase(v.id, v.decision, v.note),
+    onSuccess: (idea, v) => {
+      qc.setQueryData<CasesResponse>(qk.cases, (prev) =>
+        prev ? { ...prev, ideas: prev.ideas.map((i) => (i.id === idea.id ? idea : i)) } : prev,
+      );
+      void qc.invalidateQueries({ queryKey: qk.cases });
+      // a rejected idea leaves the lists: offer to take it back (D.1)
+      if (v.decision !== "accept") showUndo(`Rejected · ${CASE_DECISION_META[v.decision].label.toLowerCase()} · ${idea.title}`, () => api.undoCaseDecision(idea.id));
+    },
+  });
+}
+
+function useTopics() {
+  return useQuery({ queryKey: qk.topics, queryFn: () => api.topics(), staleTime: 60_000 });
+}
+
+function useSetTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; topic: string | null }) => api.setCaseTopic(v.id, v.topic),
     onSuccess: (idea) => {
       qc.setQueryData<CasesResponse>(qk.cases, (prev) =>
         prev ? { ...prev, ideas: prev.ideas.map((i) => (i.id === idea.id ? idea : i)) } : prev,
       );
       void qc.invalidateQueries({ queryKey: qk.cases });
     },
+  });
+}
+
+function useUndoCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.undoCaseDecision(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.cases }),
   });
 }
 
@@ -60,7 +92,8 @@ export function CasesView() {
   const [open, setOpen] = useState<{ id: string; order: string[] } | null>(null);
   const ideas = cases.data?.ideas ?? [];
   const byId = useMemo(() => new Map(ideas.map((i) => [i.id, i])), [ideas]);
-  const rows = useMemo(() => caseRows(hm.data?.usecases ?? [], board.data?.items ?? [], ideas), [hm.data, board.data, ideas]);
+  const allRows = useMemo(() => caseRows(hm.data?.usecases ?? [], board.data?.items ?? [], ideas), [hm.data, board.data, ideas]);
+  const rows = useMemo(() => visibleCaseRows(allRows), [allRows]);
   const pending = useMemo(
     () => inbox(ideas).filter((i) => (domain === "all" || i.domain === domain) && (kind === "all" || i.kind === kind)),
     [ideas, domain, kind],
@@ -73,7 +106,7 @@ export function CasesView() {
 
   const accepted = rows.filter((r) => r.verdict === "accepted");
   const waiting = rows.filter((r) => (r.verdict === "pending" || r.verdict === "untested") && r.origin !== "idea");
-  const rejected = rows.filter((r) => r.verdict === "rejected");
+  const rejectedCount = allRows.filter((r) => r.verdict === "rejected").length;
   const openOrder = open ? open.order.map((id) => byId.get(id)).filter((i): i is CaseIdea => !!i) : [];
   const openIdea = open ? byId.get(open.id) : undefined;
 
@@ -81,7 +114,8 @@ export function CasesView() {
     <div className="bd-cases" data-testid="board-cases">
       <p className="bd-lib__intro">
         A use case is judged on its own here, without an art style. Approve stories that hold for a decade or all time
-        ({cases.data?.min_span_years ?? 10}+ years) and reveal something as the clock runs. Ideas come from{" "}
+        ({cases.data?.min_span_years ?? 10}+ years) and reveal something as the clock runs. <b className="num">{rejectedCount}</b>{" "}
+        rejected are hidden; loops still read them as feedback. Ideas come from{" "}
         <code className="mono">node .claude/skills/board/scripts/board.mjs cases --id cs-002</code>.
       </p>
 
@@ -116,7 +150,6 @@ export function CasesView() {
 
       <CaseList id="cs-acc" title="Accepted" hint="Loops build designs on these." rows={accepted} onOpen={setOpen} />
       <CaseList id="cs-wait" title="Waiting on designs" hint="Registry formats and design proposals with no verdict yet." rows={waiting} onOpen={setOpen} />
-      <CaseList id="cs-rej" title="Rejected" hint="Kept so loops do not propose them again." rows={rejected} onOpen={setOpen} />
 
       {open && openIdea ? (
         <IdeaDialog
@@ -130,6 +163,7 @@ export function CasesView() {
           }}
         />
       ) : null}
+      <UndoToastHost />
     </div>
   );
 }
@@ -257,6 +291,8 @@ function IdeaDialog({
   const dlg = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const decide = useDecideCase();
+  const undo = useUndoCase();
+  const [topicAsked, setTopicAsked] = useState(false);
   const [note, setNote] = useState(idea.note ?? "");
   const idx = order.findIndex((i) => i.id === idea.id);
   const prev = idx > 0 ? order[idx - 1] : undefined;
@@ -279,10 +315,17 @@ function IdeaDialog({
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on every idea change
   useEffect(() => {
     setNote(idea.note ?? "");
+    setTopicAsked(false);
     dlg.current?.querySelector(".bd-idlg__body")?.scrollTo({ top: 0 });
   }, [idea.id]);
 
-  const send = (d: CaseDecision) =>
+  const send = (d: CaseDecision) => {
+    // accepting needs a topic (ADR 011): sports / geo-economy ideas have no default, so ask for one first
+    if (d === "accept" && needsTopic(idea)) {
+      setTopicAsked(true);
+      dlg.current?.querySelector<HTMLSelectElement>("[data-testid='idea-topic']")?.focus();
+      return;
+    }
     decide.mutate(
       { id: idea.id, decision: d, note },
       {
@@ -293,6 +336,7 @@ function IdeaDialog({
         },
       },
     );
+  };
 
   const onKey = (e: KeyboardEvent<HTMLDialogElement>) => {
     if ((e.target as HTMLElement).closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -345,7 +389,7 @@ function IdeaDialog({
       </div>
 
       <div className="bd-idlg__body">
-        <IdeaBody idea={idea} />
+        <IdeaBody idea={idea} picker={<TopicPicker idea={idea} asked={topicAsked} />} />
       </div>
 
       <div className="bd-lb__bar bd-idlg__bar">
@@ -379,10 +423,21 @@ function IdeaDialog({
         <div className="bd-lb__after" aria-live="polite">
           {decide.isError ? (
             <span className="bd-style__err">{serverError(decide.error)}</span>
+          ) : undo.isError ? (
+            <span className="bd-style__err">{serverError(undo.error)}</span>
           ) : idea.decision ? (
             <span className="bd-dim">
               Decided: {CASE_DECISION_META[idea.decision].label}
-              {allDone ? " · every idea in view is decided" : ""}
+              {allDone ? " · every idea in view is decided" : ""}{" "}
+              <button
+                type="button"
+                className="bd-linkbtn"
+                data-testid={`idea-${idea.id}-undo`}
+                disabled={undo.isPending}
+                onClick={() => undo.mutate(idea.id)}
+              >
+                Undo
+              </button>
             </span>
           ) : null}
         </div>
@@ -391,7 +446,52 @@ function IdeaDialog({
   );
 }
 
-function IdeaBody({ idea }: { idea: CaseIdea }) {
+/** "Pick topic": the controlled list (ADR 011) decides which row of the topic heatmap a finished video lands in. */
+function TopicPicker({ idea, asked }: { idea: CaseIdea; asked: boolean }) {
+  const topics = useTopics();
+  const set = useSetTopic();
+  const auto = ideaTopic(idea);
+  const label = new Map((topics.data?.topics ?? []).map((t) => [t.key, t.label]));
+  const missing = needsTopic(idea);
+  return (
+    <div className="bd-idea__topic">
+      <label className="bd-sel">
+        <span className="label">Topic</span>
+        <select
+          data-testid="idea-topic"
+          value={idea.topic ?? ""}
+          aria-invalid={asked && missing ? true : undefined}
+          aria-describedby={`tp-${idea.id}`}
+          disabled={set.isPending || topics.isLoading}
+          onChange={(e) => set.mutate({ id: idea.id, topic: e.target.value || null })}
+        >
+          <option value="">
+            {auto && auto.source === "case.domain" ? `From domain: ${label.get(auto.key) ?? auto.key}` : "Pick topic"}
+          </option>
+          {topicGroups(topics.data?.topics ?? []).map((g) => (
+            <optgroup key={g.family} label={g.family === "geoeconomy" ? "Geo-economy" : g.family[0]!.toUpperCase() + g.family.slice(1)}>
+              {g.topics.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <span id={`tp-${idea.id}`} className={asked && missing ? "bd-style__err" : "bd-dim"} role={asked && missing ? "alert" : undefined}>
+        {asked && missing
+          ? "Pick a topic before accepting: this domain has no default."
+          : missing
+            ? "No topic yet: its videos would show under Unassigned."
+            : "Decides the heatmap row of this case's videos."}
+      </span>
+      {set.isError ? <span className="bd-style__err">{serverError(set.error)}</span> : null}
+    </div>
+  );
+}
+
+function IdeaBody({ idea, picker }: { idea: CaseIdea; picker?: ReactNode }) {
   const t = idea.timeline;
   return (
     <article className={`bd-idea bd-idea--${idea.status}`} data-testid={`idea-${idea.id}`}>
@@ -408,6 +508,7 @@ function IdeaBody({ idea }: { idea: CaseIdea }) {
         </span>
       </header>
       <p className="bd-idea__pitch">{idea.pitch}</p>
+      {picker}
       <dl className="bd-idea__dl">
         <div>
           <dt>Over time</dt>

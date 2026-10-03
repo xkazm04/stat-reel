@@ -90,6 +90,7 @@ Write `variant-1/cases.json`, a JSON array of {{count}} objects:
   "title": "Who makes the world's music",
   "pitch": "One sentence a viewer gets in five seconds.",
   "domain": "music",
+  "topic": "music",
   "arc": "What the viz reveals as time runs, start to end.",
   "insight": "The thing the viewer did not know before.",
   "why_lasts": "Why 60-90 s of this stays interesting all the way through.",
@@ -107,6 +108,16 @@ Write `variant-1/cases.json`, a JSON array of {{count}} objects:
   "unknowns": ["chart positions before 1958", "why a country rises"]
 }]
 ```
+
+- `topic` is **required** and must be exactly one of the keys below (the owner's controlled list;
+  it decides which row of the topic heatmap the finished video lands in). Pick the most specific
+  one. `sports` and `geoeconomy` cases have no default, so choose carefully (a boxing story is
+  `boxing`, an oil-price story `energy`). Use a broad family key only when nothing narrower fits.
+  An unknown key is refused.
+
+- **Sports:** `formula-1`, `football`, `basketball`, `ice-hockey`, `tennis`, `cycling`, `motorsport-endurance`, `motorcycle-racing`, `athletics`, `baseball`, `american-football`, `boxing`, `golf`, `cricket`, `rugby`.
+- **Geo-economy:** `energy`, `trade`, `markets`, `demographics`, `labour`, `growth-income`, `prices-housing`, `debt-finance`, `agriculture-food`, `migration`.
+- **Broad families:** `culture`, `science`, `games`, `music`, `other`.
 
 - `timeline.unit` is year, season, race, matchday, month or date; `from`/`to` are in that unit, and
   `years_from`/`years_to` are the calendar years covered.

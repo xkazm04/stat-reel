@@ -26,6 +26,7 @@ import {
 } from "@statreel/schemas";
 import { modes, paths, renderNode, repoRoot, server } from "./config";
 import { assets, type Db, metricsDaily, now, publications, renders } from "./db";
+import { TopicService } from "./topics";
 import type { EventBus } from "./events";
 import { type JobContext, type JobRunner, Refusal } from "./jobs";
 import type { ProjectService } from "./projects";
@@ -274,8 +275,12 @@ export class Pipeline implements PipelineApi {
     ctx.progress(0.97, "gate");
     const verdict = await evaluatePolicy(manifest, p.target, this.opaOpts());
     const id = randomUUID();
+    const renderedAt = now();
     this.db.insert(renders).values({ id, project_id: p.projectId, job_id: ctx.id, format: props.format, path: video, manifest_path: path.join(dir, "manifest.json"),
-      checks_json: JSON.stringify(checks), policy_json: JSON.stringify({ ...verdict, target: p.target }), created_at: now() }).run();
+      checks_json: JSON.stringify(checks), policy_json: JSON.stringify({ ...verdict, target: p.target }), created_at: renderedAt }).run();
+    // the videos ledger behind the topic heatmap (ADR 011): one row per finished render, topic resolved from the project
+    new TopicService(this.db).recordRender({ render_id: id, project_id: p.projectId, title: project.title, format: props.format,
+      path: path.relative(paths.data, video).split(path.sep).join("/"), duration_s: checks.duration_s, created_at: renderedAt });
     this.projects.advance(p.projectId, "rendered");
     if (verdict.allow) this.projects.advance(p.projectId, "gated");
     // disposable intermediates go; the deliverables (video, captions, thumb, manifest) stay (ADR 003)

@@ -299,3 +299,4 @@ export * from "./data-race";
 export * from "./generation-rules";
 export * from "./sha256";
 export * from "./timing-plan";
+export * from "./topics";

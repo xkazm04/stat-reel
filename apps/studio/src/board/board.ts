@@ -111,8 +111,13 @@ export function caseOf(
 
 // ------------------------------------------------------------------ filters and counts
 
-export type StatusFilter = "all" | ItemState;
-export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "pending", "accepted", "rejected"];
+/** Rejected proposals are never listed (D.1): "all" means every non-rejected item. */
+export type StatusFilter = "all" | Exclude<ItemState, "rejected">;
+export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "pending", "accepted"];
+
+/** The items the owner still sees: everything except rejected proposals (they stay in the data for the loops). */
+export const visibleItems = <T extends Pick<BoardItem, "status" | "decision">>(all: readonly T[]): T[] =>
+  all.filter((i) => itemState(i) !== "rejected");
 export const asStatusFilter = (v: unknown): StatusFilter =>
   typeof v === "string" && (STATUS_FILTERS as readonly string[]).includes(v) ? (v as StatusFilter) : "all";
 
@@ -225,7 +230,15 @@ export type AxisTally = {
 
 export type Ledger<T> = { styles: AxisTally[]; cases: AxisTally[]; cell: (style: string, kase: string) => T[] };
 
-export function ledger<T extends BoardItem>(items: readonly T[], names?: ReadonlyMap<string, string>): Ledger<T> {
+/**
+ * Tallies come from every item given (rejections stay visible as feedback on an axis); only the
+ * shots passing `shown` are drawn in the cells.
+ */
+export function ledger<T extends BoardItem>(
+  items: readonly T[],
+  names?: ReadonlyMap<string, string>,
+  shown: (i: T) => boolean = () => true,
+): Ledger<T> {
   const cells = new Map<string, T[]>();
   const tally = (key: string, label: string, sub: string | null, proposed: boolean): AxisTally => ({
     key,
@@ -258,7 +271,7 @@ export function ledger<T extends BoardItem>(items: readonly T[], names?: Readonl
     if (rejectsCase(i.decision)) ct.rejected += 1;
     else if (i.decision === "reject_style") ct.spared += 1;
     const ck = `${s.key}|${k.key}`;
-    cells.set(ck, [...(cells.get(ck) ?? []), i]);
+    if (shown(i)) cells.set(ck, [...(cells.get(ck) ?? []), i]);
   }
   const caseList = [...cases.values()];
   return {

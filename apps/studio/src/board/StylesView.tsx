@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { api, type BoardItem, qk, serverError, type StyleEntry, type StylePatch } from "../api";
 import { Empty, Failure, Loading } from "../components/ui";
-import { groupStyles, styleItems } from "./library";
+import { groupStyles, styleItems, visibleStyles } from "./library";
 import { Shot, shotAlt, useBoard } from "./shared";
 
 const STATUS_WORD: Record<StyleEntry["status"], string> = {
@@ -40,15 +40,17 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
   const styles = useStyles();
   const board = useBoard();
   const byId = useMemo(() => new Map((board.data?.items ?? []).map((i) => [i.id, i])), [board.data]);
-  const groups = useMemo(() => groupStyles(styles.data?.styles ?? []), [styles.data]);
+  const groups = useMemo(() => groupStyles(visibleStyles(styles.data?.styles ?? [])), [styles.data]);
   const [open, setOpen] = useState<string | null>(null);
 
   if (styles.isError) return <Failure error={styles.error} what="The style library" />;
   if (styles.isLoading || board.isLoading) return <Loading what="the style library" />;
   if (!groups.length)
     return (
-      <Empty title="No styles yet" className="bd-empty">
-        Styles appear as soon as a loop posts designs. Accept designs on the Designs tab to grow the pool.
+      <Empty title={styles.data?.styles.length ? "No styles to show" : "No styles yet"} className="bd-empty">
+        {styles.data?.styles.length
+          ? "Every style so far was rejected, so none is listed. Loops still read them as feedback."
+          : "Styles appear as soon as a loop posts designs. Accept designs on the Designs tab to grow the pool."}
       </Empty>
     );
 
@@ -59,8 +61,8 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
       <p className="bd-lib__intro">
         <b className="num">{n("locked")}</b> locked · <b className="num">{n("accepted")}</b> accepted ·{" "}
         <b className="num">{n("open")}</b> not judged · <b className="num">{n("retired")}</b> retired ·{" "}
-        <b className="num">{n("rejected")}</b> rejected. Loops build on accepted and locked styles, rebuild locked
-        ones faithfully, and never reuse retired or rejected ones. Text size is not part of a style.
+        <b className="num">{n("rejected")}</b> rejected (hidden here). Loops build on accepted and locked styles, rebuild
+        locked ones faithfully, and never reuse retired or rejected ones. Text size is not part of a style.
       </p>
       {groups.map((g) => (
         <section key={g.status} className={`bd-lib__group bd-lib__group--${g.status}`} aria-labelledby={`sg-${g.status}`}>

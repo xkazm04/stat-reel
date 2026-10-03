@@ -22,7 +22,10 @@ import {
   shapeOf,
   spatialMove,
   stateLabel,
+  STATUS_FILTERS,
   styleOf,
+  visibleItems,
+  asStatusFilter,
 } from "./board";
 
 let n = 0;
@@ -124,10 +127,19 @@ describe("filters, counts, groups", () => {
   ];
   it("filters by status, style and case", () => {
     expect(filterItems(items, NO_FILTER)).toHaveLength(4);
-    expect(filterItems(items, { ...NO_FILTER, status: "rejected" })).toHaveLength(2);
     expect(filterItems(items, { ...NO_FILTER, status: "pending" })).toHaveLength(1);
     expect(filterItems(items, { ...NO_FILTER, style: "style:loom" })).toHaveLength(2);
     expect(filterItems(items, { ...NO_FILTER, case: "new:dynasty-river" })).toHaveLength(1);
+  });
+  it("hides rejected proposals: visibleItems, no rejected filter, ledger tallies keep them", () => {
+    expect(visibleItems(items)).toHaveLength(2);
+    expect(visibleItems(items).every((i) => itemState(i) !== "rejected")).toBe(true);
+    expect(STATUS_FILTERS).toEqual(["all", "pending", "accepted"]);
+    expect(asStatusFilter("rejected")).toBe("all");
+    const shown = new Set(visibleItems(items).map((i) => i.id));
+    const L = ledger(items, undefined, (i) => shown.has(i.id));
+    expect(L.styles.reduce((a, s) => a + s.rejected, 0)).toBeGreaterThan(0);
+    expect(L.styles.flatMap((s) => L.cases.flatMap((c) => L.cell(s.key, c.key)))).toHaveLength(2);
   });
   it("counts states, rejection axes, styles, cases and loops", () => {
     const c = countItems(items);

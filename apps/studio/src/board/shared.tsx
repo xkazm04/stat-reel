@@ -28,6 +28,7 @@ import {
   stateLabel,
   styleOf,
 } from "./board";
+import { showUndo } from "./undo";
 
 // ------------------------------------------------------------------ data
 
@@ -45,11 +46,25 @@ export function useDecide() {
   return useMutation({
     mutationFn: (v: { id: string; decision: BoardDecision; note?: string }) =>
       api.decideBoard(v.id, v.decision, v.note),
-    onSuccess: (item) => {
+    onSuccess: (item, v) => {
       qc.setQueryData<BoardResponse>(qk.board, (prev) =>
         prev ? { ...prev, items: prev.items.map((i) => (i.id === item.id ? { ...i, ...item } : i)) } : prev,
       );
       void qc.invalidateQueries({ queryKey: qk.board });
+      // a rejected proposal leaves the grid: offer to take it back (D.1)
+      if (v.decision !== "accept") showUndo(`${DECISION_META[v.decision].done} · ${item.title}`, () => api.undoBoardDecision(item.id));
+    },
+  });
+}
+
+/** DELETE /api/board/:id/decision: the item goes back to pending. */
+export function useUndoDecision() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.undoBoardDecision(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.board });
+      void qc.invalidateQueries({ queryKey: qk.styles });
     },
   });
 }
@@ -411,6 +426,7 @@ export function Gate({
 }) {
   const uid = useId();
   const decide = useDecide();
+  const undo = useUndoDecision();
   const [note, setNote] = useState(item.note ?? "");
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const state = itemState(item);
@@ -452,6 +468,17 @@ export function Gate({
             <>
               <StateMark item={item} />
               {item.decided_at ? <time dateTime={item.decided_at}>{relTime(item.decided_at)}</time> : null}
+              <button
+                type="button"
+                className="bd-linkbtn"
+                data-testid="undo-decision"
+                aria-disabled={undo.isPending || undefined}
+                onClick={() => {
+                  if (!undo.isPending) undo.mutate(item.id);
+                }}
+              >
+                Undo
+              </button>
             </>
           )}
         </span>
@@ -491,6 +518,11 @@ export function Gate({
       {decide.isError ? (
         <p className="bd-gate__err" role="alert">
           Not recorded: <span className="mono">{serverError(decide.error)}</span>
+        </p>
+      ) : null}
+      {undo.isError ? (
+        <p className="bd-gate__err" role="alert">
+          Not undone: <span className="mono">{serverError(undo.error)}</span>
         </p>
       ) : null}
     </section>

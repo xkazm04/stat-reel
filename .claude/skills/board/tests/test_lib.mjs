@@ -167,7 +167,7 @@ test("rejectedCases lists only cases rejected more than accepted", async () => {
 test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources)", async () => {
   const { validateCaseIdea, titleKey } = await import("../scripts/lib.mjs");
   const ok = {
-    title: "t", pitch: "p", arc: "a", insight: "i", why_lasts: "w", domain: "music", data_status: "new-source",
+    title: "t", pitch: "p", arc: "a", insight: "i", why_lasts: "w", domain: "music", topic: "music", data_status: "new-source",
     tension: { expectation: "e", reality: "r", strength: "moderate" },
     beats: [{ at: "1960", what: "a" }, { at: "1970", what: "b" }, { at: "1985", what: "c" }, { at: "2005", what: "d" }],
     timeline: { unit: "year", from: 1960, to: 2020, years_from: 1960, years_to: 2020 },
@@ -176,6 +176,9 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.deepEqual(validateCaseIdea(ok), []);
   assert.match(validateCaseIdea({ ...ok, timeline: { ...ok.timeline, years_from: 2015 } }).join(), /at least 10/);
   assert.match(validateCaseIdea({ ...ok, beats: ok.beats.slice(1) }).join(), /beats/);
+  assert.match(validateCaseIdea({ ...ok, topic: undefined }).join(), /topic must be one of/);
+  assert.match(validateCaseIdea({ ...ok, topic: "knitting" }).join(), /topic must be one of/);
+  assert.deepEqual(validateCaseIdea({ ...ok, topic: "energy" }), []);
   assert.match(validateCaseIdea({ ...ok, tension: { expectation: "e", reality: "", strength: "x" } }).join(), /tension/);
   assert.match(validateCaseIdea({ ...ok, sources: [{ name: "x" }] }).join(), /needs name, url and license/);
   assert.equal(titleKey("The Wins Record, hand to hand"), titleKey("wins record hand-to-hand"));

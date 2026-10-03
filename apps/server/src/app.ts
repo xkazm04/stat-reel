@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { compress } from "hono/compress";
 import { etag } from "hono/etag";
 import { streamSSE } from "hono/streaming";
-import { PublishTargetSchema } from "@statreel/schemas";
+import { PublishTargetSchema, TopicInputSchema, TopicPatchSchema } from "@statreel/schemas";
 import { paths } from "./config";
 import type { EventBus } from "./events";
 import type { HeatmapService } from "./heatmap-service";
@@ -22,9 +22,15 @@ import type { CalendarService } from "./calendar";
 import { type BoardService, DECISIONS, type Decision } from "./board";
 import { CASE_DECISIONS, type CaseDecision, type CaseIdeas, MIN_SPAN_YEARS, type StyleLibrary, type StyleOverride } from "./library";
 import type { Db } from "./db";
+import { TopicService } from "./topics";
+import { type GenerationGuard, noGenerationJobs } from "./generation-guard";
 
 export type AppDeps = {
   db: Db; calendar: CalendarService; board: BoardService; styles: StyleLibrary; cases: CaseIdeas; bus: EventBus; runner: JobRunner; projects: ProjectService; heatmap: HeatmapService; llm: LlmService; tools: Tools; pipeline: Pipeline;
+  /** background generation lookups for undo (D.1); defaults to "no jobs" until the queue lands (TODO(T7)) */
+  generation?: GenerationGuard;
+  /** controlled topics + the videos ledger (ADR 011); built from `db` when omitted */
+  topics?: TopicService;
 };
 
 const SERVABLE = [paths.renders, paths.audio, paths.board, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
@@ -51,12 +57,16 @@ export function buildApp(d: AppDeps) {
 
   // ---- heatmap, registry
   app.get("/api/heatmap", async (c) => c.json({ cells: await d.heatmap.current(), usecases: d.heatmap.usecases(), trend: d.heatmap.trend() }));
+  const topics = d.topics ?? new TopicService(d.db);
+  app.get("/api/heatmap/topics", (c) => c.json(topics.heatmap({ include_empty: c.req.query("include_empty") })));
   app.post("/api/heatmap/recompute", async (c) => c.json({ cells: await d.heatmap.recompute() }));
   app.get("/api/sources", async (c) => c.json({ sources: d.heatmap.sources(), capabilities: await d.heatmap.capabilities() }));
 
   // ---- projects
   app.get("/api/projects", (c) => c.json({ projects: d.projects.list().map((p) => ({ ...p, jobs: d.runner.list(p.id).slice(0, 5) })) }));
-  app.post("/api/projects", async (c) => c.json(d.projects.create(await c.req.json()), 201));
+  app.post("/api/projects", async (c) => {
+    try { return c.json(d.projects.create(await c.req.json()), 201); } catch (e) { return c.json({ error: e instanceof Error ? e.message : String(e) }, 400); }
+  });
   app.get("/api/projects/:id", (c) => {
     const id = c.req.param("id");
     const project = d.projects.get(id);
@@ -147,6 +157,19 @@ export function buildApp(d: AppDeps) {
     } catch (e) { return bad(c, e); }
   });
 
+  app.delete("/api/board/:id/decision", (c) => {
+    const id = c.req.param("id");
+    if (!d.board.get(id)) return c.json({ error: "not found" }, 404);
+    const gen = d.generation ?? noGenerationJobs;
+    if (gen.hasRunning({ kind: "item", id })) return c.json({ error: "a generation job for this item is running; cancel it first" }, 409);
+    try {
+      gen.cancelQueued({ kind: "item", id });
+      const item = d.board.undo(id);
+      d.bus.emit({ type: "board.decided", id: item.id, decision: null });
+      return c.json(item);
+    } catch (e) { return bad(c, e); }
+  });
+
   // ---- style library: verdicts from the gate + the owner's lock / retire / note / hero (ADR 008)
   app.get("/api/styles", (c) => c.json({ styles: d.styles.list(d.board.list({ status: "all" })) }));
   app.patch("/api/styles/:id", async (c) => {
@@ -178,6 +201,38 @@ export function buildApp(d: AppDeps) {
       d.bus.emit({ type: "cases.decided", id: idea.id, decision: idea.decision });
       return c.json(idea);
     } catch (e) { return bad(c, e); }
+  });
+
+  app.delete("/api/cases/:id/decision", (c) => {
+    const id = c.req.param("id");
+    if (!d.cases.get(id)) return c.json({ error: "not found" }, 404);
+    const gen = d.generation ?? noGenerationJobs;
+    if (gen.hasRunning({ kind: "case", id })) return c.json({ error: "a generation job for this case is running; cancel it first" }, 409);
+    try {
+      gen.cancelQueued({ kind: "case", id });
+      const idea = d.cases.undo(id);
+      d.bus.emit({ type: "cases.decided", id: idea.id, decision: null });
+      return c.json(idea);
+    } catch (e) { return bad(c, e); }
+  });
+
+  app.patch("/api/cases/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!d.cases.get(id)) return c.json({ error: "not found" }, 404);
+    try {
+      const b = (await c.req.json()) as { topic?: string | null };
+      if (b.topic === undefined) throw new Error("nothing to update: send {topic: <key>|null}");
+      return c.json(d.cases.setTopic(id, b.topic));
+    } catch (e) { return bad(c, e); }
+  });
+
+  // ---- topics: the controlled list (ADR 011)
+  app.get("/api/topics", (c) => c.json({ topics: topics.list({ all: c.req.query("all") === "1" }) }));
+  app.post("/api/topics", async (c) => {
+    try { return c.json({ topic: topics.create(TopicInputSchema.parse(await c.req.json())) }, 201); } catch (e) { return bad(c, e); }
+  });
+  app.patch("/api/topics/:key", async (c) => {
+    try { return c.json({ topic: topics.patch(c.req.param("key"), TopicPatchSchema.parse(await c.req.json())) }); } catch (e) { return bad(c, e); }
   });
 
   // ---- metrics (cross-channel)
