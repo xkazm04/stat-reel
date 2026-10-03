@@ -81,3 +81,4 @@ export const safeZoneVertical = { top: 270, bottom: 670, left: 65, right: 130, w
 export const safeZoneLandscape = { top: 60, bottom: 90, left: 96, right: 96, width: 1920, height: 1080 } as const;
 
 export const motion = { instantMs: 90, fastMs: 160, baseMs: 260, wipeMs: 560, sceneMs: 900 } as const;
+export * from "./logo";
