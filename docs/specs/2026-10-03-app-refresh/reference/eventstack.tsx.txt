@@ -1,0 +1,74 @@
+import React from "react";
+import type { ReactNode } from "react";
+import { Easing, interpolate, spring } from "remotion";
+
+/**
+ * Reusable event queue / stack for data videos.
+ *  - Each event has its OWN lifespan in frames (decoupled from the data time-warp) and its own enter/exit transition.
+ *  - When lifespans overlap, the newer card lands on top; older cards sink one level per newer visible card
+ *    (offset + scale + dim). An underlying card still exits when its own lifespan ends.
+ *  - Transitions: "flash" (photo-flash snap), "pageflip" (hinged page turn), "wipe" (circular reveal from a chart point),
+ *    "slide" (slide with horizontal motion blur), "stamp" (rubber-stamp drop). Each one is a single motion cue.
+ */
+export type Transition = "flash" | "pageflip" | "wipe" | "slide" | "stamp";
+export type StackEvent = {
+  id: string; start: number; life: number; enter: Transition; exit: Transition;
+  x: number; y: number; w: number; rot?: number; z?: number;
+  origin?: (f: number) => { x: number; y: number }; // absolute point a "wipe" grows from / collapses into
+  render: () => ReactNode;
+};
+export type StackOpts = { enterDur?: number; exitDur?: number; offset?: { x: number; y: number }; scaleStep?: number; dimStep?: number; maxDepth?: number; fps?: number };
+
+const c01 = (x: number) => Math.max(0, Math.min(1, x));
+export function phase(e: StackEvent, f: number, o: Required<StackOpts>) {
+  const end = e.start + e.life;
+  const enterT = f - e.start, exitT = f - (end - o.exitDur);
+  const enter = e.enter === "stamp" ? Easing.in(Easing.cubic)(c01(enterT / 8))
+    : e.enter === "slide" || e.enter === "wipe" ? Easing.out(Easing.cubic)(c01(enterT / o.enterDur))
+    : spring({ frame: enterT, fps: o.fps, config: { damping: 14, stiffness: 140, mass: 0.7 } });
+  const exit = Easing.in(Easing.cubic)(c01(exitT / o.exitDur));
+  const vis = f >= e.start && f < end ? c01(enterT / 6) * (1 - exit) : 0;
+  return { enter, exit, enterT, exitT, vis, alive: f >= e.start && f < end };
+}
+
+export function EventStack({ events, f, opts = {} }: { events: StackEvent[]; f: number; opts?: StackOpts }) {
+  const o: Required<StackOpts> = { enterDur: 14, exitDur: 12, offset: { x: 24, y: -62 }, scaleStep: 0.06, dimStep: 0.12, maxDepth: 3, fps: 30, ...opts };
+  const ev = [...events].sort((a, b) => a.start - b.start);
+  const ph = ev.map((e) => phase(e, f, o));
+  return (<>
+    {ev.map((e, i) => {
+      const p = ph[i]; if (!p.alive) return null;
+      // depth = how many newer cards currently sit on top (fractional while they enter/exit)
+      let depth = 0; for (let j = i + 1; j < ev.length; j++) depth += ph[j].vis;
+      if (depth >= o.maxDepth) return null;
+      const ox = o.offset.x * depth, oy = o.offset.y * depth, sc = 1 - o.scaleStep * depth, dim = 1 - o.dimStep * depth;
+      let tf = "", op = 1, clip: string | undefined, blur = 0, flash = 0, shade = 0, origin = "50% 50%";
+      const a = p.enter, q = p.exit;
+      // enter
+      if (e.enter === "flash") { tf += ` scale(${1.16 - 0.16 * a})`; flash = c01(1 - p.enterT / 7); op *= c01(p.enterT / 2); }
+      if (e.enter === "pageflip") { tf += ` perspective(1400px) rotateX(${-88 * (1 - a)}deg)`; origin = "50% 0%"; shade = 0.45 * (1 - a); }
+      if (e.enter === "wipe" && e.origin) { const pt = e.origin(e.start); clip = `circle(${(a * 1100).toFixed(1)}px at ${(pt.x - e.x).toFixed(1)}px ${(pt.y - e.y).toFixed(1)}px)`; }
+      if (e.enter === "slide") { tf += ` translateX(${(1 - a) * 760}px) skewX(${-10 * (1 - a)}deg)`; blur = 34 * (1 - a); }
+      if (e.enter === "stamp") { tf += ` scale(${1.7 - 0.7 * a}) rotate(${-9 * (1 - a)}deg)`; op *= c01(p.enterT / 3); }
+      // exit
+      if (q > 0) {
+        if (e.exit === "flash") { tf += ` translateY(${90 * q}px) rotate(${7 * q}deg)`; op *= 1 - q; }
+        if (e.exit === "pageflip") { tf += ` perspective(1400px) rotateX(${88 * q}deg)`; origin = "50% 0%"; shade = Math.max(shade, 0.45 * q); }
+        if (e.exit === "wipe" && e.origin) { const pt = e.origin(f); clip = `circle(${((1 - q) * 1100).toFixed(1)}px at ${(pt.x - e.x).toFixed(1)}px ${(pt.y - e.y).toFixed(1)}px)`; }
+        if (e.exit === "slide") { tf += ` translateX(${-760 * q}px) skewX(${10 * q}deg)`; blur = Math.max(blur, 34 * q); }
+        if (e.exit === "stamp") { tf += ` scale(${1 - 0.06 * q})`; op *= 1 - q; }
+      }
+      const fid = `mb-${e.id}`;
+      return (
+        <div key={e.id} style={{ position: "absolute", left: e.x, top: e.y, width: e.w, zIndex: (e.z ?? 2000) + i, transform: `translate(${ox}px, ${oy}px) scale(${sc})`, transformOrigin: "0% 0%" }}>
+          {blur > 0.3 ? <svg width={0} height={0} style={{ position: "absolute" }}><defs><filter id={fid} x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation={`${blur.toFixed(1)} 0`} /></filter></defs></svg> : null}
+          <div style={{ transform: `${tf} rotate(${e.rot ?? 0}deg)`, transformOrigin: origin, opacity: op, clipPath: clip, filter: `${blur > 0.3 ? `url(#${fid}) ` : ""}brightness(${dim})`, position: "relative" }}>
+            {e.render()}
+            {flash > 0 ? <div style={{ position: "absolute", inset: 0, background: "#fff", opacity: flash, borderRadius: 12 }} /> : null}
+            {shade > 0 ? <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.5), rgba(0,0,0,0.1))", opacity: shade, borderRadius: 12 }} /> : null}
+          </div>
+        </div>);
+    })}
+  </>);
+}
+void interpolate;

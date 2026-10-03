@@ -1,0 +1,83 @@
+// StatReel logo concepts: pure geometry -> SVG strings. Shared by the video (React) and file export.
+// All marks live in a 100x100 viewBox and take 4 palette colours + ink so they can be recoloured per video.
+// "morph" t in [0,1] lets the video grow the mark in (bars scale from the baseline / spokes extend).
+
+export const COLORWAYS = {
+  google:   { name: "Google-influenced (search video)", bg: "#f3f5fa", ink: "#12161a", c: ["#4285F4", "#EA4335", "#FBBC05", "#34A853"], accent: "#4285F4" },
+  williams: { name: "F1 Williams style", bg: "#0a1f44", ink: "#ffffff", c: ["#ffd400", "#ffffff", "#00a3e0", "#ffd400"], accent: "#ffd400" },
+  africa:   { name: "Africa flags style", bg: "#06101f", ink: "#f4f8ff", c: ["#ffd23f", "#1fae6a", "#d4475a", "#3d7bff"], accent: "#ffd23f" },
+  mono:     { name: "Master (mono ink)", bg: "#ffffff", ink: "#12161a", c: ["#12161a", "#12161a", "#12161a", "#12161a"], accent: "#12161a" },
+};
+
+const ease = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+const f = (n) => +n.toFixed(2);
+
+// A: "Bar Play" — four bars whose tops/bottoms trace a play triangle (bar chart + play button).
+function barPlay(cw, t = 1) {
+  const left = 14, right = 92, top = 12, bot = 88, H = bot - top, W = 13, gap = 2.6;
+  let s = "";
+  for (let i = 0; i < 5; i++) {
+    const x = left + i * (W + gap);
+    const cx = x + W / 2;
+    const h = H * (1 - (cx - left) / (right - left)); // triangle height at bar centre
+    const hh = h * ease(t * 1.6 - i * 0.15);
+    const y = 50 - hh / 2;
+    if (hh > 0.1) s += `<rect x="${f(x)}" y="${f(y)}" width="${W}" height="${f(hh)}" rx="3" fill="${cw.c[i % 4]}"/>`;
+  }
+  return s;
+}
+
+// B: "Reel Axis" — a film reel whose spokes are radial bars of different lengths, rimmed by a 300° progress ring.
+function reelAxis(cw, t = 1) {
+  const cx = 50, cy = 50, lens = [34, 22, 29, 17, 31, 25];
+  let s = "";
+  const ringT = ease(t * 1.3);
+  const R = 44, a0 = 30, sweep = 300 * ringT; // gap on the right (film tail / play direction), not at the top
+  if (sweep > 1) {
+    const a1 = a0 + sweep, r = (d) => (d * Math.PI) / 180;
+    const x0 = cx + R * Math.cos(r(a0)), y0 = cy + R * Math.sin(r(a0));
+    const x1 = cx + R * Math.cos(r(a1)), y1 = cy + R * Math.sin(r(a1));
+    s += `<path d="M${f(x0)} ${f(y0)} A${R} ${R} 0 ${sweep > 180 ? 1 : 0} 1 ${f(x1)} ${f(y1)}" fill="none" stroke="${cw.ink}" stroke-width="5.5" stroke-linecap="round"/>`;
+  }
+  lens.forEach((L, i) => {
+    const ang = -90 + i * 60;
+    const l = L * ease(t * 1.6 - i * 0.1);
+    if (l > 0.5) s += `<rect x="${f(cx - 4.5)}" y="${f(cy - 9 - l)}" width="9" height="${f(l)}" rx="3" fill="${cw.c[i % 4]}" transform="rotate(${ang + 90} ${cx} ${cy})"/>`;
+  });
+  s += `<circle cx="${cx}" cy="${cy}" r="${f(6 * ease(t * 2))}" fill="${cw.ink}"/>`;
+  return s;
+}
+
+// C: "Frame Stat" — a single film frame with sprocket holes; inside, bars rise like a growing chart.
+function frameStat(cw, t = 1) {
+  let s = `<rect x="6" y="14" width="88" height="72" rx="9" fill="${cw.ink}"/>`;
+  for (let i = 0; i < 6; i++) {
+    const x = 12 + i * 14;
+    s += `<rect x="${x}" y="19" width="7" height="6" rx="1.6" fill="${cw.bg}"/><rect x="${x}" y="75" width="7" height="6" rx="1.6" fill="${cw.bg}"/>`;
+  }
+  s += `<rect x="12" y="30" width="76" height="40" rx="3" fill="${cw.bg}"/>`;
+  const hs = [12, 20, 28, 36];
+  hs.forEach((h, i) => {
+    const hh = h * ease(t * 1.6 - i * 0.18);
+    if (hh > 0.2) s += `<rect x="${17 + i * 18}" y="${f(67 - hh)}" width="12" height="${f(hh)}" rx="2" fill="${cw.c[i]}"/>`;
+  });
+  return s;
+}
+
+export const CONCEPTS = {
+  A: { key: "A", name: "Bar Play", draw: barPlay },
+  B: { key: "B", name: "Reel Axis", draw: reelAxis },
+  C: { key: "C", name: "Frame Stat", draw: frameStat },
+};
+
+export function markInner(concept, cw, t = 1) { return CONCEPTS[concept].draw(cw, t); }
+
+export function markSVG(concept, cw, { size = 512, bg = false } = {}) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">${bg ? `<rect width="100" height="100" fill="${cw.bg}"/>` : ""}${markInner(concept, cw)}</svg>`;
+}
+
+// Lockup: mark + "StatReel" wordmark (Barlow Condensed 800, embedded as base64 woff2 when fontB64 given).
+export function lockupSVG(concept, cw, { fontB64 = null, bg = true } = {}) {
+  const font = fontB64 ? `<style>@font-face{font-family:'SR Barlow';font-weight:800;src:url(data:font/woff2;base64,${fontB64}) format('woff2');}</style>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 300 100">${font}${bg ? `<rect width="300" height="100" rx="0" fill="${cw.bg}"/>` : ""}<g transform="translate(14 14) scale(0.72)">${markInner(concept, cw)}</g><text x="102" y="68" font-family="'SR Barlow','Barlow Condensed',sans-serif" font-weight="800" font-size="52" letter-spacing="0.5" fill="${cw.ink}">Stat<tspan fill="${cw.accent}">Reel</tspan></text></svg>`;
+}

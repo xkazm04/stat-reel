@@ -1,0 +1,97 @@
+/**
+ * StatReel timing strategy (reusable). Pure JS, no deps: works in Node (plan generation) and in the Remotion bundle.
+ *
+ * Goal: on-screen change rate (rank swaps + visible value motion + entries/exits) roughly constant per second,
+ * instead of constant months per second. Steps:
+ *  1. score every period transition i-1 → i:  rankScore (weighted pairwise inversions inside the visible top-N,
+ *     entries/exits) + valueScore (sum of visible |Δvalue| / axis max) + base (so quiet periods still move);
+ *  2. frames_i ∝ score_i, clamped to [minFrames, maxFrames] per period;
+ *  3. Gaussian-smooth the per-period frame counts (no speed jerks), renormalise to the frame budget;
+ *  4. add event dwell (Gaussian bump around each event period);
+ *  5. emit knots [frame, period] (cumulative) for a monotone-cubic frame→time map.
+ */
+
+/** Centered moving average used for ordering (labelled on screen when used). */
+export function movingAverage(series, w) {
+  if (!w) return series.slice();
+  return series.map((_, i) => { let s = 0, n = 0; for (let j = i - w; j <= i + w; j++) if (j >= 0 && j < series.length) { s += series[j]; n++; } return s / n; });
+}
+
+export function rankOrder(values, entities) { return [...entities].sort((a, b) => values[b] - values[a]); }
+
+/** Sticky ordering: an entity only overtakes its neighbour when it leads by rel·value + abs (hysteresis).
+ *  Removes month-to-month flip-flops between near-equal entities; deterministic, returns full order per period. */
+export function stickyOrders(P, entities, ordValue, { rel = 0.06, abs = 0.01 } = {}) {
+  let order = rankOrder(Object.fromEntries(entities.map((e) => [e, ordValue(e, 0)])), entities); const out = [order.slice()];
+  for (let i = 1; i < P; i++) {
+    order = order.slice(); const v = Object.fromEntries(entities.map((e) => [e, ordValue(e, i)]));
+    for (let pass = 0; pass < entities.length; pass++) { let swapped = false;
+      for (let r = order.length - 1; r > 0; r--) { const a = order[r - 1], b = order[r]; if (v[b] > v[a] * (1 + rel) + abs) { order[r - 1] = b; order[r] = a; swapped = true; } }
+      if (!swapped) break; }
+    out.push(order.slice());
+  }
+  return out;
+}
+
+export function computeTimingPlan(opts) {
+  const { periods, entities, value, startFrame, endFrame, topN = 10, axisMax = 1, rankSmooth = 0, events = [],
+    weights = { rank: 1, value: 1, base: 0.35, entry: 1.5 }, minFrames = 1.5, maxFrames = 9, sigma = 2.5, rowWeight = (r) => 1 / (1 + 0.18 * r) } = opts;
+  const P = periods.length;
+  // ordering series (optionally smoothed)
+  const ord = {}; for (const e of entities) ord[e] = movingAverage(periods.map((_, i) => value(e, i)), rankSmooth);
+  const sticky = opts.hysteresis ? stickyOrders(P, entities, (e, i) => ord[e][i], opts.hysteresis) : null;
+  const orderAt = (i) => (sticky ? sticky[i] : rankOrder(Object.fromEntries(entities.map((e) => [e, ord[e][i]])), entities)).slice(0, topN);
+  const raw = [0]; const detail = [{ period: periods[0], rank: 0, value: 0, entries: 0 }];
+  let prev = orderAt(0);
+  for (let i = 1; i < P; i++) {
+    const cur = orderAt(i); const pp = Object.fromEntries(prev.map((e, r) => [e, r]));
+    let rank = 0; for (let a = 0; a < cur.length; a++) for (let b = a + 1; b < cur.length; b++) if (cur[a] in pp && cur[b] in pp && pp[cur[a]] > pp[cur[b]]) rank += rowWeight(Math.min(a, b));
+    const entries = cur.filter((e) => !(e in pp)).length;
+    let val = 0; for (const e of cur) val += Math.abs(value(e, i) - value(e, i - 1)) / axisMax;
+    raw.push(weights.rank * rank + weights.entry * entries + weights.value * val + weights.base);
+    detail.push({ period: periods[i], rank: +rank.toFixed(3), value: +val.toFixed(3), entries });
+    prev = cur;
+  }
+  const dwellTotal = events.reduce((s, e) => s + (e.dwell ?? 0), 0);
+  const budget = endFrame - startFrame - dwellTotal;
+  // proportional frames, clamp, smooth, renormalise (iterate so clamps hold after renormalising)
+  let f = raw.map((r, i) => (i === 0 ? 0 : r));
+  const sumR = f.reduce((a, b) => a + b, 0); f = f.map((r) => (r / sumR) * budget);
+  const K = []; const R = Math.ceil(sigma * 3); for (let k = -R; k <= R; k++) K.push(Math.exp(-(k * k) / (2 * sigma * sigma)));
+  for (let it = 0; it < 6; it++) {
+    f = f.map((x, i) => (i === 0 ? 0 : Math.min(maxFrames, Math.max(minFrames, x))));
+    f = f.map((_, i) => { if (i === 0) return 0; let s = 0, w = 0; K.forEach((k, j) => { const ii = i + j - R; if (ii >= 1 && ii < P) { s += f[ii] * k; w += k; } }); return s / w; });
+    const s = f.reduce((a, b) => a + b, 0); f = f.map((x) => (x / s) * budget);
+  }
+  const fBase = f.slice(); // before dwell (used for the evenness report: dwell is an intentional hold)
+  // event dwell: Gaussian bump centred on the event period
+  for (const ev of events) {
+    const c = ev.period; const sd = ev.spread ?? 1.5; const bump = f.map((_, i) => (i === 0 ? 0 : Math.exp(-((i - c) ** 2) / (2 * sd * sd))));
+    const bs = bump.reduce((a, b) => a + b, 0); f = f.map((x, i) => x + (bump[i] / bs) * (ev.dwell ?? 0));
+  }
+  const knots = [[startFrame, 0]]; let acc = startFrame; for (let i = 1; i < P; i++) { acc += f[i]; knots.push([+acc.toFixed(3), i]); }
+  // evenness report: changes per second, uniform vs warped, per calendar group
+  const fps = opts.fps ?? 30; const uniform = (endFrame - startFrame) / (P - 1);
+  const group = opts.groupOf ?? ((p) => String(p).slice(0, 4)); const groups = {};
+  for (let i = 1; i < P; i++) { const g = group(periods[i]); groups[g] ??= { changes: 0, warpedFrames: 0, baseFrames: 0, uniformFrames: 0 }; groups[g].changes += raw[i] - weights.base; groups[g].warpedFrames += f[i]; groups[g].baseFrames += fBase[i]; groups[g].uniformFrames += uniform; }
+  const perGroup = Object.entries(groups).map(([g, v]) => ({ group: g, changeScore: +v.changes.toFixed(2), seconds: +(v.warpedFrames / fps).toFixed(2), changesPerSecWarped: +(v.changes / (v.warpedFrames / fps)).toFixed(2), changesPerSecExDwell: +(v.changes / (v.baseFrames / fps)).toFixed(2), changesPerSecUniform: +(v.changes / (v.uniformFrames / fps)).toFixed(2) }));
+  const cv = (a) => { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length) / m; };
+  return { knots, orders: sticky ?? periods.map((_, i) => rankOrder(Object.fromEntries(entities.map((e) => [e, ord[e][i]])), entities)), framesPerPeriod: f.map((x) => +x.toFixed(3)), detail, perGroup,
+    evenness: { cvUniform: +cv(perGroup.map((g) => g.changesPerSecUniform)).toFixed(3), cvWarpedExDwell: +cv(perGroup.map((g) => g.changesPerSecExDwell)).toFixed(3), cvWarpedInclDwell: +cv(perGroup.map((g) => g.changesPerSecWarped)).toFixed(3) } };
+}
+
+/** Monotone cubic (Fritsch–Carlson) frame→period map from knots; speed never jumps, never runs backwards. */
+export function makeTimeMap(knots) {
+  const pts = knots; const n = pts.length; const d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d.push((pts[i + 1][1] - pts[i][1]) / (pts[i + 1][0] - pts[i][0]));
+  m.push(d[0]); for (let i = 1; i < n - 1; i++) m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2); m.push(d[n - 2]);
+  for (let i = 0; i < n - 1; i++) { if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; } const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b; if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; } }
+  const at = (x) => {
+    if (x <= pts[0][0]) return pts[0][1]; if (x >= pts[n - 1][0]) return pts[n - 1][1];
+    let lo = 0, hi = n - 1; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (pts[mid][0] <= x) lo = mid; else hi = mid; }
+    const i = lo, h = pts[i + 1][0] - pts[i][0], t = (x - pts[i][0]) / h, t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * pts[i][1] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * pts[i + 1][1] + (t3 - t2) * h * m[i + 1];
+  };
+  const frameOf = (period) => { let lo = pts[0][0], hi = pts[n - 1][0]; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (at(mid) < period) lo = mid; else hi = mid; } return hi; };
+  return { at, frameOf };
+}

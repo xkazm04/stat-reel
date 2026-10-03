@@ -1,0 +1,30 @@
+// Generates the timing plan for search-box-wars v3 BEFORE rendering.  node src/sv2/make-plan.mjs
+import fs from "fs";
+import { computeTimingPlan, makeTimeMap } from "../timing/timing.mjs";
+const D = JSON.parse(fs.readFileSync("src/sv2/engines.json", "utf8"));
+const rows = D.rows; const periods = rows.map((r) => r.date);
+const challengers = D.entities.filter((e) => e !== "Google");
+const idx = (d) => periods.indexOf(d);
+const FPS = 30;
+const T = { hookEnd: 60, timelineEnd: 900, spotlightEnd: 960, likeEnd: 1020, total: 1110 };
+const events = [
+  { id: "bing-launch", period: idx("2009-06"), dwell: 40, spread: 1.2, label: "Bing launches (3 Jun 2009)" },
+  { id: "firefox57", period: idx("2017-11"), dwell: 45, spread: 1.5, label: "Firefox 57 switches US default to Google (14 Nov 2017)" },
+  { id: "chatgpt", period: idx("2022-11"), dwell: 48, spread: 1.2, label: "ChatGPT released (30 Nov 2022)" },
+  { id: "bing-chat", period: idx("2023-02"), dwell: 48, spread: 1.2, label: "Bing adds AI chat (7 Feb 2023)" },
+  { id: "google-below-90", period: idx("2024-10"), dwell: 30, spread: 1.5, label: "Google below 90% for the first time since Mar 2015" },
+  { id: "bing-record", period: idx("2026-09"), dwell: 45, spread: 3.5, label: "Bing's record month (5.29%)" },
+];
+const plan = computeTimingPlan({ periods, entities: challengers, value: (e, i) => rows[i][e], startFrame: T.hookEnd, endFrame: T.timelineEnd,
+  topN: 9, axisMax: 6, rankSmooth: 1, hysteresis: { rel: 0.06, abs: 0.01 }, events, fps: FPS, minFrames: 1.0, maxFrames: 10, sigma: 1.5, weights: { rank: 1, value: 1, base: 0.1, entry: 1.5 } });
+const tm = makeTimeMap(plan.knots);
+const evOut = events.map((e) => ({ ...e, date: periods[e.period], frame: +tm.frameOf(e.period).toFixed(1), second: +(tm.frameOf(e.period) / FPS).toFixed(2) }));
+const out = { video: "search-box-wars-v3 (Shorts cut)", fps: FPS, generated: new Date().toISOString(), sections: T, strategy: {
+    unit: "month", visibleRows: "challengers #2–#10 (Google shown separately as a true-scale share strip)", ordering: "3-month centered moving average + hysteresis (an engine overtakes only when ahead by 6% of value + 0.01 pt); labelled on screen",
+    score: "weighted pairwise rank inversions in visible top 9 (row weight 1/(1+0.18·row)) + 1.5 × entries/exits + Σ|Δshare|/6 % + 0.1 base",
+    clamp: "1–10 frames per month", smoothing: "Gaussian σ = 1.5 months on frames-per-month, renormalised", dwell: "Gaussian bumps around events" },
+  longForm: { factor: 3, note: "A long-form YouTube cut would run the same plan ×3 slower: timeline ≈ " + ((T.timelineEnd - T.hookEnd) * 3 / FPS).toFixed(0) + " s, total ≈ 1:50–2:00 with longer card holds. Not rendered." },
+  orders: plan.orders, events: evOut, evenness: plan.evenness, perYear: plan.perGroup, knots: plan.knots, framesPerMonth: plan.framesPerPeriod.map((f, i) => ({ month: periods[i], frames: f, ...plan.detail[i] })) };
+fs.writeFileSync("src/sv2/timing-plan-v3.json", JSON.stringify(out, null, 1));
+console.log(JSON.stringify({ evenness: plan.evenness, events: evOut.map((e) => [e.id, e.date, e.frame, e.second]) }, null, 0));
+console.table(plan.perGroup);

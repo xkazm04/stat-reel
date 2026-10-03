@@ -1,0 +1,23 @@
+import React from "react";
+import { COLORWAYS, markInner } from "./statreel-logo.mjs";
+import { smooth } from "./ui";
+
+/** "Powered by StatReel" end card, logo concept C "Frame Stat", styled to the search video (Google-influenced colorway). */
+export function PoweredByV3({ concept, t, op, f, colorway = "google" }: { concept: "A" | "B" | "C"; t: number; op: number; f: number; colorway?: "google" | "williams" | "africa" }) {
+  const cw = COLORWAYS[colorway];
+  const word = smooth((t - 0.35) / 0.4);
+  // motion cue 1: a faint film strip drifts behind the mark (the reel advancing); cue 2: the mark's bars rise
+  const drift = (f * 2.2) % 64;
+  return (
+    <div style={{ position: "absolute", inset: 0, opacity: op, background: cw.bg, fontFamily: '"Inter"', display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: -64, top: 700, width: 1300, height: 230, background: cw.ink, opacity: 0.06, transform: `translateX(${-drift}px)` }}>
+        {Array.from({ length: 22 }, (_, i) => <div key={i} style={{ position: "absolute", left: i * 64 + 18, top: 18, width: 30, height: 26, borderRadius: 6, background: cw.bg }} />)}
+        {Array.from({ length: 22 }, (_, i) => <div key={"b" + i} style={{ position: "absolute", left: i * 64 + 18, bottom: 18, width: 30, height: 26, borderRadius: 6, background: cw.bg }} />)}
+      </div>
+      <div style={{ fontFamily: '"JetBrains Mono"', fontSize: 30, letterSpacing: 6, color: cw.ink, opacity: 0.7, marginBottom: 26, position: "relative" }}>POWERED BY</div>
+      <svg width={340} height={340} viewBox="0 0 100 100" style={{ position: "relative" }} dangerouslySetInnerHTML={{ __html: markInner(concept, cw, t) }} />
+      <div style={{ fontFamily: '"Barlow Condensed"', fontWeight: 800, fontSize: 150, lineHeight: 1, marginTop: 10, color: cw.ink, opacity: word, transform: `translateY(${(1 - word) * 20}px)`, position: "relative" }}>Stat<span style={{ color: cw.accent }}>Reel</span></div>
+      <div style={{ fontSize: 34, color: cw.ink, opacity: 0.75 * smooth((t - 0.6) / 0.4), marginTop: 16, position: "relative" }}>data in, short video out</div>
+      <div style={{ width: 380, height: 10, borderRadius: 5, marginTop: 40, display: "flex", overflow: "hidden", position: "relative" }}>{cw.c.map((c, i) => <div key={i} style={{ flex: 1, background: c }} />)}</div>
+    </div>);
+}
