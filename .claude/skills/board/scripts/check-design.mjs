@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { assessClockLabels, assessFrameFacts, assessLongevity, checkImages, FORMATS, longevitySamples, resolveFacts, stabilityProbe, validateDesign } from "./lib.mjs";
+import { assessClockLabels, assessFrameFacts, assessLongevity, checkImages, dataReadySports, dataReadyUseCases, FORMATS, longevitySamples, resolveFacts, stabilityProbe, stagedSeasonRange, validateDesign } from "./lib.mjs";
 
 /** Owner rule (2026-10-01): nothing on screen is small. Every readable text is >= 28 px in the artboard. */
 export const MIN_TEXT_PX = 28;
@@ -63,8 +63,8 @@ function loadData(dataDir) {
     const tables = {};
     for (const f of readdirSync(dataDir).filter((f) => f.startsWith("f1_") && f.endsWith(".json"))) tables[f.slice(0, -5)] = JSON.parse(readFileSync(path.join(dataDir, f), "utf8"));
     // only cases the staged (F1) data can make; a Soccer-only format is not a valid target
-    const useCases = JSON.parse(readFileSync(path.join(dataDir, "usecases.json"), "utf8")).filter((u) => u.cells.some((c) => c.sport === "F1" && c.status === "data-ready")).map((u) => u.id);
-    tableCache.set(dataDir, { tables, useCases });
+    const all = JSON.parse(readFileSync(path.join(dataDir, "usecases.json"), "utf8"));
+    tableCache.set(dataDir, { tables, useCases: dataReadyUseCases(all).map((u) => u.id), sports: dataReadySports(all), period: stagedSeasonRange(tables) });
   }
   return tableCache.get(dataDir);
 }
@@ -79,7 +79,7 @@ export async function launch() {
  * the statreel API, duration agreement, longevity across the run, seek stability.
  * Returns { ok, errors[], meta, longevity, facts }.
  */
-export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
+export async function inspect(variantDir, dataDir, { browser, useCases, sports } = {}) {
   variantDir = path.resolve(variantDir);
   dataDir = path.resolve(dataDir);
   const errors = [];
@@ -91,7 +91,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases } = {}) {
     return { ok: false, errors: [`shot.json is not valid JSON: ${e.message}`], meta: null };
   }
   const data = loadData(dataDir);
-  errors.push(...validateDesign(meta, { useCases: useCases ?? data.useCases }));
+  errors.push(...validateDesign(meta, { useCases: useCases ?? data.useCases, sports: sports ?? data.sports, period: data.period }));
   if (!meta || errors.length) return { ok: false, errors, meta };
   const facts = resolveFacts(meta.facts, data.tables);
   if (facts.cited === 0) errors.push("facts is empty: cite every figure an annotation states as <fact_key>#<column>");

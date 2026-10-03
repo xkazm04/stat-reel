@@ -44,7 +44,7 @@ must be running on 127.0.0.1:8787.
    - 30-90 s `duration_s`
    - a `timeline {unit, from, to}` that runs forward
    - `chart_form`
-   - a time-evolution use case, or a proposed case with `data_time`
+   - a data-ready time-evolution use case, or a proposed case with `data_time` and a `sport` that has data-ready cells (F1 today; `dataReadyUseCases` is the one predicate for lanes, harvest and check.mjs)
    - a stable style id, and fact refs
 
    The artboard must expose `window.statreel.seek(t)` and `dataClock(t)`. The harness renders the

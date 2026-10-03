@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyFeedback, assessClockLabels, assessFrameFacts, assessLongevity, emptyLedger, excerptWindow, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, validateDesign, validateShot } from "../scripts/lib.mjs";
+import { applyFeedback, assessClockLabels, assessFrameFacts, assessLongevity, dataReadySports, dataReadyUseCases, emptyLedger, excerptWindow, frameTimes, longevitySamples, loopPhase, renderBrief, renderLedgerMarkdown, stabilityProbe, stagedSeasonRange, validateDesign, validateShot } from "../scripts/lib.mjs";
 
 const item = (id, decision, style, useCase, note = null, proposed = null) => ({
   id, decision, note, decided_at: `2026-09-30T10:0${id.length}:00Z`, style: { id: style, name: style }, use_case_id: useCase, proposed_case: proposed,
@@ -109,7 +109,7 @@ test("a time-evolution design declares a 30-90 s run and a data timeline", () =>
   assert.match(validateDesign({ ...tl, timeline: undefined }, { useCases: ["career-wins-race"] }).join(), /timeline/);
   assert.match(validateDesign({ ...tl, timeline: { unit: "season", from: 2026, to: 1950 } }, { useCases: ["career-wins-race"] }).join(), /from < to/);
   assert.match(validateDesign({ ...tl, use_case_id: "era-adjusted-rankings" }, { useCases: ["career-wins-race"] }).join(), /not a time-evolution use case/);
-  assert.deepEqual(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p", data_time: "season" } }, { useCases: [] }), []);
+  assert.deepEqual(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p", data_time: "season", sport: "F1" } }, { useCases: [] }), []);
   assert.match(validateDesign({ ...tl, use_case_id: null, proposed_case: { name: "N", pitch: "p" } }, { useCases: [] }).join(), /data_time/);
 });
 
@@ -285,4 +285,36 @@ test("frameFacts: a wrong value, a missing leader, an unknown driver and a perio
 
 test("frameFacts: a design that does not declare it is skipped, never failed", () => {
   for (const d of [undefined, null]) assert.deepEqual(assessFrameFacts(d, tables), { ok: true, declared: false, problems: [], note: "not declared" });
+});
+
+// ---- the F1 data-ready predicate and proposed cases
+
+const cell = (sport, status) => ({ sport, mode: "m", status });
+const ucs = [
+  { id: "f1-ready", cells: [cell("Soccer", "blocked"), cell("F1", "data-ready")] },
+  { id: "soccer-only", cells: [cell("Soccer", "data-ready"), cell("F1", "not-tested")] },
+  { id: "f1-failing", cells: [cell("F1", "failing")] },
+  { id: "no-cells" },
+];
+
+test("dataReadyUseCases keeps only use cases with a data-ready cell for the sport", () => {
+  assert.deepEqual(dataReadyUseCases(ucs).map((u) => u.id), ["f1-ready"]);
+  assert.deepEqual(dataReadyUseCases(ucs, { sport: "soccer" }).map((u) => u.id), ["soccer-only"]);
+  assert.deepEqual(dataReadyUseCases(undefined), []);
+  assert.deepEqual(dataReadySports(ucs).sort(), ["F1", "Soccer"]);
+});
+
+test("a proposed case must be about a sport with data-ready cells and fit the staged seasons", () => {
+  const base = { ...tl, use_case_id: null };
+  const pc = (extra) => ({ ...base, proposed_case: { name: "N", pitch: "p", data_time: "season", ...extra } });
+  const opts = { useCases: [], sports: ["F1"], period: { from: 1950, to: 2026 } };
+  assert.deepEqual(validateDesign(pc({ sport: "F1" }), opts), []);
+  assert.match(validateDesign(pc({ sport: "Soccer" }), opts).join(), /proposed case needs Soccer data, which is not tested yet/);
+  assert.match(validateDesign(pc({}), opts).join(), /needs sport/);
+  assert.match(validateDesign(pc({ sport: "F1", data_time: "fortnight" }), opts).join(), /data_time/);
+  const out = { ...pc({ sport: "F1" }), timeline: { unit: "season", from: 1940, to: 2026 } };
+  assert.match(validateDesign(out, opts).join(), /staged tables cover seasons 1950-2026/);
+  assert.deepEqual(validateDesign(out, { ...opts, period: null }), []); // range unknown (harvest pre-check): skipped
+  assert.deepEqual(stagedSeasonRange({ f1_seasons: [{ season: 1950 }, { season: 2025 }] }), { from: 1950, to: 2025 });
+  assert.equal(stagedSeasonRange({}), null);
 });

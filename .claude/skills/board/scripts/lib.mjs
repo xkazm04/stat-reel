@@ -136,8 +136,28 @@ export function stabilityProbe(duration_s) {
 
 const UNITS = ["season", "race", "matchday", "career-start", "date"];
 
+/**
+ * Use cases whose `cells` hold a data-ready cell for `sport` (the staged data is F1 only, so a Soccer
+ * format is not a valid target). The one predicate for lanes, harvest and check.mjs.
+ */
+export function dataReadyUseCases(usecases, { sport = "F1" } = {}) {
+  const same = (a) => String(a).toLowerCase() === String(sport).toLowerCase();
+  return (usecases ?? []).filter((u) => (u.cells ?? []).some((c) => same(c.sport) && c.status === "data-ready"));
+}
+
+/** Sports that have at least one data-ready cell across the use cases (what a proposed case may be about). */
+export function dataReadySports(usecases) {
+  return [...new Set((usecases ?? []).flatMap((u) => (u.cells ?? []).filter((c) => c.status === "data-ready").map((c) => c.sport)))];
+}
+
+/** Season range the staged tables cover (f1_seasons, else f1_race_results), or null when nothing is staged. */
+export function stagedSeasonRange(tables) {
+  const seasons = (tables?.f1_seasons?.length ? tables.f1_seasons : tables?.f1_race_results ?? []).map((r) => r.season).filter((s) => typeof s === "number");
+  return seasons.length ? { from: Math.min(...seasons), to: Math.max(...seasons) } : null;
+}
+
 /** A Board design is a full 30-90 s run whose data clock advances over a declared timeline. */
-export function validateDesign(meta, { useCases = [] } = {}) {
+export function validateDesign(meta, { useCases = [], sports = ["F1"], period = null } = {}) {
   const errors = validateShot({ ...meta, facts: meta?.facts ?? [] });
   if (errors.length && !meta) return errors;
   const d = meta.duration_s;
@@ -148,7 +168,18 @@ export function validateDesign(meta, { useCases = [] } = {}) {
   } else if (!(tl.from < tl.to)) errors.push("timeline must run forward (from < to)");
   if (!meta.chart_form) errors.push("chart_form is required (e.g. bar-chart race, line race, streamgraph)");
   if (meta.use_case_id && !useCases.includes(meta.use_case_id)) errors.push(`${meta.use_case_id} is not a time-evolution use case (${useCases.join(", ") || "none staged"})`);
-  if (!meta.use_case_id && meta.proposed_case && !meta.proposed_case.data_time) errors.push("a proposed case needs data_time (what its clock runs through)");
+  const pc = meta.proposed_case;
+  if (!meta.use_case_id && pc) {
+    // a proposal bypasses the use-case list, so it must still be makeable from the staged data
+    if (!pc.data_time) errors.push("a proposed case needs data_time (what its clock runs through)");
+    const sport = String(pc.sport ?? "").trim();
+    if (!sport) errors.push(`a proposed case needs sport (one of ${sports.join(", ") || "none"}: the sport whose staged data it uses)`);
+    else if (!sports.some((s) => String(s).toLowerCase() === sport.toLowerCase())) errors.push(`proposed case needs ${sport} data, which is not tested yet (staged: ${sports.join(", ") || "none"})`);
+    const unit = typeof pc.data_time === "string" ? pc.data_time : pc.data_time?.unit;
+    if (pc.data_time && !UNITS.includes(unit)) errors.push(`proposed case data_time ${JSON.stringify(unit)} must be one of ${UNITS.join(", ")}`);
+    else if (unit === "season" && period && tl && typeof tl.from === "number" && (tl.from < period.from || tl.to > period.to))
+      errors.push(`proposed case runs ${tl.from}-${tl.to} but the staged tables cover seasons ${period.from}-${period.to}`);
+  }
   return errors;
 }
 

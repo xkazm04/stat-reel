@@ -125,8 +125,9 @@ these style + case pairings:
 
   - `timeline.unit` is one of season, race, matchday, career-start, date, and `from`/`to` are
     numbers in that unit.
-  - For a new case use `"proposed_case": {"name", "pitch", "data_time", "requires": [kinds]}` with
-    `use_case_id: null`.
+  - For a new case use `"proposed_case": {"name", "pitch", "data_time", "sport", "requires": [kinds]}` with
+    `use_case_id: null`. `sport` is the sport whose staged data you use (today only `"F1"`); a
+    proposal about a sport without data-ready data fails the harness.
   - A style `id` is how the owner's feedback finds your style in later loops. Reuse an id only for the
     same style.
 

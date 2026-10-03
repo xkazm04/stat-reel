@@ -26,7 +26,7 @@ import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSyn
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { applyFeedback, assessLongevity, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, rejectedCases, renderBrief, titleKey, renderLedgerMarkdown, seatLanes, stabilityProbe, validateDesign } from "./lib.mjs";
+import { applyFeedback, assessLongevity, dataReadySports, dataReadyUseCases, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, rejectedCases, renderBrief, titleKey, renderLedgerMarkdown, seatLanes, stabilityProbe, validateDesign } from "./lib.mjs";
 import { inspect } from "./check-design.mjs";
 import { checkCases } from "./check-cases.mjs";
 
@@ -201,7 +201,7 @@ async function loop() {
   if (r1.status !== 0) die("contest init failed");
   const rejected = new Set(rejectedCases(ledger));
   // lanes only offer cases the staged data can make (F1 cells data-ready)
-  const caseIds = (await timeEvolutionUseCases()).filter((u) => u.cells.some((c) => c.sport === "F1" && c.status === "data-ready")).map((u) => u.id).filter((c) => !rejected.has(c));
+  const caseIds = dataReadyUseCases(await timeEvolutionUseCases()).map((u) => u.id).filter((c) => !rejected.has(c));
   patchParticipantBriefs(path.join(ARENA, contestId), { caseIds, round: Number(opt("round", "0")) });
   mkdirSync(path.join(BOARD_VAULT, "Loops"), { recursive: true });
   writeFileSync(path.join(BOARD_VAULT, "Loops", `${id}.md`), `# ${id}\n\n- phase: ${loopPhase(ledger)}\n- shots per seat: ${shots}\n- contest: ${contestId}\n- started: ${new Date().toISOString()}\n\n## Brief\n\n${brief}\n`);
@@ -222,7 +222,9 @@ async function harvest() {
   const outDir = path.join(REPO, "data", "board", "items");
   mkdirSync(outDir, { recursive: true });
   let posted = 0;
-  const useCases = (await timeEvolutionUseCases()).filter((u) => u.cells.some((c) => c.sport === "F1" && c.status === "data-ready")).map((u) => u.id);
+  const allCases = await timeEvolutionUseCases();
+  const useCases = dataReadyUseCases(allCases).map((u) => u.id);
+  const sports = dataReadySports(allCases);
   const strict = argv.includes("--strict");
   const report = [];
   const seats = readdirSync(entries).filter((s) => existsSync(path.join(entries, s, "PARTICIPANT.md"))).sort();
@@ -236,9 +238,9 @@ async function harvest() {
       } catch {
         meta = null;
       }
-      const errors = validateDesign(meta, { useCases });
+      const errors = validateDesign(meta, { useCases, sports });
       if (!errors.length && strict) {
-        const r = await inspect(dir, path.join(entries, seat, "data"), { browser, useCases });
+        const r = await inspect(dir, path.join(entries, seat, "data"), { browser, useCases, sports });
         errors.push(...r.errors);
       }
       report.push({ seat, variant: v, ok: !errors.length, errors, style: meta?.style?.id ?? null, case: meta?.use_case_id ?? meta?.proposed_case?.name ?? null });
