@@ -42,6 +42,8 @@ export const JOB_EVENTS = [
   "job.cancelled",
   "job.refused",
 ] as const;
+/** Generation queue events relayed from the worker process (ADR 010). */
+export const GEN_EVENTS = ["gen.queued", "gen.started", "gen.progress", "gen.done", "gen.failed", "gen.cancelled"] as const;
 /** Named SSE events (the server writes `event: <type>`; EventSource needs one listener per name). */
 const NAMED = [
   ...JOB_EVENTS,
@@ -52,6 +54,7 @@ const NAMED = [
   "board.decided",
   "styles.updated",
   "cases.decided",
+  ...GEN_EVENTS,
   "ping",
 ];
 
@@ -85,10 +88,20 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
     void qc.invalidateQueries({ queryKey: qk.styles });
   } else if (e.type === "styles.updated") {
     void qc.invalidateQueries({ queryKey: qk.styles });
+  } else if (e.type.startsWith("gen.")) {
+    void qc.invalidateQueries({ queryKey: qk.generation });
+    if (e.type !== "gen.progress") {
+      // a finished job changed what the board shows: new tiles, a video on the heatmap, a case stage
+      void qc.invalidateQueries({ queryKey: qk.board });
+      void qc.invalidateQueries({ queryKey: qk.cases });
+      void qc.invalidateQueries({ queryKey: qk.styles });
+      void qc.invalidateQueries({ queryKey: ["heatmap-topics"] });
+    }
   } else if (e.type === "cases.decided") {
     void qc.invalidateQueries({ queryKey: qk.cases });
   } else if (e.type === "heatmap.updated") {
     void qc.invalidateQueries({ queryKey: qk.heatmap });
+    void qc.invalidateQueries({ queryKey: ["heatmap-topics"] });
   } else if (e.type === "llm.event" && e.event?.type === "tool_result" && pid) {
     // set_props / write_script may have stored a new version
     void qc.invalidateQueries({ queryKey: qk.project(pid) });

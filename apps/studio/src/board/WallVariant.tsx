@@ -11,6 +11,7 @@ import type { BoardItem } from "../api";
 import { Arrow } from "../components/glyphs";
 import type { VariantProps } from "./BoardPage";
 import { caseOf, groupItems, isMoveKey, itemState, justify, nextPending, ratioOf, spatialMove, styleOf } from "./board";
+import { GenMark, ItemJob } from "./JobBadge";
 import { boxesOf, CaseChip, Gate, ItemFacts, Shot, StateMark, shotAlt, useWidth } from "./shared";
 
 type GroupBy = "none" | "style" | "case";
@@ -185,6 +186,12 @@ function WallTile({
       <span className="bd-tile__img" style={{ height: h }}>
         <Shot item={item} fit="box" alt={shotAlt(item)} />
         <StateMark item={item} className="bd-tile__state" />
+        <GenMark item={item} className="bd-tile__gen" />
+        {item.status === "accepted" && item.case_idea_id ? (
+          <span className="bd-tile__job">
+            <ItemJob item={item} compact />
+          </span>
+        ) : null}
       </span>
       <span className="bd-tile__cap" style={{ height: CAPTION }}>
         <span className="bd-tile__title">{item.title}</span>
@@ -313,6 +320,8 @@ function Lightbox({
             {item.title}
           </h2>
           <StateMark item={item} className="bd-lb__state" />
+          <GenMark item={item} />
+          <ItemJob item={item} />
           <ItemFacts item={item} names={names} />
         </div>
       </div>

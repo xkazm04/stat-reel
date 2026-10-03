@@ -27,6 +27,7 @@ import {
   topicGroups,
   visibleCaseRows,
 } from "./library";
+import { JobBadge } from "./JobBadge";
 import { useBoard } from "./shared";
 import { showUndo, UndoToastHost } from "./undo";
 
@@ -39,7 +40,11 @@ function useCases() {
 function useDecideCase() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { id: string; decision: CaseDecision; note?: string }) => api.decideCase(v.id, v.decision, v.note),
+    mutationFn: async (v: { id: string; decision: CaseDecision; note?: string }) => {
+      const r = await api.decideCase(v.id, v.decision, v.note);
+      void qc.invalidateQueries({ queryKey: qk.generation }); // an accept queued visuals, a reject cancelled them
+      return r.idea;
+    },
     onSuccess: (idea, v) => {
       qc.setQueryData<CasesResponse>(qk.cases, (prev) =>
         prev ? { ...prev, ideas: prev.ideas.map((i) => (i.id === idea.id ? idea : i)) } : prev,
@@ -255,6 +260,7 @@ function CaseList({
               ) : r.idea?.decision ? (
                 <span className="bd-caserow__tally">{CASE_DECISION_META[r.idea.decision].label}</span>
               ) : null}
+              {r.idea?.status === "accepted" ? <JobBadge caseId={r.key} /> : null}
               {r.idea ? (
                 <button type="button" className="bd-linkbtn" data-idea={r.key} onClick={() => onOpen({ id: r.key, order })}>
                   Open
