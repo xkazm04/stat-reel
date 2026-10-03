@@ -11,6 +11,8 @@
     "start": "pnpm --parallel --filter @statreel/server run \"/^(start|worker)$/\"",
     "typecheck": "tsc -b",
     "lint": "biome check .",
+    "lint:changed": "biome check --changed",
+    "lint:ratchet": "node scripts/biome-ratchet.mjs",
     "format": "biome format --write .",
     "test": "vitest run",
     "test:scripts": "node --test \"scripts/*.test.mjs\"",
