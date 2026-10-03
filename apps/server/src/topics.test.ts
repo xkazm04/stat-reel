@@ -1,6 +1,7 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { TOPIC_SEED } from "@statreel/schemas";
@@ -251,5 +252,20 @@ describe("recording a render", () => {
       { project_id: "p-b", topic_key: "boxing", topic_source: "project.topic", topic_label: "Boxing" },
       { project_id: "p-c", topic_key: "unassigned", topic_source: "unassigned", topic_label: "Unassigned" },
     ]);
+  });
+});
+
+describe("the board skill's case brief and checker stay in step with the seed", () => {
+  const skill = path.resolve(__dirname, "../../../.claude/skills/board");
+  const pickable = TOPIC_SEED.map((t) => t.key).filter((k) => k !== "unassigned");
+  it("lib.mjs CASE_TOPICS equals the seed without the reserved key", async () => {
+    const lib = (await import(/* @vite-ignore */ pathToFileURL(path.join(skill, "scripts", "lib.mjs")).href)) as { CASE_TOPICS: string[] };
+    expect([...lib.CASE_TOPICS].sort()).toEqual([...pickable].sort());
+  });
+  it("case-brief.md lists every pickable key and asks for `topic`", () => {
+    const md = readFileSync(path.join(skill, "references", "case-brief.md"), "utf8");
+    for (const k of pickable) expect(md).toContain(`\`${k}\``);
+    expect(md).not.toContain("`unassigned`");
+    expect(md).toMatch(/"topic": "music"/);
   });
 });

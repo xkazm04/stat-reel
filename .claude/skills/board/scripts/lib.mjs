@@ -226,6 +226,8 @@ export function rejectedCases(ledger) {
 // ---- case ideas (text-only use cases; mirrors apps/server/src/library.ts validateCaseIdea) ----
 
 export const CASE_DOMAINS = ["f1", "sports", "games", "geoeconomy", "music", "culture", "science", "other"];
+/** Mirrors TOPIC_SEED in packages/schemas/src/topics.ts (the controlled topic list, ADR 011), without the reserved "unassigned". */
+export const CASE_TOPICS = ["formula-1", "football", "basketball", "ice-hockey", "tennis", "cycling", "motorsport-endurance", "motorcycle-racing", "athletics", "baseball", "american-football", "boxing", "golf", "cricket", "rugby", "energy", "trade", "markets", "demographics", "labour", "growth-income", "prices-housing", "debt-finance", "agriculture-food", "migration", "culture", "science", "games", "music", "other"];
 export const DATA_STATUSES = ["staged", "registry", "new-source", "guess"];
 export const CASE_KINDS = ["observed", "what-if", "influence"];
 export const FEASIBILITY = ["likely", "possible", "hard"];
@@ -240,6 +242,7 @@ export function validateCaseIdea(c) {
   if (!t?.expectation?.trim() || !t?.reality?.trim() || !["strong", "moderate", "weak"].includes(t?.strength)) e.push("tension {expectation, reality, strength: strong|moderate|weak} is required");
   if (!Array.isArray(c.beats) || c.beats.filter((b) => b?.at && b?.what).length < MIN_BEATS) e.push(`beats: at least ${MIN_BEATS} dated turns {at, what}`);
   if (!CASE_DOMAINS.includes(c.domain)) e.push(`domain must be one of ${CASE_DOMAINS.join(", ")}`);
+  if (!CASE_TOPICS.includes(c.topic)) e.push(`topic must be one of ${CASE_TOPICS.join(", ")} (the controlled topic list)`);
   if (!DATA_STATUSES.includes(c.data_status)) e.push(`data_status must be one of ${DATA_STATUSES.join(", ")}`);
   const tl = c.timeline;
   if (!tl || typeof tl.years_from !== "number" || typeof tl.years_to !== "number" || !tl.unit || typeof tl.from !== "number" || typeof tl.to !== "number") e.push("timeline {unit, from, to, years_from, years_to} (numbers) is required");

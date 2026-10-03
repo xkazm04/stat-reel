@@ -54,6 +54,7 @@
 | D11 | **f1db via the GitHub Releases API** ([ADR 001](docs/decisions/001-f1db-via-github-releases-api.md)) | github.com/robots.txt disallows `/*/download`; the API + registered redirect host is allowed | Release download URL |
 | D16 | **Format: 30–90 s viz-led time-evolution videos, no narration** ([ADR 007](docs/decisions/007-format-time-evolution-videos.md)) | Owner: the data visualization tells the story over time; shorts are cut-outs of long runs | Narrated headline shorts (hook → reveal → payoff) |
 | D21 | **Page loading discipline: lazy routes, staggered arrival, transitions, revalidating reads** ([ADR 012](docs/decisions/012-page-loading-discipline.md)) | Every screen is a chunk with loader-prefetched data; sections mount top to bottom behind reserved placeholders; `/api` is gzip + ETag; hashed assets immutable | Heatmap grid left atomic (ARIA grid + focus registry) |
+| D20 | **Topic activity heatmap: controlled topic list + `videos` ledger** ([ADR 011](docs/decisions/011-topic-activity-heatmap.md)) | Owner: a topic is a broad domain (a type of sport, a geo-economic discipline) from a fixed list; one row per topic, column n = n-th finished video, filled by recency | Free-text topic labels; scanning the file system for videos |
 | D17 | **Board libraries + text-only case loop + generated images as art supplement** ([ADR 008](docs/decisions/008-board-libraries-case-loop-images.md)) | Owner: cases were locked in our own data and styles in the same x/y charts; judge stories apart from looks, expand domains via approved sources | Judging style and case only together on designs |
 | D15 | **Two themes (A/1 dark, A/3 light), Calendar, Board** ([ADR 006](docs/decisions/006-two-themes-studio-modules.md)) | Owner: keep both winners until one dominates; studio composes, Calendar publishes; Board gates visual direction | Single baseline |
 | D14 | **"On Air" brand + UI baseline, real data only** ([ADR 005](docs/decisions/005-on-air-brand-baseline.md)) | Owner verdict on the `--landing` contest | Patchbay (temporary) |
@@ -486,6 +487,8 @@ The gate's result lists every check it ran (`checks_run[]`) as well as its denia
 - `publications(id, render_id, platform, external_id, visibility, url, published_at, status)`
 - `metrics_daily(publication_id, date, views, watch_time_s, avg_view_duration_s, likes, comments, shares, subs_delta)`
 - `heatmap_snapshots(run_id, at, cells_json)`
+- `topics(key, label, family, sort, active)`: the controlled topic list, seeded from `TOPIC_SEED`; `case_ideas.topic` and `projects.topic` reference it (ADR 011)
+- `videos(id, topic_key, topic_label, topic_source, case_id, project_id, render_id, generation_job_id, title, format, duration_s, path, created_at)`: one row per finished MP4, the ledger behind `GET /api/heatmap/topics` (ADR 011)
 - `settings(key, value_json)` (non-secret)
 
 DuckDB `warehouse.duckdb`: schemas `staging_*`, `core`, `marts`, `llm` (views), `meta` (`capabilities`, `model_lineage`, `ingest_runs`, `source_snapshots`).

@@ -1,6 +1,6 @@
 # 011: Topic activity heatmap (topic × video ordinal, recency fill)
 
-- **Status:** proposed (draft rev. 2, 2026-10-03; owner answered Q2)
+- **Status:** accepted (2026-10-03; owner answered Q2; the seed list is a proposal the owner reviews in the PR). Server side implemented (T5); the UI (T6) follows.
 - **Date:** 2026-10-03
 - **Affects:** `apps/server` (`db.ts`: the `topics` and `videos` tables, plus `case_ideas.topic` and `projects.topic`; `topics.ts`; `pipeline.ts`; `GET /api/heatmap/topics`; `/api/topics`), `apps/studio` (`/heatmap` views, topic picker on the Use cases tab), `packages/schemas/src/topics.ts`, `.claude/skills/board/references/case-brief.md`, `DESIGN.md` §6.1 and §7.
 
