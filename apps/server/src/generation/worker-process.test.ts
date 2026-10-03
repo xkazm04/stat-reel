@@ -29,7 +29,14 @@ beforeEach(async () => {
   insertCase(db, CASE_A);
   api = createServer((req, res) => {
     res.setHeader("content-type", "application/json");
-    res.end(req.url?.endsWith("/finalize") ? '{"recorded":1,"stub":true}' : '{"ok":true}');
+    const u = req.url ?? "";
+    // a stand-in server: renders succeed at once (the worker asks for one per variant)
+    res.end(
+      u.endsWith("/finalize") ? '{"recorded":1,"stub":true}'
+        : u.endsWith("/render") ? '{"render_job_id":"r1"}'
+        : u === "/api/jobs" ? JSON.stringify({ jobs: [{ id: "r1", status: "succeeded", result_json: JSON.stringify({ stills: ["x.png"], output: "x.mp4" }) }] })
+        : '{"ok":true}',
+    );
   });
   await new Promise<void>((r) => api.listen(0, "127.0.0.1", r));
   port = (api.address() as AddressInfo).port;
