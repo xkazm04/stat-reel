@@ -136,9 +136,9 @@ describe.skipIf(!opaAvailable)("evaluatePolicy (real opa)", () => {
 });
 
 /**
- * checks_run is a hand-written list in publish.rego; the rule bodies are the ground truth. A deny/warn
- * head (comments stripped) is owned by the `# rule: <name>` annotation in the comment block directly
- * above it, or - for a second body of one rule - repeats the previous head line verbatim.
+ * checks_run is a hand-written list in publish.rego; the rule bodies are the ground truth. Every deny/warn
+ * head (comments stripped) is owned by the `# rule: <name>` annotation in the comment block directly above
+ * it; a rule with two bodies carries the annotation twice.
  */
 function regoRules() {
   const src = readFileSync(join(repoRoot(), "policy", "publish.rego"), "utf8");
@@ -147,7 +147,6 @@ function regoRules() {
   const annotations: string[] = [];
   const owners: string[] = [];
   let pending: string | null = null;
-  let prevHead = "";
   for (const line of src.split(/\r?\n/)) {
     const ann = /^#\s*rule:\s*([a-z0-9_]+)\s*$/.exec(line);
     if (ann) {
@@ -158,9 +157,7 @@ function regoRules() {
     const code = line.replace(/#.*$/, "").trimEnd();
     if (!code) continue;
     if (/^(deny|warn) contains\b/.test(code)) {
-      const owner = pending ?? (code === prevHead ? (owners.at(-1) ?? "<unannotated>") : "<unannotated>");
-      owners.push(owner);
-      prevHead = code;
+      owners.push(pending ?? "<unannotated>");
     }
     pending = null;
   }
@@ -175,8 +172,7 @@ describe("policy/publish.rego checks_run", () => {
   it("lists every rule exactly once, and only rules that exist", () => {
     expect(checksRun.length).toBeGreaterThan(20);
     expect(new Set(checksRun).size).toBe(checksRun.length);
-    expect(new Set(annotations).size).toBe(annotations.length);
-    expect([...annotations].sort()).toEqual([...checksRun].sort());
+    expect([...new Set(annotations)].sort()).toEqual([...checksRun].sort());
   });
 
   it("every deny/warn head is annotated, and every annotated rule has a head", () => {

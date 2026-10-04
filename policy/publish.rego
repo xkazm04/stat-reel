@@ -10,7 +10,7 @@ default allow := false
 
 allow := count(deny) == 0
 
-# Every rule name below appears in exactly one deny/warn rule (see the `# rule:` comments).
+# Every rule name below owns one or more deny/warn bodies, each annotated `# rule: <name>` (policy.test.ts checks).
 checks_run := [
 	"source_not_legal_on_monetized",
 	"data_license_not_legal_on_monetized",
@@ -261,6 +261,7 @@ deny contains "duration outside the 30-90 s band" if {
 	d < duration_band_s.min
 }
 
+# rule: duration_out_of_band
 deny contains "duration outside the 30-90 s band" if {
 	d := evidence("checks.duration_s")
 	is_number(d)
