@@ -148,7 +148,9 @@ export class Pipeline implements PipelineApi {
 
   async renderKeyframes(projectId: string, frames_s: number[]): Promise<{ stills: string[] }> {
     const props = this.projects.latestProps(projectId)?.props;
-    if (!props) return { stills: [] };
+    // an impossible request is a failure the caller can act on, not an empty success (the MCP door answers isError,
+    // the REST door 422): the co-pilot is told what to do instead of guessing why nothing rendered
+    if (!props) throw new Refusal("render_keyframes", `project ${projectId} has no props yet; call set_props first`);
     const outDir = path.join(paths.renders, projectId, `stills-${Date.now()}`);
     const res = await this.worker({ mode: "stills", compositionId: compositionId(props), props, frames: frames_s, outDir }, undefined);
     return { stills: (res.stills as string[]).map(fileUrl) };

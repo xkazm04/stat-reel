@@ -117,6 +117,18 @@ describe("audio job cancellation (pipeline-real-cancel-cleanup)", () => {
   });
 });
 
+describe("render_keyframes before set_props", () => {
+  it("is a named refusal (the tool answers isError), never an empty list of stills", async () => {
+    const { pipeline } = setup();
+    const internals = pipeline as unknown as { projects: { latestProps: () => unknown }; worker: unknown };
+    internals.projects.latestProps = () => undefined;
+    const worker = vi.fn();
+    internals.worker = worker;
+    await expect(pipeline.renderKeyframes("p1", [1, 2])).rejects.toThrow(/refused by render_keyframes: project p1 has no props yet; call set_props first/);
+    expect(worker).not.toHaveBeenCalled();
+  });
+});
+
 describe("render mastering takes the job's cancel signal", () => {
   it("normalizeTo and measureLoudness get the render job's signal (cancel reaches the ffmpeg runs)", async () => {
     const { runner, pipeline } = setup();
