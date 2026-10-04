@@ -219,3 +219,30 @@ def test_relative_redirect_is_resolved_and_rechecked(registry, tmp_path, clock):
     })
     res = make_client(registry, tmp_path, clock, srv).get(f"{API}/a")
     assert res.final_url == f"{API}/b" and res.content == b"b"
+
+
+# ---- the fetch log records failures too, not only responses -----------------------------------------
+
+def _log_rows(tmp_path):
+    return [json.loads(l) for l in (tmp_path / "fetch_log.jsonl").read_text().splitlines()]
+
+
+def test_a_transport_failure_on_a_data_request_is_logged(registry, tmp_path, clock):
+    def timeout(request):
+        raise httpx.ReadTimeout("slow", request=request)
+
+    srv = Server({f"{API}/robots.txt": robots_allow_all(), f"{API}/a": timeout})
+    with pytest.raises(httpx.ReadTimeout):
+        make_client(registry, tmp_path, clock, srv).get(f"{API}/a")
+    row = [r for r in _log_rows(tmp_path) if r["url"] == f"{API}/a"]
+    assert row and row[0]["status"] is None and row[0]["error"] == "ReadTimeout" and row[0]["source_id"] == "f1db"
+
+
+def test_an_unreachable_robots_txt_is_logged_before_the_run_is_refused(registry, tmp_path, clock):
+    def boom(request):
+        raise httpx.ConnectError("unreachable", request=request)
+
+    srv = Server({f"{API}/robots.txt": boom})
+    with pytest.raises(RobotsDisallowed):
+        make_client(registry, tmp_path, clock, srv).get(f"{API}/a")
+    assert [(r["url"], r["status"], r["error"]) for r in _log_rows(tmp_path)] == [(f"{API}/robots.txt", None, "ConnectError")]

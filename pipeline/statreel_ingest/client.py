@@ -125,7 +125,11 @@ class EthicalClient:
         interval = max(self.source.min_interval_s(), self._crawl_delay.get(origin, 0.0))
         self._throttle.wait(host, interval)
         started = time.perf_counter()
-        resp = self._http.get(url, headers=headers)
+        try:
+            resp = self._http.get(url, headers=headers)
+        except httpx.HTTPError as exc:  # a timeout or refused connection is a fetch too: log it, then fail
+            self._log(url, None, 0, (time.perf_counter() - started) * 1000, error=type(exc).__name__)
+            raise
         self._log(url, resp.status_code, len(resp.content), (time.perf_counter() - started) * 1000)
         self._stop_if_asked(host, resp)
         return resp
@@ -182,12 +186,13 @@ class EthicalClient:
         robots_url = f"{origin}/robots.txt"
         host = urlsplit(robots_url).hostname or ""
         self._throttle.wait(host, self.source.min_interval_s())
+        started = time.perf_counter()
         try:
-            started = time.perf_counter()
             resp = self._http.get(robots_url)
-            self._log(robots_url, resp.status_code, len(resp.content), (time.perf_counter() - started) * 1000)
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            self._log(robots_url, None, 0, (time.perf_counter() - started) * 1000, error=type(exc).__name__)
             return None
+        self._log(robots_url, resp.status_code, len(resp.content), (time.perf_counter() - started) * 1000)
         self._stop_if_asked(host, resp, robots=True)
         if 200 <= resp.status_code < 300:
             self._robots_to_disk(origin, resp.text)
@@ -218,11 +223,15 @@ class EthicalClient:
         keep = {k: v for k, v in resp.headers.items() if k.lower() in ("content-type", "etag", "last-modified")}
         meta.write_text(json.dumps({"url": url, "etag": etag, "last_modified": modified, "headers": keep}), encoding="utf-8")
 
-    def _log(self, url: str, status: int, size: int, duration_ms: float) -> None:
+    def _log(self, url: str, status: int | None, size: int, duration_ms: float, *, error: str | None = None) -> None:
+        """One row per request attempt; a transport failure has status null and names the error class."""
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         # Signed redirect URLs carry short-lived credentials; log the path only.
         parts = urlsplit(url)
         logged = url if parts.hostname == "api.github.com" or not parts.query else f"{parts.scheme}://{parts.netloc}{parts.path}?…"
+        row = {"ts": self._clock(), "source_id": self.source.id, "url": logged, "status": status,
+               "bytes": size, "duration_ms": round(duration_ms, 1)}
+        if error:
+            row["error"] = error
         with self.log_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"ts": self._clock(), "source_id": self.source.id, "url": logged, "status": status,
-                                 "bytes": size, "duration_ms": round(duration_ms, 1)}) + "\n")
+            fh.write(json.dumps(row) + "\n")
