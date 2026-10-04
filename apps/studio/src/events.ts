@@ -109,6 +109,32 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
   }
 }
 
+/**
+ * Connection-state wiring of the one EventSource. /events has no replay, so events emitted while the stream
+ * was down (every server restart, tsx watch included) are lost; the first open after an error therefore
+ * refetches the active queries once. The first open never does (the pages just loaded), and a flapping
+ * connection invalidates once per successful reopen, not per error. Returns the detach function.
+ */
+export function watchConnection(es: EventSource, qc: QueryClient, setState: (s: ConnectionState) => void): () => void {
+  let dropped = false;
+  const onOpen = () => {
+    setState("open");
+    if (!dropped) return;
+    dropped = false;
+    void qc.invalidateQueries({ refetchType: "active" });
+  };
+  const onError = () => {
+    dropped = true;
+    setState(es.readyState === es.CLOSED ? "closed" : "connecting");
+  };
+  es.addEventListener("open", onOpen);
+  es.addEventListener("error", onError);
+  return () => {
+    es.removeEventListener("open", onOpen);
+    es.removeEventListener("error", onError);
+  };
+}
+
 export function EventsProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const listeners = useRef(new Set<Listener>());
@@ -120,8 +146,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       return;
     }
     const es = new EventSource("/events");
-    const onOpen = () => setState("open");
-    const onError = () => setState(es.readyState === EventSource.CLOSED ? "closed" : "connecting");
+    const unwatch = watchConnection(es, qc, setState);
     const handle = (msg: MessageEvent<string>) => {
       let data: Record<string, unknown> = {};
       try {
@@ -134,11 +159,10 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       invalidate(qc, e);
       for (const fn of listeners.current) fn(e);
     };
-    es.addEventListener("open", onOpen);
-    es.addEventListener("error", onError);
     es.addEventListener("message", handle);
     for (const name of NAMED) es.addEventListener(name, handle as EventListener);
     return () => {
+      unwatch();
       for (const name of NAMED) es.removeEventListener(name, handle as EventListener);
       es.close();
     };
