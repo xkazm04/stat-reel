@@ -11,7 +11,7 @@ import { GenerationError, type GenerationEngine, type RunContext } from "./engin
 import { acquireLease, heartbeatLease, type LeaseOptions, releaseLease } from "./lease";
 import { jobPaths } from "./paths";
 import { buildCaseData, configSnapshot, prepareDirs, writeCaseJson } from "./prepare";
-import type { GenerationQueue } from "./queue";
+import { type GenerationQueue, spendOf } from "./queue";
 import type { RenderStep } from "./render-steps";
 import { type GenerationValidator, stubValidator } from "./validator";
 
@@ -249,6 +249,12 @@ export class GenerationWorker {
         note: (u) => queue.update(job.id, u), log: logLine,
       };
       const run = await this.d.engine.run(ctx);
+      // cost ledger: add this attempt to the job's total (earlier attempts stay), then report the total downstream
+      const rc = run.result?.cost_usd;
+      const rt = run.result?.turns;
+      queue.addSpend(job.id, { cost_usd: typeof rc === "number" ? rc : null, turns: typeof rt === "number" ? rt : null });
+      const total = queue.spend(job.id);
+      const runResult = { ...run.result, ...(total.cost_usd !== null ? { attempt_cost_usd: rc ?? null, cost_usd: total.cost_usd } : {}), ...(total.turns !== null ? { turns: total.turns } : {}) };
       if (reason) throw new GenerationError("cancelled", "aborted");
       // ---- finalize
       phase = "finalize";
@@ -267,12 +273,14 @@ export class GenerationWorker {
         phase = "finalize";
         queue.update(job.id, { phase: "finalize", progress_note: "saving results" });
       }
-      const fin = await this.callServer(() => this.d.callbacks.finalize(job.id, { outputs: v.outputs, result: { ...run.result, ...rendered } }), controller.signal);
+      const fin = await this.callServer(() => this.d.callbacks.finalize(job.id, { outputs: v.outputs, result: { ...runResult, ...rendered } }), controller.signal);
       logLine(`finalize ok: ${v.outputs.length} outputs`);
-      return queue.finish(job.id, "done", { result: { ...run.result, outputs: v.outputs, ...fin } });
+      return queue.finish(job.id, "done", { result: { ...runResult, outputs: v.outputs, ...fin } });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       logLine(`ERROR (${phase}): ${msg}`);
+      // a failed, budget-capped or cancelled run was still billed: keep what its result event reported
+      try { queue.addSpend(job.id, spendOf(e)); } catch (err) { this.log(`could not record spend (${err instanceof Error ? err.message : err})`); }
       if (reason === "shutdown") return undefined; // shutdown() re-queues the row (no attempt burnt) and releases the lease
       if (reason === "lease") return undefined; // someone else holds the lease now; their recover() decides this row
       if (reason === "cancel") return queue.finish(job.id, "cancelled", { error: "cancelled", error_kind: "cancelled" });

@@ -17,6 +17,7 @@ import { parseStreamLine, resolveClaudeBin, type LlmEvent } from "@statreel/llm"
 import { killTree } from "../proc";
 import { type GenerationEngine, GenerationError, type RunContext } from "./engine";
 import { type JobPaths, jobPaths } from "./paths";
+import type { RunSpend } from "./queue";
 import { renderPrompt, writePrompt } from "./prompt";
 import { stageRefs } from "./refs";
 import { repoRoot } from "../config";
@@ -91,6 +92,13 @@ export function logLineFor(e: LlmEvent): { line: string; tool?: string } | null 
     case "tool_result": return { line: `tool_result${e.is_error ? " ERROR" : ""}: ${clip(oneLine(e.content))}` };
     case "result": return { line: `result ok=${e.ok} turns=${e.turns ?? "?"} cost=${e.cost_usd ?? "?"} ${clip(oneLine(e.result), 500)}` };
     case "stderr": return { line: `stderr: ${clip(e.text)}` };
+  }
+}
+
+/** A GenerationError that also carries what the run cost: failed, budget and cancelled runs are billed too (cost ledger). */
+export class CostedGenerationError extends GenerationError {
+  constructor(kind: GenerationError["kind"], message: string, readonly spend: RunSpend) {
+    super(kind, message);
   }
 }
 
@@ -177,12 +185,15 @@ export function createLiveEngine(o: LiveEngineOptions): GenerationEngine {
           ctx.signal.removeEventListener("abort", abort);
           if (buf.trim()) onLine(buf);
           ctx.setPid(null);
-          if (ctx.signal.aborted) return reject(new GenerationError("cancelled", "aborted"));
           const r = result as Extract<LlmEvent, { type: "result" }> | null;
-          if (!r) return reject(new GenerationError("cli_exit", `claude exited ${code} without a result event: ${oneLine(stderrTail).slice(-300)}`));
-          if (r.refusal) return reject(new GenerationError("cli_exit", `refused: ${clip(oneLine(r.result), 200)}`));
-          if (/budget/i.test(resultSubtype)) return reject(new GenerationError("budget", `budget cap reached (${resultSubtype})`));
-          if (!r.ok) return reject(new GenerationError("cli_exit", `session ended with ${resultSubtype || "an error"}: ${clip(oneLine(r.result), 200)}`));
+          // the result event's cost is carried on every outcome; a run killed before its result reports none
+          const spend: RunSpend = { cost_usd: r?.cost_usd ?? null, turns: r?.turns ?? null };
+          const fail = (kind: GenerationError["kind"], message: string) => reject(new CostedGenerationError(kind, message, spend));
+          if (ctx.signal.aborted) return fail("cancelled", "aborted");
+          if (!r) return fail("cli_exit", `claude exited ${code} without a result event: ${oneLine(stderrTail).slice(-300)}`);
+          if (r.refusal) return fail("cli_exit", `refused: ${clip(oneLine(r.result), 200)}`);
+          if (/budget/i.test(resultSubtype)) return fail("budget", `budget cap reached (${resultSubtype})`);
+          if (!r.ok) return fail("cli_exit", `session ended with ${resultSubtype || "an error"}: ${clip(oneLine(r.result), 200)}`);
           resolve({ result: { cost_usd: r.cost_usd ?? null, turns: r.turns ?? null, session_id: r.session_id, model: ctx.config.model, exit_code: code } });
         });
       });

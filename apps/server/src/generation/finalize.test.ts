@@ -134,6 +134,27 @@ describe("finalize generate_video", () => {
     expect(row).toMatchObject({ topic_key: "energy", topic_source: "case.topic", case_id: "ci-ddddddd4", generation_job_id: job.id, format: "vertical", path: `renders/gen/ci-ddddddd4/${job.id}/video.mp4` });
   }, 60_000);
 
+  it("the manifest and the videos row carry the job's total cost; an unknown cost stays null", async () => {
+    const { job, body } = videoJob();
+    queue.addSpend(job.id, { cost_usd: 0.4, turns: 10 });
+    queue.addSpend(job.id, { cost_usd: 0.2, turns: 7 });
+    const total = queue.spend(job.id);
+    const r = (await fin.finalize(job, { ...body, result: { ...body.result, cost_usd: total.cost_usd, turns: total.turns } })) as { video_id: string };
+    const m = JSON.parse(readFileSync(path.join(dir, "renders", "gen", "ci-ddddddd4", job.id, "manifest.json"), "utf8"));
+    expect(m).toMatchObject({ turns: 17 });
+    expect(m.cost_usd).toBeCloseTo(0.6, 6);
+    const row = db.$client.prepare("select cost_usd from videos where id = ?").get(r.video_id) as { cost_usd: number | null };
+    expect(row.cost_usd).toBeCloseTo(0.6, 6);
+  }, 60_000);
+
+  it("a video without any reported cost records null, not 0", async () => {
+    const { job, body } = videoJob();
+    const r = (await fin.finalize(job, body)) as { video_id: string };
+    const m = JSON.parse(readFileSync(path.join(dir, "renders", "gen", "ci-ddddddd4", job.id, "manifest.json"), "utf8"));
+    expect(m.cost_usd).toBeNull();
+    expect((db.$client.prepare("select cost_usd from videos where id = ?").get(r.video_id) as { cost_usd: number | null }).cost_usd).toBeNull();
+  }, 60_000);
+
   it("finalize twice gives one videos row", async () => {
     const { job, body } = videoJob();
     const a = (await fin.finalize(job, body)) as { video_id: string };

@@ -19,6 +19,16 @@ export type QueueOptions = { clock?: () => string; maxAttempts?: number };
 export type EnqueueResult = { job: GenerationJob; existing: boolean };
 export type JobUpdate = { phase?: string | null; progress_note?: string | null; last_tool?: string | null };
 
+/** What one CLI run reported in its `result` event; null = not reported (unmeasurable is not zero). */
+export type RunSpend = { cost_usd: number | null; turns: number | null };
+
+/** The spend an engine error carries (failed, budget and cancelled runs still cost money); null when none was reported. */
+export function spendOf(e: unknown): RunSpend | null {
+  const s = (e as { spend?: Partial<RunSpend> } | null)?.spend;
+  if (!s) return null;
+  return { cost_usd: typeof s.cost_usd === "number" ? s.cost_usd : null, turns: typeof s.turns === "number" ? s.turns : null };
+}
+
 export const dedupeKey = (type: string, caseId: string, boardItemId?: string | null) => `${type}|${caseId}|${boardItemId ?? "-"}`;
 
 export class GenerationQueue {
@@ -119,6 +129,25 @@ export class GenerationQueue {
   heartbeat(id: string): boolean {
     const at = this.clock();
     return this.c.prepare("update generation_jobs set heartbeat_at = ?, updated_at = ? where id = ? and status = 'running'").run(at, at, id).changes === 1;
+  }
+
+  /**
+   * Add one run's spend to the job's total (cost ledger). The `cost_usd` / `turns` columns survive `retry` and a
+   * restart re-queue, so every attempt adds to the total and none replaces it. A null part adds nothing and
+   * leaves an unknown total unknown.
+   */
+  addSpend(id: string, s: RunSpend | null | undefined): void {
+    if (!s || (s.cost_usd === null && s.turns === null)) return;
+    this.c.prepare(
+      `update generation_jobs set cost_usd = case when ? is null then cost_usd else coalesce(cost_usd, 0) + ? end,
+         turns = case when ? is null then turns else coalesce(turns, 0) + ? end where id = ?`,
+    ).run(s.cost_usd, s.cost_usd, s.turns, s.turns, id);
+  }
+
+  /** The job's total spend so far, `null` parts when no attempt ever reported one. */
+  spend(id: string): RunSpend {
+    const r = this.c.prepare("select cost_usd, turns from generation_jobs where id = ?").get(id) as RunSpend | undefined;
+    return { cost_usd: r?.cost_usd ?? null, turns: r?.turns ?? null };
   }
 
   /** running -> done | failed | cancelled (or queued -> cancelled). Returns the updated row, or undefined when the state did not allow it. */

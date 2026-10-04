@@ -82,6 +82,9 @@ export const llmSessions = sqliteTable("llm_sessions", {
   started_at: text("started_at").notNull(),
   ended_at: text("ended_at"),
   fixture_path: text("fixture_path"),
+  /** summed CLI spend of the session's runs; null = never reported (unmeasurable is not zero). Added by addColumn. */
+  cost_usd: real("cost_usd"),
+  turns: integer("turns"),
 });
 export const llmEvents = sqliteTable("llm_events", {
   session_id: text("session_id").notNull(),
@@ -227,6 +230,8 @@ export const videos = sqliteTable("videos", {
   duration_s: real("duration_s"),
   path: text("path").notNull(),
   created_at: text("created_at").notNull(),
+  /** the generation job's total spend over all attempts; null = unknown. Added by addColumn after migrateTopics (which owns the DDL). */
+  cost_usd: real("cost_usd"),
 });
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
@@ -259,6 +264,9 @@ export const generationJobs = sqliteTable("generation_jobs", {
   started_at: text("started_at"),
   finished_at: text("finished_at"),
   updated_at: text("updated_at").notNull(),
+  /** CLI spend summed over every attempt (queue.retry and restarts keep it); null = no result event ever reported. Added by addColumn. */
+  cost_usd: real("cost_usd"),
+  turns: integer("turns"),
 });
 export const generationJobEvents = sqliteTable("generation_job_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -359,7 +367,12 @@ export function openDb(file: string): Db {
   addColumn("case_ideas", "beats_json", "text not null default '[]'");
   for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
   addColumn("case_ideas", "archive_reason", "text");
+  addColumn("generation_jobs", "cost_usd", "real");
+  addColumn("generation_jobs", "turns", "integer");
+  addColumn("llm_sessions", "cost_usd", "real");
+  addColumn("llm_sessions", "turns", "integer");
   migrateTopics(sqlite); // topics + videos tables, seed, topic columns, backfills (ADR 011); idempotent
+  addColumn("videos", "cost_usd", "real"); // videos is created by migrateTopics, so its column comes after it
   return drizzle(sqlite) as Db;
 }
 

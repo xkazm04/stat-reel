@@ -30,6 +30,16 @@ export class FinalizeError extends Error {
   }
 }
 
+/** The job's total spend: the worker's summed result, else the row's own ledger columns; null when never reported. */
+function jobSpend(job: GenerationJob, body: FinalizeBody): { cost_usd: number | null; turns: number | null } {
+  const row = job as GenerationJob & { cost_usd?: number | null; turns?: number | null };
+  const r = body.result;
+  return {
+    cost_usd: typeof r?.cost_usd === "number" ? r.cost_usd : (row.cost_usd ?? null),
+    turns: typeof r?.turns === "number" ? r.turns : (row.turns ?? null),
+  };
+}
+
 export type FinalizeBody = { outputs: string[]; result?: Record<string, unknown> };
 export type FinalizerDeps = { db: Db; board: BoardService; dataRoot: string; boardRoot: string; bus?: EventBus; fontsManifest?: string;
   /** `wh.facts`: resolves fact refs against the warehouse. Without it a "real" video is refused (fail closed). */
@@ -163,6 +173,7 @@ export class GenerationFinalizer {
       fonts = m.fonts.map((f) => ({ family: f.family, license: f.license, sha256: f.sha256 }));
     } catch { /* the manifest is informational here */ }
     const params = JSON.parse(job.params_json || "{}") as { model?: string; engine?: string };
+    const spend = jobSpend(job, body);
     const manifest = {
       schema: "statreel/generation-video@1",
       job_id: job.id,
@@ -171,6 +182,9 @@ export class GenerationFinalizer {
       composition: "DataRace-vertical",
       model: params.model ?? null,
       engine: params.engine ?? null,
+      /** the job's total CLI spend over all attempts; null = never reported (unmeasurable is not zero) */
+      cost_usd: spend.cost_usd,
+      turns: spend.turns,
       created_at: new Date().toISOString(),
       data: { data_provenance: dataProvenanceOf(props), data_status: idea.data_status, sources: JSON.parse(idea.sources_json || "[]") },
       props_sha256: planSha256(props),
@@ -191,8 +205,9 @@ export class GenerationFinalizer {
       topic_key: topic.key, topic_source: topic.source, case_id: job.case_id, generation_job_id: job.id, title: idea.title, format: "vertical",
       duration_s: checks.duration_s, path: rel,
     });
+    if (spend.cost_usd !== null) c.prepare("update videos set cost_usd = ? where id = ?").run(spend.cost_usd, id);
     this.d.bus?.emit({ type: "heatmap.updated" });
-    return { video_id: id, path: rel, checks };
+    return { video_id: id, path: rel, checks, cost_usd: spend.cost_usd };
   }
 
   private visualOptions(job: GenerationJob, p: JobPaths, body: FinalizeBody): Record<string, unknown> {
@@ -200,7 +215,7 @@ export class GenerationFinalizer {
     if (!idea) throw new FinalizeError(`case ${job.case_id} no longer exists`, 404);
     const stills = ((body.result?.renders as { stills?: Record<string, string> } | undefined)?.stills) ?? {};
     const params = JSON.parse(job.params_json || "{}") as { model?: string; engine?: string };
-    const cost = typeof body.result?.cost_usd === "number" ? body.result.cost_usd : null;
+    const cost = jobSpend(job, body).cost_usd;
     const existing = new Map<number, string>();
     for (const i of this.d.board.list({ status: "all" })) {
       if (i.case_idea_id === job.case_id && i.source?.job_id === job.id) existing.set(Number(i.source.variant), i.id);
