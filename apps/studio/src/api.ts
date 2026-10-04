@@ -518,10 +518,16 @@ export function parseJson<T>(s: string | null | undefined): T | null {
 
 export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/**
+ * Did the StatReel API itself answer? Its errors are JSON `{error}` (app.onError); a thrown fetch or a
+ * proxy's own page (the Vite dev proxy answers 500 text/plain while the API is down) is not an answer.
+ */
+export const serverAnswered = (e: unknown): e is ApiError =>
+  e instanceof ApiError && !!e.body && typeof e.body === "object" && "error" in e.body;
+
 /** The server's own error text (`{error}` body) verbatim, else the transport message. */
 export function serverError(e: unknown): string {
-  if (e instanceof ApiError && e.body && typeof e.body === "object" && "error" in e.body)
-    return String((e.body as { error: unknown }).error);
+  if (serverAnswered(e)) return String((e.body as { error: unknown }).error);
   return errorText(e);
 }
 

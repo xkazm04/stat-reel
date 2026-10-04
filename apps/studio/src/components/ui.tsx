@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { errorText } from "../api";
+import { errorText, serverAnswered } from "../api";
 import { sparkPoints } from "../display";
 
 /** An honest, labelled empty state. */
@@ -49,7 +49,8 @@ export function Failure({
     <div className="failure" role="alert">
       <b>{what} did not load</b>
       <span className="mono">{errorText(error)}</span>
-      <span>Is the API running on 127.0.0.1:8787? (`pnpm dev` starts both.)</span>
+      {/* the API answered with its own error: asking whether it runs would send the owner the wrong way */}
+      {serverAnswered(error) ? null : <span>Is the API running on 127.0.0.1:8787? (`pnpm dev` starts both.)</span>}
       {onRetry ? (
         <button type="button" className="btn btn--sm failure__retry" onClick={onRetry} disabled={retrying} aria-busy={retrying}>
           {retrying ? "Retrying" : "Retry"}
