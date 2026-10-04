@@ -207,7 +207,7 @@ export async function main(variantArg, dataDir) {
   const r = await inspect(path.resolve(variantArg), dataDir);
   if (r.ok) {
     const l = r.longevity;
-    console.log(`PASS ${variantArg}: ${r.meta.duration_s}s, clock ${l.clock_from}->${l.clock_to}, ${r.facts.cited} facts resolved, seek-stable, ${r.truth?.labels.checked ?? 0} clock labels checked`);
+    console.log(`PASS ${variantArg}: ${r.meta.duration_s}s, clock ${l.clock_from}->${l.clock_to}, ${r.facts.cited} facts resolved, seek-stable, ${r.truth?.labels.checked ?? 0} clock labels checked, ${r.truth?.labels.unlabelled ?? 0} unlabelled, frameFacts ${r.truth?.frameFacts ?? "not run"}`);
   } else {
     console.log(`FAIL ${variantArg}:`);
     for (const e of r.errors) console.log(`  - ${e}`);

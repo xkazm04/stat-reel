@@ -44,7 +44,7 @@ must be running on 127.0.0.1:8787.
    - 30-90 s `duration_s`
    - a `timeline {unit, from, to}` that runs forward
    - `chart_form`
-   - a data-ready time-evolution use case, or a proposed case with `data_time` and a `sport` that has data-ready cells (F1 today; `dataReadyUseCases` is the one predicate for lanes, harvest and check.mjs)
+   - a data-ready time-evolution use case, or a proposed case with `data_time` and a `sport` that has data-ready cells (F1 today; `dataReadyUseCases` is the one predicate for lanes, harvest and `scripts/check-design.mjs`)
    - a stable style id, and fact refs
 
    The artboard must expose `window.statreel.seek(t)` and `dataClock(t)`. The harness renders the
@@ -68,11 +68,17 @@ must be running on 127.0.0.1:8787.
   is cited as `<fact_key>#<column>` in `shot.json`.
 - The data clock advances monotonically for the whole run, and the picture is viz-led, with no
   narration and no text-led story.
-- Attribution on screen and text inside the vertical safe box are gated by `check.mjs`
-  (`attributionPresent`, `textOutsideSafeBox` in `scripts/lib.mjs` hold the numbers).
+- Attribution on screen and text inside the vertical safe box are gated by `scripts/check-design.mjs`
+  (`attributionPresent`, `textOutsideSafeBox` in `scripts/lib.mjs` hold the numbers). Seats run it as
+  `node data/check.mjs variant-N`, the wrapper `board.mjs` stages into each workspace. Two truth gates
+  sit beside it: **clock label** (`assessClockLabels`: the season printed on a sampled frame must be
+  `floor(dataClock(t))`; a frame with no year is counted as unlabelled, never failed) and
+  **frameFacts** (`assessFrameFacts`: an optional `window.statreel.frameFacts(t)` is recomputed from
+  the staged rows and a wrong value or missing leader fails; not declared = not checked).
+  The harness tests run with `just check --only board`.
 - No league, team, sponsor or broadcaster marks, and no athlete photos. Illustration must read as
   illustration.
-- Every readable text is at least 28 px (owner rule; `check.mjs` measures DOM, SVG and canvas text).
+- Every readable text is at least 28 px (owner rule; `scripts/check-design.mjs` measures DOM, SVG and canvas text).
 - Generated images (grok `image_gen`) carry texture, mood or scene only, never data. Each is listed in
   `shot.json` `images[]` with its exact prompt (ending in the text ban) and role, is illustrated rather
   than photo-real, is never a figure in a slot naming a real person, and stays under 2.5 MB (15 MB per

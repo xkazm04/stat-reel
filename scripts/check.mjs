@@ -1,4 +1,4 @@
-// One offline gate: typecheck, vitest, script tests, pytest, OPA, dbt parse, Biome ratchet. Every step runs even
+// One offline gate: typecheck, vitest, script tests, board harness tests, pytest, OPA, dbt parse, Biome ratchet. Every step runs even
 // when an earlier one fails, so one invocation reports everything that is red. `--only a,b` narrows it.
 // Usage: node scripts/check.mjs [--only typecheck,opa]   (also `pnpm check` / `just check`)
 import { spawnSync } from "node:child_process";
@@ -39,6 +39,7 @@ export const STEPS = [
   { name: "typecheck", run: () => sh("pnpm", ["-s", "typecheck"]) },
   { name: "vitest", run: () => sh("pnpm", ["-s", "test"]) },
   { name: "scripts", run: () => sh(process.execPath, ["--test", "scripts/*.test.mjs"]) },
+  { name: "board", run: () => sh(process.execPath, ["--test", ".claude/skills/board/tests/*.mjs"]) },
   { name: "pytest", run: () => sh("uv", ["run", "--project", "pipeline", "pytest", "pipeline/tests", "-m", "not live"]) },
   { name: "opa", run: () => sh(path.join(root, ".tools", win ? "opa.exe" : "opa"), ["test", "policy"]) },
   { name: "dbt-parse", run: dbtParse },

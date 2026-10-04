@@ -43,3 +43,11 @@ test("--only parsing: both spellings, null when absent, unknown names rejected",
   assert.throws(() => parseOnly(["--only", "zzz"], known), /unknown step/);
   assert.throws(() => parseOnly(["--only"], known), /needs a step list/);
 });
+
+test("check.mjs declares the board harness as a named, selectable step with unique names", async () => {
+  const { STEPS } = await import("./check.mjs");
+  const names = STEPS.map((s) => s.name);
+  assert.equal(new Set(names).size, names.length);
+  assert.ok(names.includes("board"), "board harness tests must be a step of just check");
+  assert.deepEqual(parseOnly(["--only", "board"], names), ["board"]);
+});
