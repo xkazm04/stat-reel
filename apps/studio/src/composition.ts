@@ -48,14 +48,19 @@ export function loadComposition(): Promise<CompositionInfo> {
   return cached;
 }
 
-export function useComposition(): CompositionInfo {
+/**
+ * `enabled` false (no props to play yet, see studio-logic compositionLoadWanted) never starts the import, so a
+ * screen that has nothing to play does not pay for the chunk (ADR 012); it loads when `enabled` turns true.
+ */
+export function useComposition(enabled = true): CompositionInfo {
   const [info, setInfo] = useState<CompositionInfo>({ status: "loading" });
   useEffect(() => {
+    if (!enabled) return;
     let live = true;
     void loadComposition().then((i) => live && setInfo(i));
     return () => {
       live = false;
     };
-  }, []);
+  }, [enabled]);
   return info;
 }

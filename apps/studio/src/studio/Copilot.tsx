@@ -5,7 +5,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { api, errorText, type LlmEvent, type ProjectDetail, qk } from "../api";
+import { api, errorText, type LlmEvent, type ProjectDetail, qk, serverError } from "../api";
 import { StatusChip } from "../components/glyphs";
 import { Failure } from "../components/ui";
 import { useEvents } from "../events";
@@ -150,8 +150,16 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
         <p className="copilot__note">
           Through MCP tools only: validated props, read-only SQL on llm.* views, the narration. Never composition code.
         </p>
-        {start.isError ? <p className="joberr">Could not start: {errorText(start.error)}</p> : null}
-        {stop.isError ? <p className="joberr">Could not stop: {errorText(stop.error)}</p> : null}
+        {start.isError ? (
+          <p className="joberr" title={errorText(start.error)}>
+            Could not start: {serverError(start.error)}
+          </p>
+        ) : null}
+        {stop.isError ? (
+          <p className="joberr" title={errorText(stop.error)}>
+            Could not stop: {serverError(stop.error)}
+          </p>
+        ) : null}
       </div>
       {log.isError ? (
         <div className="copilot__fail">

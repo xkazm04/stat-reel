@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCancelJob, canSchedule, compositionState, cps, draftSpans, hasPlayer, peakCueCps, produceBlockReason, rulerTicks, sceneSpans, scheduleOffered, spanAt, spanLabel, verdictView } from "./studio-logic";
+import { canCancelJob, canSchedule, compositionLoadStatus, compositionLoadWanted, compositionState, cps, draftSpans, hasPlayer, peakCueCps, produceBlockReason, REUSED_RENDER_TEXT, reusedRenderOf, rulerTicks, sceneSpans, scheduleOffered, spanAt, spanLabel, verdictView } from "./studio-logic";
 
 const scenes = [
   { id: "hook", kind: "hook" },
@@ -117,5 +117,43 @@ describe("verdictView", () => {
     expect(verdictView(null, false).word).toBe("NO VERDICT");
     expect(verdictView({ allow: true }, false)).toEqual({ word: "ALLOW", status: "go" });
     expect(verdictView({ allow: false }, false, true)).toEqual({ word: "DENY", status: "blocked" });
+  });
+});
+
+describe("compositionLoadWanted", () => {
+  it("loads the composition chunk only once props exist and the use case has a player", () => {
+    expect(compositionLoadWanted(false, "EraAdjustedSlope")).toBe(false);
+    expect(compositionLoadWanted(false, undefined)).toBe(false);
+    expect(compositionLoadWanted(true, "EraAdjustedSlope")).toBe(true);
+    expect(compositionLoadWanted(true, undefined)).toBe(true);
+    expect(compositionLoadWanted(true, "DataRace")).toBe(false);
+  });
+  it("reports ready, not a spinner, while nothing is wanted", () => {
+    expect(compositionLoadStatus(false, "loading")).toBe("ready");
+    expect(compositionLoadStatus(true, "loading")).toBe("loading");
+    expect(compositionLoadStatus(true, "missing")).toBe("missing");
+    expect(compositionState("EraAdjustedSlope", compositionLoadStatus(false, "loading"))).toBe("built");
+  });
+});
+
+describe("reusedRenderOf", () => {
+  const jobs = [
+    { id: "fresh", result_json: JSON.stringify({ render_id: "r1", video: "x" }) },
+    { id: "reuse", result_json: JSON.stringify({ render_id: "r2", reused: "r1", note: "reused render r1" }) },
+    { id: "broken", result_json: "{nope" },
+    { id: "none", result_json: null },
+  ];
+  it("names the render a produce reused", () => {
+    expect(reusedRenderOf(jobs, { job_id: "reuse" })).toBe("r1");
+  });
+  it("is null for a fresh, unreadable, missing or unknown result", () => {
+    expect(reusedRenderOf(jobs, { job_id: "fresh" })).toBeNull();
+    expect(reusedRenderOf(jobs, { job_id: "broken" })).toBeNull();
+    expect(reusedRenderOf(jobs, { job_id: "none" })).toBeNull();
+    expect(reusedRenderOf(jobs, { job_id: "gone" })).toBeNull();
+    expect(reusedRenderOf(jobs, null)).toBeNull();
+  });
+  it("has the sentence the screens show", () => {
+    expect(REUSED_RENDER_TEXT).toBe("Reused the existing render (inputs unchanged)");
   });
 });

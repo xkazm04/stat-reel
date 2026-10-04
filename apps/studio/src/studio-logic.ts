@@ -3,6 +3,7 @@
  * honest even split while the draft has no audio), the scene under the playhead, captions CPS per
  * scene, ruler ticks and the "schedule in calendar" condition. No React, no DOM (unit-tested).
  */
+import type { RenderJobResult } from "./api";
 
 export type SceneSpan = { id: string; kind?: string; start: number; end: number; measured: boolean };
 
@@ -140,3 +141,40 @@ export function verdictView(
   if (!policy) return { word: "NO VERDICT", status: null };
   return policy.allow ? { word: "ALLOW", status: "go" } : { word: "DENY", status: "blocked" };
 }
+
+/**
+ * Should the Remotion composition chunk (~286 KB) load? Only once the project has props and its use case has a
+ * player at all: an empty project or an unbuilt composition never plays anything (ADR 012).
+ */
+export const compositionLoadWanted = (hasProps: boolean, compositionName: string | null | undefined): boolean =>
+  hasProps && hasPlayer(compositionName);
+
+/**
+ * The load status the screen reports. Without a reason to load, nothing is in flight, so the monitor shows its
+ * own "no props" empty state rather than a spinner that would never resolve.
+ */
+export const compositionLoadStatus = (
+  wanted: boolean,
+  status: "loading" | "ready" | "missing",
+): "loading" | "ready" | "missing" => (wanted ? status : "ready");
+
+/**
+ * The earlier render a produce reused (skip-unchanged, pipeline.ts reuseRender), read from the result of the
+ * job that wrote `render`; null for a fresh render, an unknown job or an unreadable result.
+ */
+export function reusedRenderOf(
+  jobs: readonly { id: string; result_json: string | null }[],
+  render: { job_id: string } | null | undefined,
+): string | null {
+  const job = render ? jobs.find((j) => j.id === render.job_id) : undefined;
+  if (!job?.result_json) return null;
+  try {
+    const r = JSON.parse(job.result_json) as RenderJobResult | null;
+    return typeof r?.reused === "string" && r.reused ? r.reused : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The sentence shown for a reused render. */
+export const REUSED_RENDER_TEXT = "Reused the existing render (inputs unchanged)";

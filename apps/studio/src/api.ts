@@ -508,3 +508,13 @@ export function serverError(e: unknown): string {
     return String((e.body as { error: unknown }).error);
   return errorText(e);
 }
+
+/**
+ * A render job's `result_json` (pipeline.ts renderRun / reuseRender). `reused` is the id of the earlier render a
+ * skip-unchanged produce built its new row over; absent on a fresh render.
+ */
+export type RenderJobResult = {
+  render_id?: string;
+  reused?: string;
+  note?: string;
+};

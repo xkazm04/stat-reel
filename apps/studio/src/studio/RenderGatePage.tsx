@@ -7,13 +7,13 @@
  */
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { serverError } from "../api";
+import { errorText, serverError } from "../api";
 import { Defer } from "../components/arrive";
 import { Arrow, StatusChip } from "../components/glyphs";
 import { Empty, Failure, Loading } from "../components/ui";
 import { latestRender, renderChecks, renderFile, renderPolicy, useManifest } from "../data";
 import { checkRows, fileUrl, relTime } from "../logic";
-import { scheduleOffered } from "../studio-logic";
+import { REUSED_RENDER_TEXT, reusedRenderOf, scheduleOffered } from "../studio-logic";
 import { hasCaptionSidecar, hasChecks, isNewerRender } from "./render-gate";
 import { DenyReason, JobError, JobLine, lastJobOf, ProduceAnnouncer, useProduce, useStudio, Verdict } from "./shared";
 
@@ -35,6 +35,7 @@ export function RenderGatePage() {
   const captionsVtt = hasCaptionSidecar(m, "captions.vtt");
   // scheduling concerns the project's latest render; the picker may show an older one
   const isLatest = !!render && render.id === latestRender(detail)?.id;
+  const reused = reusedRenderOf(detail.jobs, render);
   const schedulable = isLatest && scheduleOffered(policy, !!running, detail.publications);
 
   return (
@@ -139,6 +140,11 @@ export function RenderGatePage() {
               <div className="rg__verdict">
                 <Verdict detail={detail} render={render} size="lg" />
               </div>
+              {reused ? (
+                <p className="sum-p" data-testid="produce-reused">
+                  {REUSED_RENDER_TEXT}
+                </p>
+              ) : null}
               {running ? (
                 <p className="sum-p" role="note">
                   A produce is running; its new render gets its own verdict. This one is about the render shown.
@@ -167,7 +173,11 @@ export function RenderGatePage() {
                   <Link to="/studio/$projectId" params={{ projectId: pid }} className="btn btn--sm">
                     Back to the control room
                   </Link>
-                  {produce.isError ? <span className="joberr">{serverError(produce.error)}</span> : null}
+                  {produce.isError ? (
+                    <span className="joberr" title={errorText(produce.error)}>
+                      {serverError(produce.error)}
+                    </span>
+                  ) : null}
                 </p>
               ) : null}
               {policy ? (

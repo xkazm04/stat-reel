@@ -9,14 +9,23 @@ import type { PlayerRef } from "@remotion/player";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
-import { api, errorText } from "../api";
+import { api, errorText, serverError } from "../api";
 import { Defer } from "../components/arrive";
 import { Arrow } from "../components/glyphs";
 import type { PlayerMeta } from "../components/Programme";
 import { useComposition } from "../composition";
 import { latestRender, renderPolicy } from "../data";
 import { nextAction } from "../logic";
-import { canCancelJob, compositionState, sceneSpans, scheduleOffered } from "../studio-logic";
+import {
+  canCancelJob,
+  compositionLoadStatus,
+  compositionLoadWanted,
+  compositionState,
+  REUSED_RENDER_TEXT,
+  reusedRenderOf,
+  sceneSpans,
+  scheduleOffered,
+} from "../studio-logic";
 import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
 import { PropsPanel } from "./PropsPanel";
@@ -50,10 +59,11 @@ export function ControlRoom() {
   // stop the running audio/render job; job.* SSE events (events.ts) refresh the project, so no manual invalidate
   const cancel = useMutation({ mutationFn: (jobId: string) => api.cancelJob(jobId) });
 
-  const comp = useComposition();
-  const cstate = compositionState(usecase?.composition, comp.status);
-
   const props = detail?.props?.props ?? null;
+  // the Remotion chunk loads only once there is something to play (ADR 012)
+  const wantsPlayer = compositionLoadWanted(!!props, usecase?.composition);
+  const comp = useComposition(wantsPlayer);
+  const cstate = compositionState(usecase?.composition, compositionLoadStatus(wantsPlayer, comp.status));
   const duration = props?.timing?.duration_s ?? (meta ? meta.durationInFrames / meta.fps : 0);
   const spans = useMemo(
     () => (props ? sceneSpans(props.scenes, props.timing ?? null, duration) : []),
@@ -77,6 +87,7 @@ export function ControlRoom() {
   if (!detail) return null;
   const render = latestRender(detail);
   const policy = renderPolicy(render);
+  const reused = reusedRenderOf(detail.jobs, render);
   const next = nextAction(detail.project.status, detail.jobs[0]);
   const schedulable = scheduleOffered(policy, !!running, detail.publications);
 
@@ -120,8 +131,21 @@ export function ControlRoom() {
           {running ? <JobLine job={running} projectId={pid} /> : null}
           {!props || !detail.script ? <span className="stagebar__hint">needs props and a script first</span> : null}
           {blockReason ? <span className="stagebar__hint">{blockReason}</span> : null}
-          {cancel.isError ? <span className="joberr">{errorText(cancel.error)}</span> : null}
-          {produce.isError ? <span className="joberr">{errorText(produce.error)}</span> : null}
+          {cancel.isError ? (
+            <span className="joberr" title={errorText(cancel.error)}>
+              {serverError(cancel.error)}
+            </span>
+          ) : null}
+          {produce.isError ? (
+            <span className="joberr" title={errorText(produce.error)}>
+              {serverError(produce.error)}
+            </span>
+          ) : null}
+          {reused && !running ? (
+            <span className="stagebar__hint" data-testid="produce-reused">
+              {REUSED_RENDER_TEXT}
+            </span>
+          ) : null}
         </div>
         <div className="stagebar__gate">
           <span className="label">Gate</span>
