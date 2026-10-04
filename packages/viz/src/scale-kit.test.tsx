@@ -95,6 +95,13 @@ describe("time scale", () => {
     expect(parseTime("nope")).toBeNaN();
     expect(parseTime("2024-13-01")).toBeNaN();
   });
+  it("refuses a day the month does not have instead of rolling into the next month", () => {
+    expect(parseTime("2023-02-29")).toBeNaN();
+    expect(parseTime("2023-02-31")).toBeNaN();
+    expect(parseTime("2023-04-31")).toBeNaN();
+    expect(parseTime("2024-02-29")).toBeCloseTo(2024 + 59 / 366, 9);
+    expect(parseTime("2023-12-31")).toBeCloseTo(2023 + 364 / 365, 9);
+  });
   it("maps seasons and dates to px, with invert", () => {
     const s = scaleTime([1950, 2020], [0, 700]);
     expect(s(1950)).toBe(0);

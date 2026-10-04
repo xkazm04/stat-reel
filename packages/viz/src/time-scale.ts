@@ -20,7 +20,10 @@ export function parseTime(value: TimeValue): number {
   const year = Number(m[1]);
   const month = m[2] === undefined ? 1 : Number(m[2]);
   const day = m[3] === undefined ? 1 : Number(m[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return Number.NaN;
+  if (month < 1 || month > 12 || day < 1) return Number.NaN;
+  // days in the month: a February 31st is not March 3rd, it is not a date
+  const monthDays = (month === 12 ? 365 : (CUM[month] as number)) - (CUM[month - 1] as number);
+  if (day > monthDays + (month === 2 && isLeap(year) ? 1 : 0)) return Number.NaN;
   const days = isLeap(year) ? 366 : 365;
   const doy = (CUM[month - 1] as number) + (month > 2 && isLeap(year) ? 1 : 0) + day - 1;
   return year + doy / days;
