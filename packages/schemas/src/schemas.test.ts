@@ -143,6 +143,12 @@ describe("script tokens (ADR 003 #7)", () => {
     expect(untracedScriptFigures(ScriptSchema.parse(bad))).toEqual(["hook: '99' has no fact_key"]);
   });
 
+  it("carries no narration rate of its own: the measured one lives with the word budget (server NARRATOR_WPM)", () => {
+    expect("words_per_minute" in ScriptSchema.parse(sampleScript)).toBe(false);
+    // a stored script that still carries the old field parses (the key is dropped, not refused)
+    expect("words_per_minute" in ScriptSchema.parse({ ...sampleScript, words_per_minute: { min: 140, max: 175 } })).toBe(false);
+  });
+
   it("allows a declared literal (a rule, not data)", () => {
     const ok: Script = ScriptSchema.parse(structuredClone(sampleScript));
     ok.scenes[0]!.tokens.push({ display: "25", spoken: "twenty-five", literal: "points for a win under the current system" });

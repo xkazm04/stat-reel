@@ -230,7 +230,7 @@ export const ScriptSceneSchema = z.object({ scene_id: z.string(), tokens: z.arra
 export const ScriptSchema = z.object({
   scenes: z.array(ScriptSceneSchema).min(1),
   pronunciations: z.record(z.string(), z.string()).default({}),
-  words_per_minute: z.object({ min: z.number(), max: z.number() }).default({ min: 140, max: 175 }),
+  // no words_per_minute: the word budget uses the narrator's MEASURED rate (apps/server/src/projects.ts NARRATOR_WPM)
 });
 export type Script = z.infer<typeof ScriptSchema>;
 export type ScriptScene = z.infer<typeof ScriptSceneSchema>;
