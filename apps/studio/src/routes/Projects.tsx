@@ -9,6 +9,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type CSSProperties, useState } from "react";
 import type { MetricsPublication, ProjectWithJobs } from "../api";
 import { Defer } from "../components/arrive";
+import { Card } from "../components/Card";
 import { OnTheLine } from "../components/OnTheLine";
 import { Arrow, FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
@@ -33,7 +34,7 @@ export function ProjectsPage() {
   const needs = projects.filter((p) => ["you", "blocked"].includes(nextAction(p.status, p.jobs[0]).tone)).length;
 
   return (
-    <main id="main" className="page rundown-page">
+    <main id="main" className="page page--cards rundown-page">
       <header className="page__head">
         <div>
           <p className="eyebrow">
@@ -75,16 +76,19 @@ export function ProjectsPage() {
       ) : pr.isLoading ? (
         <Loading what="the rundown" />
       ) : !projects.length ? (
-        <Empty title="No project yet">
-          Create one from a Go cell on the <Link to="/heatmap" search={{ view: "feasibility" }}>rights grid</Link>: open the cell, then Create project.
-          <OnTheLine variant="panel" />
-        </Empty>
+        <Card>
+          <Empty title="No project yet">
+            Create one from a Go cell on the <Link to="/heatmap" search={{ view: "feasibility" }}>rights grid</Link>: open the cell, then Create project.
+            <OnTheLine variant="panel" />
+          </Empty>
+        </Card>
       ) : view === "board" ? (
         <Defer tier={1} id="rundown:sheet" minHeight={360}>
           <RaceSheet projects={projects} live={live} pubsOf={pubsOf} />
         </Defer>
       ) : (
-        <Defer tier={1} id="rundown:list" phClass="table-wrap" minHeight={260}>
+        <Defer tier={1} id="rundown:list" phClass="card" minHeight={260}>
+          <Card title="Projects" tag={projects.length} pad="none">
           <div className="table-wrap">
             <table className="tbl">
               <thead>
@@ -142,6 +146,7 @@ export function ProjectsPage() {
               </tbody>
             </table>
           </div>
+          </Card>
         </Defer>
       )}
     </main>
@@ -167,24 +172,15 @@ function RaceSheet({
   const say = sayLine(projects);
   const flagged = say.parts.some((x) => x.text.startsWith("is flagged"));
   return (
-    <section className="rs-view" aria-labelledby="rs-title">
-      <div className="rs-head">
-        <p className="rs-count label" id="rs-title">
-          {n.open} in progress · {n.published} published · {n.flagged} flagged
-        </p>
-        <p className={`rs-say${flagged ? " is-flagged" : ""}`} role="status">
-          <span>
-            {say.lead}{" "}
-            {say.parts.map((x) => (
-              <span key={x.id}>
-                <b className="mono">{x.id}</b> {x.text}.{" "}
-              </span>
-            ))}
-          </span>
-        </p>
+    <Card
+      className="rs-view"
+      title="Race sheet"
+      tag={`${n.open} in progress · ${n.published} published · ${n.flagged} flagged`}
+      pad="none"
+      actions={
         <div className="rs-sort" role="group" aria-label="Sort lanes">
           <span className="label">Sort</span>
-          <span className="seg">
+          <span className="seg seg--sm">
             <button type="button" aria-pressed={sort === "needs"} onClick={() => setSort("needs")}>
               Needs you next
             </button>
@@ -193,7 +189,32 @@ function RaceSheet({
             </button>
           </span>
         </div>
-      </div>
+      }
+      footer={
+        <div className="rs-foot">
+          <span className="rs-key">
+            <i className="k" aria-hidden="true" /> marker at its gate
+          </span>
+          <span className="rs-key">
+            <i className="k k--flag" aria-hidden="true" /> flagged: the last job failed or was refused, or the gate did
+            not allow the render
+          </span>
+          <span className="rs-key">
+            <i className="k k--fin" aria-hidden="true" /> published = the finish line; v1 uploads private only
+          </span>
+        </div>
+      }
+    >
+      <p className={`rs-say card__toolbar${flagged ? " is-flagged" : ""}`} role="status">
+        <span>
+          {say.lead}{" "}
+          {say.parts.map((x) => (
+            <span key={x.id}>
+              <b className="mono">{x.id}</b> {x.text}.{" "}
+            </span>
+          ))}
+        </span>
+      </p>
       <div className="rs" role="table" aria-label="Projects by pipeline stage">
         <div className="rs-cols" role="row">
           <span role="columnheader">Id</span>
@@ -211,19 +232,7 @@ function RaceSheet({
           <RaceLane key={p.id} p={p} live={live} pubs={pubsOf(p.id)} />
         ))}
       </div>
-      <div className="rs-foot">
-        <span className="rs-key">
-          <i className="k" aria-hidden="true" /> marker at its gate
-        </span>
-        <span className="rs-key">
-          <i className="k k--flag" aria-hidden="true" /> flagged: the last job failed or was refused, or the gate did not
-          allow the render
-        </span>
-        <span className="rs-key">
-          <i className="k k--fin" aria-hidden="true" /> published = the finish line; v1 uploads private only
-        </span>
-      </div>
-    </section>
+    </Card>
   );
 }
 

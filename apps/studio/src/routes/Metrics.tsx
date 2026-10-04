@@ -9,6 +9,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, errorText, type MetricsGroup } from "../api";
 import { Defer } from "../components/arrive";
+import { Card, CardGrid } from "../components/Card";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading, Sparkline } from "../components/ui";
 import { useHeatmap, useMetrics } from "../data";
@@ -20,11 +21,7 @@ import { groupFigure } from "../metricsGroup";
 function Bars({ title, groups, nameOf }: { title: string; groups: MetricsGroup[]; nameOf: (k: string) => string }) {
   const max = Math.max(0, ...groups.map((g) => g.views ?? 0));
   return (
-    <section className="panel">
-      <h2 className="sec-h">
-        <span>{title}</span>
-        <span>views</span>
-      </h2>
+    <Card title={title} tag="views">
       {groups.length ? (
         <ul className="bars">
           {groups.map((g) => {
@@ -48,7 +45,7 @@ function Bars({ title, groups, nameOf }: { title: string; groups: MetricsGroup[]
       ) : (
         <p className="sum-p">Nothing published yet.</p>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -73,7 +70,7 @@ export function MetricsPage() {
   const allDry = pubs.length > 0 && pubs.every((p) => p.mode === "dry");
 
   return (
-    <main id="main" className="page metrics-page">
+    <main id="main" className="page page--cards metrics-page">
       <header className="page__head">
         <div>
           <p className="eyebrow">
@@ -108,13 +105,16 @@ export function MetricsPage() {
       ) : met.isLoading ? (
         <Loading what="metrics" />
       ) : !pubs.length ? (
-        <Empty title="No publication yet">
-          Metrics start with a publication. Publishing runs dry until the Google app exists, so even then there are no
-          platform numbers. See the <Link to="/projects">rundown</Link> for what is close to air.
-        </Empty>
+        <Card>
+          <Empty title="No publication yet">
+            Metrics start with a publication. Publishing runs dry until the Google app exists, so even then there are no
+            platform numbers. See the <Link to="/projects">rundown</Link> for what is close to air.
+          </Empty>
+        </Card>
       ) : (
         <>
-          <Defer tier={1} id="metrics:table" phClass="table-wrap" minHeight={220}>
+          <Defer tier={1} id="metrics:table" phClass="card" minHeight={220}>
+            <Card title="Publications" tag={pubs.length} pad="none">
             <div className="table-wrap">
               <table className="tbl tbl--metrics">
                 <thead>
@@ -177,12 +177,13 @@ export function MetricsPage() {
                 </tbody>
               </table>
             </div>
+            </Card>
           </Defer>
-          <Defer tier={2} id="metrics:bars" visible phClass="metrics-grid" minHeight={180}>
-            <div className="metrics-grid">
+          <Defer tier={2} id="metrics:bars" visible phClass="card" minHeight={180}>
+            <CardGrid cols={2}>
               <Bars title="Per use case" groups={met.data?.by_use_case ?? []} nameOf={ucName} />
               <Bars title="Per sport" groups={met.data?.by_sport ?? []} nameOf={(k) => k} />
-            </div>
+            </CardGrid>
           </Defer>
           <p className="page__foot">
             Retention curves are not pulled yet (DESIGN §6.7): they appear once live publications exist and the metrics
