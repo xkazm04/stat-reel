@@ -86,6 +86,21 @@ describe("LlmService session lifecycle", () => {
     expect(runner.get(job_id)?.error).toMatch(/stopped at 3 tool calls .*LLM_MAX_TURNS/);
   });
 
+  it("a run that makes exactly the allowed number of tool calls completes (the cap is not off by one)", async () => {
+    const { runner, svc } = setup(async (o) => {
+      const evs: LlmEvent[] = [{ type: "session", session_id: "ext-1" }];
+      for (let i = 0; i < 3; i++) {
+        o.onEvent({ type: "tool_call", id: `t${i}`, tool: "query", input: {} });
+        if (o.signal?.aborted) throw new Error("aborted");
+      }
+      return [...evs, result()];
+    }, { ...DEFAULT_LIMITS, maxTurns: 3 });
+    const { job_id } = svc.start("p1");
+    await runner.idle();
+    expect(runner.get(job_id)?.error ?? null).toBeNull();
+    expect(runner.get(job_id)?.status).toBe("succeeded");
+  });
+
   it("enforces the wall-clock cap through the abort signal", async () => {
     const { db, runner, svc } = setup(untilAborted, { ...DEFAULT_LIMITS, timeoutMs: 20 });
     const { session_id, job_id } = svc.start("p1");

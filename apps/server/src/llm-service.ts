@@ -90,7 +90,8 @@ export class LlmService {
           onEvent: (e: LlmEvent) => {
             emit(e);
             if (e.type === "result") spend = { cost_usd: e.cost_usd ?? null, turns: e.turns ?? null };
-            if (e.type === "tool_call" && ++toolCalls >= this.limits.maxTurns) stop("max_tool_calls");
+            // the cap ALLOWS maxTurns calls: abort on the first call beyond it (">=" killed the last allowed one mid-flight)
+            if (e.type === "tool_call" && ++toolCalls > this.limits.maxTurns) stop("max_tool_calls");
           },
         });
         this.db.update(llmSessions).set({ external_session_id: res.session_id || undefined }).where(eq(llmSessions.id, sessionId)).run();
@@ -98,12 +99,12 @@ export class LlmService {
         const last = res.events.findLast((e) => e.type === "result");
         if (last?.type === "result" && isRefusal(res.events)) throw new Refusal(engine.name, last.result.slice(0, 200));
         const reason = stopped ?? (last?.type === "result" ? stopReasonFromSubtype(last.subtype) : undefined);
-        if (reason) throw new Error(stopMessage(reason, this.limits, reason === "max_tool_calls" ? toolCalls : last?.type === "result" ? last.turns : undefined));
+        if (reason) throw new Error(stopMessage(reason, this.limits, reason === "max_tool_calls" ? this.limits.maxTurns : last?.type === "result" ? last.turns : undefined));
         if (!res.ok) throw new Error(`LLM session ended without success: ${res.result.slice(0, 300)}${res.stderr ? ` | CLI stderr: ${res.stderr}` : ""}`);
         return { session_id: res.session_id, result: res.result, cost_usd: res.cost_usd };
       } catch (err) {
         // our own cap aborted the run: report that, not the AbortError the engine surfaced
-        if (stopped && !ctx.signal.aborted) throw new Error(stopMessage(stopped, this.limits, stopped === "max_tool_calls" ? toolCalls : undefined));
+        if (stopped && !ctx.signal.aborted) throw new Error(stopMessage(stopped, this.limits, stopped === "max_tool_calls" ? this.limits.maxTurns : undefined));
         throw err;
       } finally {
         clearTimeout(timer);
