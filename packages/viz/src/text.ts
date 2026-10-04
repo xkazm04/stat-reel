@@ -37,8 +37,12 @@ const TABLE_FACE: Record<FaceKey, string> = {
 const WIDE = /[←-⇿—]/u;
 
 const advanceMaps = new Map<string, Map<number, number>>();
+/** (face, requested weight) -> its resolved map, so the nearest-weight search runs once per pair, not per call. */
+const resolved = new Map<string, Map<number, number>>();
 /** codepoint -> advance in 1/1000 em for the table nearest `weight` of `face`; absent = unknown glyph. */
 function advances(face: FaceKey, weight: number): Map<number, number> {
+  const hit = resolved.get(`${face}:${weight}`);
+  if (hit) return hit;
   const prefix = `${TABLE_FACE[face]}-`;
   const weights = Object.keys(FONT_ADVANCES)
     .filter((k) => k.startsWith(prefix))
@@ -58,6 +62,7 @@ function advances(face: FaceKey, weight: number): Map<number, number> {
     });
     advanceMaps.set(key, m);
   }
+  resolved.set(`${face}:${weight}`, m);
   return m;
 }
 
