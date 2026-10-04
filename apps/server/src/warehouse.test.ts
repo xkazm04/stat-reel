@@ -4,7 +4,8 @@ import path from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { paths } from "./config";
-import { FactKeyCollisionError, Warehouse, checkReadOnlyLlmSql, factRefFormatHint, queryTimeoutMessage } from "./warehouse";
+import { capViews, MAX_RESULT_BYTES } from "./tool-output";
+import { checkReadOnlyLlmSql, FactKeyCollisionError, factRefFormatHint, queryTimeoutMessage, Warehouse } from "./warehouse";
 
 const hasWarehouse = existsSync(paths.warehouse);
 
@@ -164,6 +165,46 @@ describe("fact_key contract: disjoint across views", () => {
     try {
       const m = await wh.facts(["ka#n", "kb#n"]);
       expect([m.get("ka#n"), m.get("kb#n")]).toEqual([10, 20]);
+    } finally {
+      wh.close();
+    }
+  });
+});
+
+describe("describeViews: the data-as-of view leads", () => {
+  it("lists <sport>_data_as_of first, so capViews (which cuts from the end) never drops it", async () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "wh-asof-")), "t.duckdb");
+    const inst = await DuckDBInstance.create(file);
+    const c = await inst.connect();
+    await c.run("create schema llm");
+    await c.run("create schema meta");
+    await c.run("create table meta.model_lineage as select 'x' as model, 'legal' as license_class, ['t'] as sources");
+    for (const v of ["f1_alpha", "f1_data_as_of", "f1_zeta"]) await c.run(`create view llm.${v} as select 1 as n`);
+    c.closeSync();
+    inst.closeSync();
+    const wh = await Warehouse.open(file);
+    try {
+      expect((await wh.describeViews()).map((v) => v.name)).toEqual(["llm.f1_data_as_of", "llm.f1_alpha", "llm.f1_zeta"]);
+      expect((await wh.describeViews("f1")).map((v) => v.name)[0]).toBe("llm.f1_data_as_of");
+    } finally {
+      wh.close();
+    }
+  });
+});
+
+describe.skipIf(!hasWarehouse)("describe_views size against the real warehouse", () => {
+  it("stays under the tool-result cap with a margin, with nothing dropped", async () => {
+    const wh = await Warehouse.open(paths.warehouse);
+    try {
+      const views = await wh.describeViews();
+      const size = Buffer.byteLength(JSON.stringify(views), "utf8");
+      console.info(`describe_views: ${views.length} views, ${size} bytes (cap ${MAX_RESULT_BYTES}, ${((size / MAX_RESULT_BYTES) * 100).toFixed(1)} % used)`);
+      expect(size).toBeLessThanOrEqual(MAX_RESULT_BYTES * 0.75); // 25 % headroom for new views/columns before capViews starts dropping samples
+      const capped = capViews(views);
+      expect(capped.note).toBeUndefined();
+      expect(capped.views).toHaveLength(views.length);
+      // once the warehouse has been rebuilt with f1_data_as_of it must be the first entry
+      if (views.some((v) => v.name === "llm.f1_data_as_of")) expect(views[0]?.name).toBe("llm.f1_data_as_of");
     } finally {
       wh.close();
     }

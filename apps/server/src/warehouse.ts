@@ -264,7 +264,10 @@ export class Warehouse {
   }
 
   async describeViews(sport?: string): Promise<ViewDescription[]> {
-    const views = await this.rows("select view_name, comment from duckdb_views() where schema_name = 'llm' order by view_name");
+    // `<sport>_data_as_of` leads: capViews cuts from the END of this list, so the freshness view is never the one truncated.
+    const views = await this.rows(
+      "select view_name, comment from duckdb_views() where schema_name = 'llm' order by ends_with(view_name, '_data_as_of') desc, view_name",
+    );
     const out: ViewDescription[] = [];
     for (const v of views) {
       const name = String(v.view_name);
