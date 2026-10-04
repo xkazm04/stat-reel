@@ -221,18 +221,20 @@ export function longevitySamples(duration_s, n = 12) {
 export function assessLongevity(samples, timeline) {
   const problems = [];
   const clocks = samples.map((s) => s.clock);
-  if (clocks.some((c) => typeof c !== "number" || Number.isNaN(c))) problems.push("dataClock(t) missing or not a number");
+  if (clocks.some((c) => typeof c !== "number" || !Number.isFinite(c))) problems.push("dataClock(t) missing or not a number");
   else {
     if (clocks.some((c, i) => i > 0 && c < clocks[i - 1] - 1e-9)) problems.push("data clock runs backwards");
     const span = timeline.to - timeline.from;
-    const covered = (Math.max(...clocks) - Math.min(...clocks)) / span;
+    // the part of the declared range the clock actually visits (a clock in another unit, or one
+    // that runs before or after the range, does not cover it however far it travels)
+    const covered = Math.max(0, Math.min(Math.max(...clocks), timeline.to) - Math.max(Math.min(...clocks), timeline.from)) / span;
     if (covered < 0.85) problems.push(`coverage ${(covered * 100).toFixed(0)}% of ${timeline.from}-${timeline.to}`);
     const stalls = clocks.filter((c, i) => i > 0 && Math.abs(c - clocks[i - 1]) < 1e-9).length / (clocks.length - 1);
     if (stalls > 0.3) problems.push(`data clock stalls for ${(stalls * 100).toFixed(0)}% of the run`);
   }
   const same = samples.filter((s, i) => i > 0 && s.hash === samples[i - 1].hash).length / Math.max(1, samples.length - 1);
   if (same > 0.3) problems.push(`picture static for ${(same * 100).toFixed(0)}% of the run`);
-  const numeric = clocks.filter((c) => typeof c === "number");
+  const numeric = clocks.filter((c) => Number.isFinite(c));
   return {
     ok: problems.length === 0, problems,
     clock_from: numeric.length ? Math.min(...numeric) : null, clock_to: numeric.length ? Math.max(...numeric) : null,

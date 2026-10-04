@@ -150,6 +150,17 @@ test("longevity: the data clock advances monotonically across the run and the pi
   assert.match(assessLongevity(noClock, { unit: "season", from: 1950, to: 2026 }).problems.join(), /dataClock/);
 });
 
+test("longevity: coverage is the overlap with the declared timeline, not the clock's own span", () => {
+  const tl = { unit: "season", from: 1950, to: 2026 };
+  const run = (f) => Array.from({ length: 12 }, (_, i) => ({ t: i * 6, clock: f(i), hash: `h${i}` }));
+  // a clock in the wrong unit (race index 0..1100 against seasons) spans 1447% of the range
+  assert.match(assessLongevity(run((i) => i * 100), tl).problems.join(), /coverage 0%/);
+  // a clock that runs 1900-1980 spans 105% of the range but covers only its first 30 seasons
+  assert.match(assessLongevity(run((i) => 1900 + (i * 80) / 11), tl).problems.join(), /coverage 39%/);
+  assert.match(assessLongevity(run((i) => (i === 11 ? Infinity : 1950 + i * 7)), tl).problems.join(), /dataClock/);
+  assert.equal(assessLongevity(run((i) => 1950 + i * 7), tl).ok, true);
+});
+
 test("longevity samples span the whole run", () => {
   const s = longevitySamples(72);
   assert.equal(s[0], 0);
