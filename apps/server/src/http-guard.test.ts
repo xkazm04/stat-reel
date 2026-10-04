@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guard } from "./http-guard";
+import { allowedOrigins, guard } from "./http-guard";
 
 const ok = async () => new Response("ok");
 const g = guard(ok, { port: 8787, env: {} });
@@ -45,5 +45,17 @@ describe("http guard", () => {
       expect((await g2(req("/api/x", { host: "127.0.0.1:8797", method: "POST", body: "{}", headers: { origin, "content-type": "application/json" } }))).status).toBe(200);
     }
     expect((await g2(req("/api/x", { host: "127.0.0.1:8797", method: "POST", body: "{}", headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" } }))).status).toBe(403);
+  });
+  it("a malformed STATREEL_ALLOWED_ORIGINS entry or studio port is a boot error, not a per-request 500 or a silent 403", async () => {
+    for (const bad of ["127.0.0.1:3000", "localhost:3000", "ftp://127.0.0.1:3000", "http://127.0.0.1:3000/studio"]) {
+      expect(() => allowedOrigins(8787, { STATREEL_ALLOWED_ORIGINS: `http://127.0.0.1:4000,${bad}` }), bad).toThrow(/STATREEL_ALLOWED_ORIGINS/);
+    }
+    expect(() => allowedOrigins(8787, { STATREEL_STUDIO_PORT: "abc" })).toThrow(/STATREEL_STUDIO_PORT/);
+    expect(() => allowedOrigins(8787, { E2E_STUDIO_PORT: "70000" })).toThrow(/E2E_STUDIO_PORT/);
+    expect(allowedOrigins(8787, { STATREEL_STUDIO_PORT: "", E2E_STUDIO_PORT: "5183" }).has("http://127.0.0.1:5183")).toBe(true);
+    // the accepted spellings: trailing slash, https, an explicit default
+    expect([...allowedOrigins(8787, { STATREEL_ALLOWED_ORIGINS: " http://127.0.0.1:3000/ ,https://studio.example" })]).toEqual(
+      expect.arrayContaining(["http://127.0.0.1:3000", "https://studio.example"]),
+    );
   });
 });

@@ -16,14 +16,35 @@ const LOOPBACK = ["127.0.0.1", "localhost"];
 
 export type GuardOptions = { port: number; env?: Record<string, string | undefined> };
 
+/**
+ * Built once at boot (serve.ts), so a malformed value stops the server with the key's name: a
+ * scheme-less origin would otherwise never match (a silent 403) or throw in `new URL` on every request
+ * whose Host falls through to it (a 500 per request).
+ */
 export function allowedOrigins(port: number, env: Record<string, string | undefined> = process.env): Set<string> {
-  const studioPort = env.STATREEL_STUDIO_PORT ?? env.E2E_STUDIO_PORT ?? "5173";
+  // an empty value counts as unset (as in config.ts)
+  const portKey = (["STATREEL_STUDIO_PORT", "E2E_STUDIO_PORT"] as const).find((k) => env[k]?.trim());
+  const studioPort = portKey ? (env[portKey] as string).trim() : "5173";
+  if (!/^\d{1,5}$/.test(studioPort) || Number(studioPort) < 1 || Number(studioPort) > 65535)
+    throw new Error(`${portKey} must be a port number 1-65535 (got ${JSON.stringify(studioPort)})`);
   const out = new Set<string>();
   for (const h of LOOPBACK) {
     out.add(`http://${h}:${port}`);
     out.add(`http://${h}:${studioPort}`);
   }
-  for (const o of (env.STATREEL_ALLOWED_ORIGINS ?? "").split(",")) if (o.trim()) out.add(o.trim().replace(/\/+$/, ""));
+  for (const raw of (env.STATREEL_ALLOWED_ORIGINS ?? "").split(",")) {
+    const o = raw.trim().replace(/\/+$/, "");
+    if (!o) continue;
+    let u: URL | undefined;
+    try {
+      u = new URL(o);
+    } catch {
+      /* reported below */
+    }
+    const isOrigin = !!u && (u.protocol === "http:" || u.protocol === "https:") && u.pathname === "/" && !u.search && !u.hash && !u.username && !u.password;
+    if (!u || !isOrigin) throw new Error(`STATREEL_ALLOWED_ORIGINS entries must be origins like http://127.0.0.1:3000 (got ${JSON.stringify(raw.trim())})`);
+    out.add(u.origin); // the browser's own serialization (lower-case host, default port dropped)
+  }
   return out;
 }
 
