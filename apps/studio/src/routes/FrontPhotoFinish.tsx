@@ -897,7 +897,9 @@ function Lanes({
         <div className="pf-lanes__right">
           <span className="pf-hint">Point at, focus or tap a lane. Enter opens its scene.</span>
           {rot.control ? (
-            <button type="button" className="btn btn--sm" onClick={() => setTouched((t) => !t)} aria-pressed={touched}>
+            // Play / Pause name the operation the press performs; no aria-pressed on top of a name that
+            // already changes (it read "Play lane rotation, pressed" while the rotation was paused)
+            <button type="button" className="btn btn--sm" onClick={() => setTouched((t) => !t)}>
               {touched ? "Play lane rotation" : "Pause lane rotation"}
             </button>
           ) : null}
