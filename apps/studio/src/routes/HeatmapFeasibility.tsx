@@ -233,7 +233,7 @@ export function HeatmapFeasibility() {
             </div>
           </div>
         ) : (
-          <div className="hm-wrap"><FinishSheet {...gridProps} /></div>
+          <div className="hm-wrap card-surface"><FinishSheet {...gridProps} /></div>
         )}
 
         <Defer tier={1} id="hm:foot" phClass="hm-foot" minHeight={48}>

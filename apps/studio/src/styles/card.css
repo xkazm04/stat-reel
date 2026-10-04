@@ -273,3 +273,9 @@
 .card__pad {
   padding: 16px;
 }
+
+/* a bespoke container that takes the card skin: clip its content to the rounded edge */
+.hm-wrap.card-surface {
+  overflow: hidden;
+  margin-bottom: 8px;
+}

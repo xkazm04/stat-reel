@@ -12,6 +12,7 @@ import { RECENCY_BUCKETS } from "@statreel/schemas";
 import { Link } from "@tanstack/react-router";
 import { type FocusEvent, type KeyboardEvent, useRef, useState } from "react";
 import { Defer } from "../components/arrive";
+import { Card } from "../components/Card";
 import { ViewSwitch } from "../components/HeatmapViews";
 import { Failure, Loading } from "../components/ui";
 import { useHeatmapTopics } from "../data";
@@ -68,44 +69,24 @@ export function HeatmapTopics() {
       <div className="hm-layer1 tp">
         <header className="hm-head">
           <div className="hm-title">
-            <p className="eyebrow">
-              {data
-                ? `${rows.length} topic${rows.length === 1 ? "" : "s"} · ${totalVideos} video${totalVideos === 1 ? "" : "s"}`
-                : "Topics"}
-            </p>
+            <p className="eyebrow">Heatmap · topics</p>
             <h1>What we have made</h1>
           </div>
-          <ul className="tp-legend" aria-label="Colour scale: how long ago a video was made">
-            {RECENCY_BUCKETS.map((b) => (
-              <li key={b.id} data-bucket={b.id}>
-                <i aria-hidden="true" />
-                <span>{b.label}</span>
-              </li>
-            ))}
-            <li data-bucket="pending">
-              <i aria-hidden="true" />
-              <span>queued / rendering</span>
-            </li>
-          </ul>
           <div className="hm-ctl">
             <ViewSwitch view="topics" />
-            <label className="tp-toggle">
-              <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} data-testid="topics-show-all" />
-              Show all topics
-            </label>
           </div>
         </header>
 
         {q.isError ? (
-          <div className="hm-state">
+          <Card className="tp-card">
             <Failure error={q.error} what="The topic heatmap" onRetry={() => void q.refetch()} retrying={q.isFetching} />
-          </div>
+          </Card>
         ) : q.isLoading || !data ? (
-          <div className="hm-state">
+          <Card className="tp-card">
             <Loading what="the topic heatmap" />
-          </div>
+          </Card>
         ) : !rows.length ? (
-          <div className="hm-state">
+          <Card className="tp-card">
             <div className="empty" data-testid="topics-empty">
               <b>No videos yet</b>
               A row appears for a topic once a case in it is accepted on the Board; cells fill as videos finish.{" "}
@@ -118,10 +99,45 @@ export function HeatmapTopics() {
               </Link>
               . "Show all topics" lists the whole controlled list.
             </div>
-          </div>
+          </Card>
         ) : (
-          <Defer tier={1} id="topics:grid" phClass="hm-wrap" minHeight={320}>
-            <div className="hm-wrap tp-wrap">
+          <Defer tier={1} id="topics:grid" phClass="card tp-card" minHeight={320}>
+            <Card
+              className="tp-card"
+              title="Videos per topic"
+              tag={`${rows.length} topic${rows.length === 1 ? "" : "s"} · ${totalVideos} video${totalVideos === 1 ? "" : "s"}`}
+              pad="none"
+              actions={
+                <label className="tp-toggle">
+              <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} data-testid="topics-show-all" />
+              Show all topics
+                </label>
+              }
+              footer={
+                <>
+                  <span>
+                    <kbd>Arrows</kbd> move between videos
+                </span>
+                  <span>Column n is the n-th video made for the topic, oldest first.</span>
+                  <span>{data.generated_at ? `As of ${relTime(data.generated_at)}` : ""}</span>
+                </>
+              }
+            >
+              <div className="card__toolbar">
+                <ul className="tp-legend" aria-label="Colour scale: how long ago a video was made">
+            {RECENCY_BUCKETS.map((b) => (
+              <li key={b.id} data-bucket={b.id}>
+                <i aria-hidden="true" />
+                <span>{b.label}</span>
+              </li>
+            ))}
+            <li data-bucket="pending">
+              <i aria-hidden="true" />
+              <span>queued / rendering</span>
+            </li>
+                </ul>
+              </div>
+              <div className="tp-wrap">
               {totalVideos === 0 ? (
                 <p className="tp-note" data-testid="topics-no-videos">
                   Topics are listed, but no video has finished yet. Cells fill as videos finish.
@@ -161,14 +177,8 @@ export function HeatmapTopics() {
                   <TopicLine key={t.key} t={t} ri={ri} cur={cur} hasEarlier={cols.earlier > 0} ordinals={ordinals} />
                 ))}
               </div>
-              <p className="hm-foot tp-foot">
-                <span>
-                  <kbd>Arrows</kbd> move between videos
-                </span>
-                <span>Column n is the n-th video made for the topic, oldest first.</span>
-                <span>{data.generated_at ? `As of ${relTime(data.generated_at)}` : ""}</span>
-              </p>
-            </div>
+              </div>
+            </Card>
           </Defer>
         )}
       </div>
@@ -238,7 +248,7 @@ function TopicLine({
             tabIndex={tabIndexFor(cur, ri, ci)}
             aria-label={emptyCellLabel(t.label, o, null, none)}
           >
-            {none ? <span className="tp-none">no video yet</span> : null}
+            {none ? <span className="tp-none">none yet</span> : null}
           </div>
         );
       })}

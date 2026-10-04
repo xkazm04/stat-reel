@@ -1143,7 +1143,7 @@ html.hm-layer-open {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--color-bg);
+  background: var(--card-bg);
 }
 .tp-corner,
 .tp-colh {
@@ -1162,7 +1162,7 @@ html.hm-layer-open {
   position: sticky;
   left: 0;
   z-index: 1;
-  background: var(--color-bg);
+  background: var(--card-bg);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1235,4 +1235,28 @@ a.tp-cell--video:hover,
   .tp-cell {
     transition: none;
   }
+}
+
+/* the topic grid lives in a card that fills the layer and scrolls inside */
+.hm-layer1.tp > .tp-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 10px;
+}
+.tp-card > .card__body {
+  overflow: auto;
+}
+.tp-card .tp-grid {
+  padding: 4px 16px 0;
+}
+.tp-card .tp-note {
+  padding: 8px 16px 0;
+}
+.tp-card .card__toolbar {
+  padding: 8px 16px;
+}
+
+.hm--topics .hm-ctl {
+  margin-left: auto;
+  align-items: flex-end;
 }
