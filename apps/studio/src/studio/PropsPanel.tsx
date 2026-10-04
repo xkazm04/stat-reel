@@ -9,7 +9,7 @@ import type { EraAdjustedProps, HeatmapCell, Mode, UseCase } from "@statreel/sch
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { api, errorText, type ProjectDetail, qk } from "../api";
+import { api, errorText, type ProjectDetail, qk, serverError } from "../api";
 import { LicChip, StatusChip } from "../components/glyphs";
 import { Empty } from "../components/ui";
 import { cellOf, factGroup } from "../logic";
@@ -244,7 +244,11 @@ function JsonEdit({ detail, onDone }: { detail: ProjectDetail; onDone: () => voi
           Reset loads v{stale}.
         </p>
       ) : null}
-      {save.isError ? <p className="joberr">{errorText(save.error)}</p> : null}
+      {save.isError ? (
+        <p className="joberr" title={errorText(save.error)}>
+          Could not save: {serverError(save.error)}
+        </p>
+      ) : null}
       {errors ? (
         <ul className="json__errs" role="alert">
           {errors.map((e) => (
