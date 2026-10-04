@@ -157,7 +157,10 @@ export function relWhen(iso: string, now = Date.now()): string {
   const d = (t - now) / 1000;
   const a = Math.abs(d);
   if (a < 45) return "now";
-  const v = a < 3600 ? `${Math.round(a / 60)} min` : a < 86400 ? `${Math.round(a / 3600)} h` : `${Math.round(a / 86400)} d`;
+  // each unit is chosen AFTER rounding (as logic.ts relTime), so 3599 s reads "1 h", never "60 min"
+  const m = Math.round(a / 60);
+  const h = Math.round(a / 3600);
+  const v = m < 60 ? `${m} min` : h < 24 ? `${h} h` : `${Math.round(a / 86400)} d`;
   return d > 0 ? `in ${v}` : `${v} ago`;
 }
 

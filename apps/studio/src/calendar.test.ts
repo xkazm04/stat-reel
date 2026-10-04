@@ -113,6 +113,18 @@ describe("relWhen", () => {
     expect(relWhen("2026-09-30T11:48:00Z", now)).toBe("12 min ago");
     expect(relWhen("2026-09-30T12:00:10Z", now)).toBe("now");
   });
+  it("picks the unit after rounding: never 60 min or 24 h (parity with logic.ts relTime)", () => {
+    const now = Date.parse("2026-09-30T12:00:00Z");
+    const at = (s: number) => new Date(now + s * 1000).toISOString();
+    expect(relWhen(at(3599), now)).toBe("in 1 h");
+    expect(relWhen(at(-3599), now)).toBe("1 h ago");
+    expect(relWhen(at(86399), now)).toBe("in 1 d");
+    expect(relWhen(at(-86399), now)).toBe("1 d ago");
+    // every other age reads as before
+    expect(relWhen(at(90), now)).toBe("in 2 min");
+    expect(relWhen(at(-5400), now)).toBe("2 h ago");
+    expect(relWhen(at(3 * 86400), now)).toBe("in 3 d");
+  });
 });
 
 describe("labels", () => {
