@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CalendarService } from "./calendar";
 import { eq } from "drizzle-orm";
 import { openDb, projects, renders, schedule } from "./db";
@@ -125,6 +125,25 @@ describe("Calendar (channels + scheduling on top of composed videos)", () => {
       expect(enqueued).toHaveLength(1);
       expect(cal.tick(new Date("2026-09-30T08:03:00Z"))).toBe(1); // next tick retries the rolled-back slot
       expect(cal.get(a.id)).toMatchObject({ status: "publishing", error: null });
+    });
+
+    it("a slot the tick cannot process says why on the slot and in the log; the others still run", () => {
+      const { cal, db, enqueued } = twoProjects();
+      const [yt] = cal.channels();
+      const a = cal.schedule({ project_id: "p1", channel_id: String(yt?.id), publish_at: "2026-09-30T08:00:00Z" });
+      const b = cal.schedule({ project_id: "p2", channel_id: String(yt?.id), publish_at: "2026-09-30T08:01:00Z" });
+      db.update(renders).set({ policy_json: "{truncated" }).where(eq(renders.id, a.render_id)).run(); // a corrupt stored verdict
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        expect(cal.tick(new Date("2026-09-30T08:02:00Z"))).toBe(1);
+        expect(cal.get(a.id)).toMatchObject({ status: "scheduled" });
+        expect(cal.get(a.id)?.error).toMatch(/^the scheduler could not process this slot: .*JSON/);
+        expect(cal.get(b.id)).toMatchObject({ status: "publishing" });
+        expect(enqueued).toHaveLength(1);
+        expect(log.mock.calls.some((c) => String(c[0]).includes(a.id))).toBe(true);
+      } finally {
+        log.mockRestore();
+      }
     });
 
     it("a claim without a job (crash between claim and enqueue) is failed visibly, never published twice", () => {

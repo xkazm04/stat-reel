@@ -191,7 +191,9 @@ export class CalendarService {
     let slots: Slot[];
     try {
       slots = this.db.select().from(schedule).where(inArray(schedule.status, ["scheduled", "publishing"])).all();
-    } catch {
+    } catch (e) {
+      // the loop is alive but blind this tick: say so, or "why did my slot not fire?" has no answer
+      console.error(`[calendar] tick could not read the schedule: ${e instanceof Error ? e.message : String(e)}`);
       return 0;
     }
     for (const s of slots) {
@@ -221,8 +223,14 @@ export class CalendarService {
         } catch (e) {
           this.db.update(schedule).set({ status: "scheduled", error: `publish could not be queued: ${e instanceof Error ? e.message : String(e)}` }).where(eq(schedule.id, s.id)).run();
         }
-      } catch {
-        // one bad slot (corrupt tags_json, locked db, ...) must not block the rest; it is retried next tick
+      } catch (e) {
+        // one bad slot (a corrupt stored verdict, a locked db, ...) must not block the rest; it is retried next tick,
+        // and its reason is put where the owner looks (the slot's error) and in the log
+        const why = `the scheduler could not process this slot: ${e instanceof Error ? e.message : String(e)}`;
+        console.error(`[calendar] slot ${s.id}: ${why}`);
+        try {
+          if (s.error !== why) this.db.update(schedule).set({ error: why }).where(eq(schedule.id, s.id)).run();
+        } catch { /* the database itself is failing: the log line above is the trace */ }
       }
     }
     return dispatched;
