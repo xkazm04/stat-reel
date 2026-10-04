@@ -91,6 +91,40 @@ describe("studio theme contrast (Photo Finish)", () => {
     expect(contrast(hex("--color-signal"), hex("--color-bg"))).toBeGreaterThanOrEqual(3);
   });
 
+  it("every lane mark (--lane-1..10) is >= 3:1 on the sheet, raised band and surface", () => {
+    // Lane hues are non-text marks and fills (WCAG 1.4.11). The sheet is the darkest ground a lane
+    // sits on, the surface the lightest; the raised band is checked too. surface-2 (alternate band)
+    // carries lane chips with their own fill and is deliberately not part of this floor.
+    for (let n = 1; n <= 10; n++)
+      for (const g of ["--color-bg", "--color-bg-raised", "--color-surface"])
+        expect(contrast(hex(`--lane-${n}`), hex(g)), `--lane-${n} on ${g}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it("the ten lane hues stay mutually distinguishable (OKLab distance floor)", () => {
+    // Nudging a lane for contrast must not collapse it onto a neighbour. Closest pair today is
+    // lane-2/lane-9 at ~0.058; the floor sits just below so a drift toward a twin fails.
+    const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    const oklab = (h: string): number[] => {
+      const [r, g, b] = [1, 3, 5].map((i) => lin(Number.parseInt(h.slice(i, i + 2), 16) / 255)) as [number, number, number];
+      const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+      const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+      const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+      return [
+        0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+        1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+        0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+      ];
+    };
+    const lab = Array.from({ length: 10 }, (_, i) => oklab(hex(`--lane-${i + 1}`)));
+    for (let i = 0; i < 10; i++)
+      for (let j = i + 1; j < 10; j++) {
+        const a = lab[i] as number[];
+        const b = lab[j] as number[];
+        const d = Math.hypot((a[0] ?? 0) - (b[0] ?? 0), (a[1] ?? 0) - (b[1] ?? 0), (a[2] ?? 0) - (b[2] ?? 0));
+        expect(d, `lane-${i + 1} vs lane-${j + 1}`).toBeGreaterThanOrEqual(0.055);
+      }
+  });
+
   it("lane text (lane hue mixed toward graphite by --lane-ink-mix) is >= 4.5:1 for all ten lanes", () => {
     // Lane hues stay as marks and fills (they only need 3:1); where a lane colour is TEXT the
     // studio uses color-mix(lane, --color-text, --lane-ink-mix). Same arithmetic as the browser.

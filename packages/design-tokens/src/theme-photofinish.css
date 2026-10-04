@@ -62,10 +62,10 @@
   --lane-3: #2c9a55;   /* spatial career maps */
   --lane-4: #1f73da;   /* network & flow */
   --lane-5: #b83c9b;   /* distribution races */
-  --lane-6: #d4820e;   /* probability narratives */
+  --lane-6: #c67500;   /* probability narratives */
   --lane-7: #d2426b;   /* similarity / DNA */
   --lane-8: #6e8f10;   /* metric explainer shorts */
-  --lane-9: #1899cf;   /* reactive weekend */
+  --lane-9: #0191c7;   /* reactive weekend */
   --lane-10: #566a90;  /* interactive companion */
   /* Where a lane colour is TEXT, the studio mixes the hue toward graphite by this share of hue:
      color-mix(in srgb, var(--lane-color) var(--lane-ink-mix), var(--color-text)). The hues stay

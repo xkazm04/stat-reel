@@ -20,10 +20,10 @@ export const identColors: Record<string, string> = {
   "spatial-career-maps": "#2c9a55",
   "network-flow-timelines": "#1f73da",
   "distribution-races": "#b83c9b",
-  "probability-narratives": "#d4820e",
+  "probability-narratives": "#c67500",
   "similarity-dna": "#d2426b",
   "metric-explainer-shorts": "#6e8f10",
-  "reactive-weekend-pipeline": "#1899cf",
+  "reactive-weekend-pipeline": "#0191c7",
   "interactive-companion-loop": "#566a90",
 };
 
