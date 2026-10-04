@@ -13,6 +13,7 @@ allow := count(deny) == 0
 # Every rule name below appears in exactly one deny/warn rule (see the `# rule:` comments).
 checks_run := [
 	"source_not_legal_on_monetized",
+	"data_license_not_legal_on_monetized",
 	"source_verdict_avoid",
 	"source_missing_classification",
 	"sources_empty",
@@ -131,6 +132,17 @@ deny contains msg if {
 	some s in sources
 	object.get(s, "license_class", "unknown") != "legal"
 	msg := sprintf("source %s is %s: not allowed on a monetized channel", [object.get(s, "id", "<unknown>"), object.get(s, "license_class", "unknown")])
+}
+
+# rule: data_license_not_legal_on_monetized
+# data.license_class is the warehouse lineage's most restrictive class over the views the video read
+# ("unknown" when a view has no lineage row). sources[] lists only lineage sources that have a snapshot
+# row, so a source can drop out of it while the class still carries it. Missing counts as unknown.
+deny contains msg if {
+	monetized
+	cls := object.get(input.manifest, ["data", "license_class"], "unknown")
+	cls != "legal"
+	msg := sprintf("data license class %v: not allowed on a monetized channel", [cls])
 }
 
 # rule: source_verdict_avoid

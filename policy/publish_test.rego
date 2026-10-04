@@ -78,7 +78,7 @@ test_empty_input_denied if {
 }
 
 test_checks_run_lists_every_rule if {
-	count(publish.checks_run) == 27
+	count(publish.checks_run) == 28
 	"evidence_missing" in publish.checks_run
 	"visibility_not_private" in publish.checks_run
 	"description_missing_attribution" in publish.checks_run
@@ -106,6 +106,41 @@ test_source_not_legal_missing_monetized_is_monetized if {
 		{"op": "remove", "path": "/target/monetized"},
 	])
 	denies(inp, msg_nc)
+}
+
+# ------------------------------------------------------------------ data_license_not_legal_on_monetized
+
+msg_lc(cls) := sprintf("data license class %v: not allowed on a monetized channel", [cls])
+
+test_data_license_negative if not denies(base, msg_lc("legal"))
+
+test_data_license_non_commercial_positive if {
+	denies(replace("/manifest/data/license_class", "non_commercial"), msg_lc("non_commercial"))
+}
+
+# the lineage reports "unknown" when a view the video read has no lineage row: that is not legal
+test_data_license_unknown_positive if {
+	inp := replace("/manifest/data/license_class", "unknown")
+	denies(inp, msg_lc("unknown"))
+	not publish.allow with input as inp
+}
+
+test_data_license_missing_positive if denies(remove("/manifest/data/license_class"), msg_lc("unknown"))
+
+test_data_license_ok_when_not_monetized if {
+	inp := patched([
+		{"op": "replace", "path": "/manifest/data/license_class", "value": "paid"},
+		{"op": "replace", "path": "/target/monetized", "value": false},
+	])
+	not denies(inp, msg_lc("paid"))
+}
+
+test_data_license_missing_monetized_is_monetized if {
+	inp := patched([
+		{"op": "replace", "path": "/manifest/data/license_class", "value": "paid"},
+		{"op": "remove", "path": "/target/monetized"},
+	])
+	denies(inp, msg_lc("paid"))
 }
 
 # ------------------------------------------------------------------ source_verdict_avoid

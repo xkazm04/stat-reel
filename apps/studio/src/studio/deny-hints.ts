@@ -12,6 +12,10 @@ const RULES: [RegExp, string][] = [
     /^source .+ is .+: not allowed on a monetized channel$/,
     "Make the project non-commercial, or use a source whose licence allows monetized use.",
   ],
+  [
+    /^data license class .+: not allowed on a monetized channel$/,
+    "A view behind the video has a non-legal or unrecorded licence lineage; run just transform, or make the project non-commercial.",
+  ],
   [/^source .+ has verdict avoid$/, "Drop this source from the props; an avoid source can never ship."],
   [
     /^source .+ has no (id|license_class|verdict)$/,
