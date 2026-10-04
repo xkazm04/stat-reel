@@ -7,14 +7,14 @@ import { videoTheme } from "@statreel/design-tokens";
 import { DATA_RACE_LIMITS } from "@statreel/schemas";
 import type { ReactElement } from "react";
 import { LikeSubscribe, PoweredBy, WinnerSpotlight, spotlightDim, spotlightScale } from "./ending";
-import { AxisTicks, BarRow, EventStack, L, LogoTile, TNUM } from "./parts";
+import { FOOTER_W as footerW, HOOK_TILE_W, clockLayout, footerLayout, hookLayout, hookTileNameLayout, titleLayout, unitLayout } from "./layout";
+import { AxisTicks, BarRow, EventStack, L, Lines, LogoTile, TNUM } from "./parts";
 import { type DataRaceRenderProps, dataRaceState } from "./state";
 
 const T = videoTheme;
 
-/** One-line title size: fits 984 px at <= 42 characters, never below 40 px. */
-export const titleFontSize = (title: string): number =>
-  Math.max(40, Math.min(64, Math.floor(960 / (Math.max(1, title.length) * 0.46))));
+/** One-line title size: the largest 64 -> 28 px that fits 960 px by the measured advances of Barlow 800. */
+export const titleFontSize = (title: string): number => titleLayout(title).fontSize;
 
 export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; frame: number }): ReactElement {
   const st = dataRaceState(props, frame);
@@ -28,19 +28,23 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
   const sample = props.data_provenance === "sample";
   const hookTiles = [...props.entities].sort((a, b) => a.name.localeCompare(b.name));
   const showFooter = st.phase !== "powered";
+  const footer = footerLayout(props.source_line);
+  const clock = clockLayout(props.periods);
+  const unit = unitLayout(props.unit_label, clock.width);
+  const hook = hookLayout(props.hook);
 
   return (
     <div data-data-race="" data-phase={st.phase} style={{ position: "relative", width: L.width, height: L.height, background: T.background, overflow: "hidden", color: T.ink }}>
       {inTimeline ? (
         <>
-          <div data-title="" style={{ position: "absolute", left: L.marginX, top: L.titleY, width: L.width - 2 * L.marginX, height: 76, display: "flex", alignItems: "center", fontFamily: T.fonts.display, fontWeight: 800, fontSize: titleFontSize(props.title), color: T.ink, whiteSpace: "nowrap", overflow: "hidden" }}>
+          <div data-title="" style={{ position: "absolute", left: L.marginX, top: L.titleY, width: L.width - 2 * L.marginX, height: 76, display: "flex", alignItems: "center", fontFamily: T.fonts.display, fontWeight: 800, fontSize: titleLayout(props.title).fontSize, color: T.ink, whiteSpace: "nowrap", overflow: "hidden" }}>
             {props.title}
           </div>
           <div style={{ opacity: st.chartOpacity }}>
-            <div style={{ position: "absolute", left: L.marginX, top: L.unitRowY, width: 520, height: 64, display: "flex", alignItems: "center", fontFamily: T.fonts.ui, fontWeight: 600, fontSize: 32, color: T.inkDim }}>
-              {props.unit_label}
+            <div data-unit="" style={{ position: "absolute", left: L.marginX, top: L.unitRowY, width: unit.width, height: 64, display: "flex", flexDirection: "column", justifyContent: "center", fontFamily: T.fonts.ui, fontWeight: 600, fontSize: unit.fontSize, lineHeight: 1.1, color: T.inkDim }}>
+              <Lines lines={unit.lines} />
             </div>
-            <div data-clock="" style={{ position: "absolute", right: 120, top: L.unitRowY, height: 64, display: "flex", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 700, fontSize: 52, color: T.ink, ...TNUM }}>
+            <div data-clock="" style={{ position: "absolute", right: 120, top: L.unitRowY, height: 64, display: "flex", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 700, fontSize: clock.fontSize, color: T.ink, whiteSpace: "nowrap", ...TNUM }}>
               {props.periods[st.period]}
             </div>
             {plan.strategy.order_label ? (
@@ -58,16 +62,21 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
           </div>
           {st.hookOpacity > 0 ? (
             <div data-hook="" style={{ position: "absolute", left: 0, top: 0, width: L.width, height: L.height, opacity: st.hookOpacity }}>
-              <div style={{ position: "absolute", left: L.marginX, top: 400, width: L.width - 2 * L.marginX, textAlign: "center", fontFamily: T.fonts.display, fontWeight: 800, fontSize: 96, lineHeight: 1.08, color: T.ink }}>
-                {props.hook}
+              <div data-hook-text="" style={{ position: "absolute", left: L.marginX, top: 400, width: L.width - 2 * L.marginX, textAlign: "center", fontFamily: T.fonts.display, fontWeight: 800, fontSize: hook.fontSize, lineHeight: 1.08, color: T.ink }}>
+                <Lines lines={hook.lines} />
               </div>
-              <div style={{ position: "absolute", left: L.marginX, top: 860, width: L.width - 2 * L.marginX, display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 24 }}>
-                {hookTiles.map((e) => (
-                  <div key={e.id} style={{ width: 164, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                    <LogoTile entity={e} size={124} radius={26} />
-                    <div style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 32, color: T.ink, whiteSpace: "nowrap" }}>{e.name}</div>
-                  </div>
-                ))}
+              <div style={{ position: "absolute", left: L.marginX, top: 860, width: L.width - 2 * L.marginX, display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "flex-start", columnGap: 12, rowGap: 24 }}>
+                {hookTiles.map((e) => {
+                  const nm = hookTileNameLayout(e.name);
+                  return (
+                    <div key={e.id} data-hook-tile="" style={{ width: HOOK_TILE_W, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                      <LogoTile entity={e} size={124} radius={26} />
+                      <div style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: nm.fontSize, lineHeight: 1.1, color: T.ink, textAlign: "center" }}>
+                        <Lines lines={nm.lines} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -90,12 +99,12 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
       {st.phase === "like" ? <LikeSubscribe f={st.phaseFrame} /> : null}
       {st.phase === "powered" ? <PoweredBy f={st.phaseFrame} bars={bars} /> : null}
       {showFooter ? (
-        <div data-source="" style={{ position: "absolute", left: L.marginX, top: L.footerY, width: L.width - 2 * L.marginX - 60, height: 34, display: "flex", alignItems: "center", fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 28, color: T.inkDim, whiteSpace: "nowrap", overflow: "hidden" }}>
-          {props.source_line}
+        <div data-source="" style={{ position: "absolute", left: L.marginX, top: footer.top, width: footerW, height: footer.height, display: "flex", flexDirection: "column", justifyContent: "flex-end", fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 28, lineHeight: "32px", color: T.inkDim }}>
+          <Lines lines={footer.lines} />
         </div>
       ) : null}
       {sample ? (
-        <div data-sample-badge="" style={{ position: "absolute", left: 0, top: L.badgeY, width: L.width, display: "flex", justifyContent: "center", zIndex: 1000 }}>
+        <div data-sample-badge="" style={{ position: "absolute", left: 0, top: footer.badgeY, width: L.width, display: "flex", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ background: T.ink, color: T.background, fontFamily: T.fonts.data, fontWeight: 800, fontSize: 28, letterSpacing: 1, padding: "4px 22px", borderRadius: 8, lineHeight: "34px" }}>
             {DATA_RACE_LIMITS.sampleBadgeText}
           </div>

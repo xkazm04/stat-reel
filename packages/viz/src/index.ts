@@ -57,10 +57,13 @@ export {
 } from "./slopegraph-layout";
 export {
   CHAR_EM,
+  DEFAULT_WEIGHT,
+  ellipsize,
   estimateWidth,
   type FaceKey,
   fitText,
   formatFixed,
+  measureText,
   ordinal,
   ordinalSuffix,
   surname,

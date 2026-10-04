@@ -5,39 +5,19 @@
  */
 import { videoTheme } from "@statreel/design-tokens";
 import type { DataRaceProps } from "@statreel/schemas";
+import { measureText } from "@statreel/viz";
 import type { CSSProperties, ReactElement } from "react";
 import { Img } from "remotion";
 import { CHIP, type RowChip } from "./chips";
 import { relativeLuminance } from "./contrast";
+import { L, LABEL_RIGHT, cardLayout, nameLayout } from "./layout";
 import { type CardState, type RaceRow, niceTicks } from "./state";
+
+export { L, LABEL_RIGHT };
 
 type Entity = DataRaceProps["entities"][number];
 type Event = DataRaceProps["events"][number];
 type ValueFormat = DataRaceProps["value_format"];
-
-/** All geometry for the 1080 x 1920 vertical frame. Safe box: y 150-1580, nothing right of x ~965. */
-export const L = {
-  width: 1080,
-  height: 1920,
-  marginX: 60,
-  titleY: 150,
-  unitRowY: 236,
-  orderLabelY: 304,
-  barsTop: 352,
-  rowH: 74,
-  barH: 52,
-  tile: 60,
-  nameX: 132,
-  nameW: 200,
-  barX: 344,
-  barMaxW: 480,
-  cardX: 60,
-  cardW: 840,
-  cardH: 236,
-  cardTop: 1250,
-  badgeY: 1500,
-  footerY: 1544,
-} as const;
 
 export const TNUM: CSSProperties = { fontVariantNumeric: "tabular-nums", fontFeatureSettings: '"tnum" 1' };
 const T = videoTheme;
@@ -75,10 +55,26 @@ export function LogoTile({ entity, size, radius }: { entity: Entity; size: numbe
   );
 }
 
-/** Right edge of anything the end of a bar draws: the platform icon column starts at ~x 965. */
-export const LABEL_RIGHT = 965;
-/** Bold 30 px tabular glyphs are at most ~0.62 em wide; a deliberately pessimistic estimate. */
-export const textWidth = (text: string, size: number): number => Math.ceil(text.length * size * 0.62);
+/** Measured lines of one text slot, one nowrap block each (keys = the line plus its occurrence, never an index). */
+export function Lines({ lines }: { lines: readonly string[] }): ReactElement {
+  const seen = new Map<string, number>();
+  return (
+    <>
+      {lines.map((line) => {
+        const n = seen.get(line) ?? 0;
+        seen.set(line, n + 1);
+        return (
+          <div key={`${line}#${n}`} style={{ whiteSpace: "nowrap" }}>
+            {line}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** Width in px of mono text (value labels, chips, tick labels): the real advances, rounded up. */
+const monoWidth = (text: string, size: number, weight: number): number => Math.ceil(measureText(text, size, "mono", 0, weight));
 
 /**
  * Where the value label sits, relative to the row (row x = marginX). It follows the bar end, but a
@@ -86,7 +82,7 @@ export const textWidth = (text: string, size: number): number => Math.ceil(text.
  * inside and gets a plate so it stays readable where it overlaps the bar tip.
  */
 export function valueLabelLayout(barW: number, text: string, size = 30, extra = 0): { left: number; width: number; plate: boolean } {
-  const width = textWidth(text, size) + extra;
+  const width = monoWidth(text, size, 700) + extra;
   const natural = L.barX - L.marginX + barW + 14;
   const max = LABEL_RIGHT - L.marginX - width;
   return natural <= max ? { left: natural, width, plate: false } : { left: max, width, plate: true };
@@ -98,7 +94,7 @@ const chipEase = (x: number): number => {
 };
 
 /** Estimated width of a chip incl. its leading gap (the end label reserves it for the x 965 clamp). */
-export const chipWidth = (chip: RowChip): number => 10 + 20 + textWidth(chip.text, 28) + (chip.kind === "up" ? 22 : 0);
+export const chipWidth = (chip: RowChip): number => 10 + 20 + monoWidth(chip.text, 28, 800) + (chip.kind === "up" ? 22 : 0);
 
 /**
  * "Up N" / "NEW" chip. Filled with `accentInk` and lettered in the sheet colour (>= 4.5:1), 28 px.
@@ -134,7 +130,7 @@ export function AxisTicks({ axisMax, rows, format }: { axisMax: number; rows: nu
       {ticks.map((v) => {
         const x = L.barX + (v / axisMax) * L.barMaxW;
         const label = formatValue(v, { prefix: "", suffix: "", ...format, decimals });
-        const w = textWidth(label, 28);
+        const w = monoWidth(label, 28, 600);
         const left = Math.min(x - w / 2, LABEL_RIGHT - w);
         return (
           <div key={v} data-tick={v}>
@@ -149,10 +145,6 @@ export function AxisTicks({ axisMax, rows, format }: { axisMax: number; rows: nu
   );
 }
 
-export function nameFontSize(name: string, width: number): number {
-  return Math.max(28, Math.min(36, Math.floor(width / (Math.max(1, name.length) * 0.46))));
-}
-
 /**
  * One bar row. `dim` (0..1, default 1) multiplies the row opacity and `scale` (default 1) enlarges
  * the entity mark (logo, name, bar) from its left edge; the value label follows the scaled bar end
@@ -163,6 +155,7 @@ export function BarRow({ entity, row, axisMax, format, dim = 1, scale = 1 }: { e
   const w = Math.max(6, Math.min(1, row.value / axisMax) * L.barMaxW);
   const top = L.barsTop + row.pos * L.rowH;
   const text = formatValue(row.value, format);
+  const name = nameLayout(entity.name);
   const shift = (L.barX - L.marginX + w) * (scale - 1);
   const label = valueLabelLayout(w + shift, text, 30, row.chip ? chipWidth(row.chip) : 0);
   return (
@@ -172,9 +165,10 @@ export function BarRow({ entity, row, axisMax, format, dim = 1, scale = 1 }: { e
         <LogoTile entity={entity} size={L.tile} />
       </div>
       <div
-        style={{ position: "absolute", left: L.nameX - L.marginX, top: 0, width: L.nameW, height: L.rowH, display: "flex", alignItems: "center", fontFamily: T.fonts.display, fontWeight: 700, fontSize: nameFontSize(entity.name, L.nameW), color: T.ink, whiteSpace: "nowrap", overflow: "hidden" }}
+        data-name=""
+        style={{ position: "absolute", left: L.nameX - L.marginX, top: 0, width: L.nameW, height: L.rowH, display: "flex", flexDirection: "column", justifyContent: "center", fontFamily: T.fonts.display, fontWeight: 700, fontSize: name.fontSize, lineHeight: 1.1, color: T.ink }}
       >
-        {entity.name}
+        <Lines lines={name.lines} />
       </div>
       <div style={{ position: "absolute", left: L.barX - L.marginX, top: (L.rowH - L.barH) / 2, width: w, height: L.barH, borderRadius: 10, background: entity.color }} />
       </div>
@@ -189,20 +183,23 @@ export function BarRow({ entity, row, axisMax, format, dim = 1, scale = 1 }: { e
   );
 }
 
-/** One event card. Static content; the stack positions and reveals it. */
+/** One event card. Static content; the stack positions and reveals it. Height follows the measured text (`cardLayout`). */
 export function EventCard({ event, entity }: { event: Event; entity: Entity | undefined }): ReactElement {
+  const lay = cardLayout(event);
   return (
     <div
       data-card={event.id}
-      style={{ position: "relative", width: L.cardW, height: L.cardH, boxSizing: "border-box", borderRadius: 18, background: T.surface, boxShadow: `inset 0 0 0 2px ${T.grid}, 0 18px 40px rgba(0,0,0,0.28)`, padding: "22px 28px 20px 44px", overflow: "hidden" }}
+      style={{ position: "relative", width: L.cardW, height: lay.height, boxSizing: "border-box", borderRadius: 18, background: T.surface, boxShadow: `inset 0 0 0 2px ${T.grid}, 0 18px 40px rgba(0,0,0,0.28)`, padding: "22px 28px 20px 44px", overflow: "hidden" }}
     >
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 14, background: entity?.color ?? T.accent }} />
       <div style={{ fontFamily: T.fonts.data, fontWeight: 700, fontSize: 28, letterSpacing: 2, color: T.inkDim, lineHeight: "34px", ...TNUM }}>{event.date_label}</div>
-      <div style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 46, lineHeight: "54px", color: T.ink, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden" }}>{event.title}</div>
+      <div data-card-title="" style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: lay.title.fontSize, lineHeight: "54px", color: T.ink, marginTop: 6, whiteSpace: "nowrap", height: 54, display: "flex", alignItems: "center" }}>
+        {lay.title.lines.join(" ")}
+      </div>
       <div style={{ marginTop: 8 }}>
-        {event.facts.map((f) => (
-          <div key={f.ref} style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 28, lineHeight: "36px", color: T.inkDim, whiteSpace: "nowrap", overflow: "hidden", ...TNUM }}>
-            {f.text}
+        {event.facts.map((f, i) => (
+          <div key={f.ref} data-fact="" style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 28, lineHeight: "34px", color: T.inkDim, ...TNUM }}>
+            <Lines lines={lay.facts[i]?.lines ?? [f.text]} />
           </div>
         ))}
       </div>

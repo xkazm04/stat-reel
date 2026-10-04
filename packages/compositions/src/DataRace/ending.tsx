@@ -7,7 +7,8 @@
 import { FRAME_STAT_VIEWBOX, frameStatRects, videoTheme } from "@statreel/design-tokens";
 import { ENDING_FRAMES, type DataRaceProps } from "@statreel/schemas";
 import type { CSSProperties, ReactElement } from "react";
-import { L, LogoTile, TNUM, formatValue } from "./parts";
+import { spotlightLayout, winnerLayout } from "./layout";
+import { L, Lines, LogoTile, TNUM, formatValue } from "./parts";
 
 const T = videoTheme;
 const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
@@ -47,30 +48,40 @@ export function WinnerSpotlight({ props, winnerId, f }: { props: DataRaceProps; 
   if (!e) return null;
   const last = e.values[e.values.length - 1] ?? 0;
   const op = Math.min(smooth((f - 6) / 12), clamp01((ENDING_FRAMES.spotlight - f) / 8));
-  const top = L.barsTop + L.rowH * props.entities.length + 40;
+  const lay = spotlightLayout(props.entities.length, props.spotlight.facts, props.source_line);
+  const valueText = formatValue(last, props.value_format);
+  const win = winnerLayout(e.name, valueText);
   return (
-    <div data-ending="spotlight" style={{ position: "absolute", left: L.marginX, top, width: L.width - 2 * L.marginX, opacity: op }}>
+    <div data-ending="spotlight" style={{ position: "absolute", left: L.marginX, top: lay.top, width: L.width - 2 * L.marginX, opacity: op }}>
       <div style={{ height: 44, display: "flex", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 700, fontSize: 34, letterSpacing: 6, color: T.inkDim }}>NO. 1 AT THE END</div>
       <div style={{ marginTop: 14, height: 120, display: "flex", alignItems: "center", gap: 24 }}>
         <LogoTile entity={e} size={120} radius={26} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 88, lineHeight: 1, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.name}</div>
+          <div data-winner-name="" style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: win.name.fontSize, lineHeight: 1, color: T.ink }}>
+            <Lines lines={win.name.lines} />
+          </div>
           <div style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 30, lineHeight: "34px", color: T.inkDim, whiteSpace: "nowrap" }}>{props.unit_label}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div data-winner-swatch="" style={{ width: 14, height: 76, borderRadius: 7, background: e.color }} />
-          <div data-winner-value="" style={{ fontFamily: T.fonts.data, fontWeight: 700, fontSize: 84, lineHeight: 1, color: T.ink, whiteSpace: "nowrap", ...TNUM }}>
-            {formatValue(last, props.value_format)}
+          <div data-winner-value="" style={{ fontFamily: T.fonts.data, fontWeight: 700, fontSize: win.valueSize, lineHeight: 1, color: T.ink, whiteSpace: "nowrap", ...TNUM }}>
+            {valueText}
           </div>
         </div>
       </div>
       <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 14 }}>
-        {props.spotlight.facts.map((s) => (
-          <div key={s.ref} style={{ display: "flex", alignItems: "baseline", gap: 18 }}>
-            <span style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: 32, color: T.inkDim }}>{s.label}</span>
-            <span style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 60, color: T.ink, ...TNUM }}>{s.value_text}</span>
-          </div>
-        ))}
+        {props.spotlight.facts.map((s, i) => {
+          const fl = lay.facts[i];
+          const stack = fl?.mode === "stack";
+          return (
+            <div key={s.ref} data-spotlight-fact={fl?.mode ?? "row"} style={{ display: "flex", flexDirection: stack ? "column" : "row", alignItems: stack ? "flex-start" : "baseline", gap: stack ? 4 : 18 }}>
+              <span style={{ fontFamily: T.fonts.ui, fontWeight: 500, fontSize: fl?.label.fontSize ?? 32, color: T.inkDim, lineHeight: stack ? `${(fl?.label.fontSize ?? 32) + 4}px` : undefined }}>
+                <Lines lines={fl?.label.lines ?? [s.label]} />
+              </span>
+              <span style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: fl?.value.fontSize ?? 60, color: T.ink, whiteSpace: "nowrap", ...TNUM }}>{(fl?.value.lines ?? [s.value_text]).join(" ")}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

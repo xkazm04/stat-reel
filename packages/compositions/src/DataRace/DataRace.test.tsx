@@ -12,6 +12,7 @@ import {
   planSha256,
   resolveDataRaceRenderProps,
 } from "@statreel/schemas";
+import { measureText } from "@statreel/viz";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { COMPOSITIONS, compositionIdFor } from "../compositions";
@@ -22,7 +23,7 @@ import { buildSampleDataRace } from "./fixture";
 import { CHIP, raceChips } from "./chips";
 import { contrastRatio } from "./contrast";
 import { SPOTLIGHT_DIM, SPOTLIGHT_SCALE } from "./ending";
-import { LABEL_RIGHT, L, formatValue, textWidth, valueLabelLayout } from "./parts";
+import { LABEL_RIGHT, L, formatValue, valueLabelLayout } from "./parts";
 import { CARD, type DataRaceRenderProps, AXIS_HEADROOM, axisMaxAt, dataRaceState, niceTicks, orderedEvents, phaseAt } from "./state";
 
 // Remotion's <Img> reads useCurrentFrame(), which only exists inside a registered composition. These
@@ -178,7 +179,9 @@ describe("race", () => {
   it("hook shows the question and equal logo tiles, without the answer, at frame 0", () => {
     const html = markup(0);
     expect(html).toContain("data-hook");
-    expect(html).toContain(props.hook);
+    // the hook is laid out as explicit measured lines; its text is the lines joined
+    const hookBlock = html.slice(html.indexOf("data-hook-text"), html.indexOf("data-hook-tile"));
+    expect(hookBlock.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain(props.hook);
     expect(html).not.toContain("NO. 1 AT THE END");
     expect(html.slice(html.indexOf("data-hook")).match(/data-logo="(file|wordmark)"/g)?.length).toBe(10);
   });
@@ -247,7 +250,7 @@ describe("axis: grow-only max-so-far with nice gridline ticks (ADR scale-and-axi
     }
     expect(valueLabelLayout(100, "5.0 M").plate).toBe(false);
     expect(valueLabelLayout(L.barMaxW, formatValue(1, longest)).plate).toBe(true);
-    expect(textWidth("5.0 M", 30)).toBeGreaterThan(0);
+    expect(measureText("5.0 M", 30, "mono", 0, 700)).toBe(5 * 0.6 * 30);
     const wide = { ...props, value_format: longest };
     const html = markup(plan.sections.timeline_end - 1, wide);
     for (const m of html.matchAll(/data-value="" style="left:([\d.]+)px;[^"]*width:(\d+)px/g))
@@ -459,13 +462,13 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
-        "chipNew": "0af2776c2500ab0f",
-        "chipUp": "12c080285f36edc3",
-        "hook0": "82c6217f7e72dc05",
-        "like": "4fd9eeef8ee716e2",
-        "mid45": "3afd214c17a418d4",
+        "chipNew": "813fd82f84a1ff47",
+        "chipUp": "3824370e2fd5ef74",
+        "hook0": "2078fc8d440ab189",
+        "like": "7e8e23affe7e97a7",
+        "mid45": "3f39295bbb31514a",
         "poweredEnd": "8688d428ce072a85",
-        "spotlight": "5bdd817955da3b62",
+        "spotlight": "9ef7c25d7235d541",
       }
     `);
   });

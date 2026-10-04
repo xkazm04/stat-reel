@@ -16,23 +16,28 @@ import { type TimingPlan, TimingPlanSchema, planSha256 } from "./timing-plan";
 export const DataRaceFactRef = z.string().regex(FACT_KEY_PATTERN, FACT_KEY_MESSAGE);
 
 /**
- * Text limits are derived from the DataRace frame geometry (DataRace/parts.tsx, DataRaceFrame.tsx),
- * because the frame clips (nowrap + overflow hidden) or wraps text instead of failing.
- * Average advance widths in em, pessimistic for mixed-case text: Barlow Condensed 0.46 (the figure
- * titleFontSize / nameFontSize already use; the 800 weight of the hook is set to 0.48), Inter 0.56
- * (packages/captions AVG_CHAR_EM).
+ * Text limits are character counts; the frame fits them by MEASURED width (DataRace/layout.ts, real
+ * advances from the OFL fonts via packages/viz `measureText`), so no slot silently clips: every text
+ * stays >= 28 px, and shrinks, wraps or (only when nothing else fits) ends in an explicit "..." instead.
  *
- *   title        Barlow 800, shrinks 64 -> 40 px to fit 960 px: 960 / (40 * 0.46) = 52 chars at the
- *                floor. 42 stays the authoring rule (49 px, still a clear headline), well inside it.
- *   event title  Barlow 700 46 px, nowrap, card content width 840 - 44 - 28 = 768 px:
- *                768 / (46 * 0.46) = 36.3 -> 36 chars.
- *   fact text    Inter 500 28 px, nowrap, same 768 px: 768 / (28 * 0.56) = 48.98 -> 48 chars.
- *   hook         Barlow 800 96 px, line-height 1.08 (104 px), 960 px wide, starts at y 400 and the
- *                logo tiles start at y 860: 3 lines end at y ~711 (4 would reach 815, too close).
- *                Chars per line 960 / (96 * 0.48) = 20.8 -> 20; 3 lines = 60 chars.
- *   name, date label, unit label, source line, spotlight label / value: the pre-existing authoring
- *                limits, kept as they were (the name and title shrink to fit first; these are the
- *                points where the floor font size would still clip). They now say "N characters fit".
+ *   title        Barlow 800, one line in 960 px, 64 px shrinking to 28 px for wide glyphs (a normal
+ *                title keeps >= 40). 42 stays the authoring rule: a clear headline at ~50 px.
+ *   event title  Barlow 700, one line in the 768 px card text, 46 px shrinking to 28 px: 36 "W"s fit at 30.
+ *   fact text    Inter 500 28 px in 768 px, wrapping to a second line (the card grows by one line);
+ *                48 characters fit in two lines whatever the glyphs.
+ *   hook         Barlow 800, <= 3 centred lines in 960 px, 96 px shrinking to fit the band above the
+ *                logo tiles (y 400 -> 860); 60 characters fit whatever the glyphs.
+ *   name         Barlow 700 in a 232 px column: one line at 36-28 px, else two lines (a word wider than
+ *                the column breaks at a character); 22 characters fit in two lines whatever the glyphs.
+ *                It does NOT shrink below 28 px; it wraps.
+ *   source line  Inter 500 28 px, <= 2 lines in 905 px, bottom-anchored in the safe box. 70 mixed-case
+ *                characters fit; a run of 70 wide capitals (W, M) is wider than two lines and ends in
+ *                "...": the limit is a character count, the true constraint is width.
+ *   unit label   Inter 600 32 -> 28 px, <= 2 lines left of the clock; the clock shrinks (52 -> 28 px)
+ *                for a period label wider than 420 px.
+ *   spotlight    label Inter 500 32 -> 28 px and value Barlow 700 60 px sit side by side when they fit,
+ *                stacked when not; 28 + 20 characters fit stacked whatever the glyphs.
+ *   date label   Mono (exact 0.6 em + 2 px spacing): 24 characters are 451 px in 768.
  *
  * Array caps come from the format (30-90 s at 30 fps, hook + 240-frame ending, so a timeline of at most
  * ~2400 frames) and from what the repo has produced (n = 53 full DataRace props files across the repo
@@ -123,7 +128,7 @@ export const DataRaceEventSchema = z
     id: Slug,
     /** optional: the entity the card is about (its colour marks the card) */
     entity_id: Slug.optional(),
-    /** <= 36 chars, one line (the card clips beyond it); may name entities, never the final ranking (rule 4; checked by checkGenerationRules) */
+    /** <= 36 chars, one line (the title shrinks 46 -> 28 px to fit); may name entities, never the final ranking (rule 4; checked by checkGenerationRules) */
     title: z
       .string()
       .min(1)
@@ -166,7 +171,7 @@ const DataRacePropsObject = z
       .string()
       .min(1)
       .max(DATA_RACE_LIMITS.titleMaxChars, tooLong("title (one line)", DATA_RACE_LIMITS.titleMaxChars)),
-    /** a question ending in "?" that does not reveal the outcome (rule 4); <= 60 chars = 3 lines at 96 px */
+    /** a question ending in "?" that does not reveal the outcome (rule 4); <= 60 chars, at most 3 lines (the size shrinks from 96 px to fit) */
     hook: z
       .string()
       .min(1)
