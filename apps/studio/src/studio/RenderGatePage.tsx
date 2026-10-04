@@ -9,6 +9,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { errorText, serverError } from "../api";
 import { Defer } from "../components/arrive";
+import { Card } from "../components/Card";
 import { Arrow, StatusChip } from "../components/glyphs";
 import { Empty, Failure, Loading } from "../components/ui";
 import { latestRender, renderChecks, renderFile, renderPolicy, useManifest } from "../data";
@@ -82,12 +83,8 @@ export function RenderGatePage() {
         </Empty>
       ) : (
         <div className="rg__grid">
-          <Defer tier={1} id="rg:video" phClass="panel rg__video" minHeight={320}>
-            <section className="panel rg__video">
-              <h2 className="sec-h">
-                <span>Render · {render.format}</span>
-                <span>{checks && typeof checks.duration_s === "number" ? `${checks.duration_s} s` : ""}</span>
-              </h2>
+          <Defer tier={1} id="rg:video" phClass="card rg__video" minHeight={320}>
+            <Card className="rg__video" title={`Render · ${render.format}`} actions={<span>{checks && typeof checks.duration_s === "number" ? `${checks.duration_s} s` : ""}</span>}>
               <div className={`rg__frame${render.format === "landscape" ? " wide" : ""}`}>
                 {video ? (
                   // biome-ignore lint/a11y/useMediaCaption: the captions track is added once the manifest names a sidecar
@@ -124,19 +121,17 @@ export function RenderGatePage() {
                   ) : null;
                 })}
               </ul>
-            </section>
+            </Card>
           </Defer>
 
-          <Defer tier={2} id="rg:gate" phClass="panel rg__gate" minHeight={220}>
-            <section className="panel rg__gate">
-              <h2 className="sec-h">
-                <span>Policy gate · OPA</span>
+          <Defer tier={2} id="rg:gate" phClass="card rg__gate" minHeight={220}>
+            <Card className="rg__gate" title="Policy gate · OPA" actions={
                 <span>
                   {policy?.target
                     ? `${policy.target.platform} · ${policy.target.monetized ? "monetized" : "non-commercial"} · ${policy.target.visibility ?? "private"}`
                     : ""}
                 </span>
-              </h2>
+              }>
               <div className="rg__verdict">
                 <Verdict detail={detail} render={render} size="lg" />
               </div>
@@ -226,14 +221,11 @@ export function RenderGatePage() {
               ) : (
                 <p className="sum-p">This render carries no policy verdict.</p>
               )}
-            </section>
+            </Card>
           </Defer>
 
-          <Defer tier={3} id="rg:checks" phClass="panel rg__checks" minHeight={200}>
-            <section className="panel rg__checks">
-              <h2 className="sec-h">
-                <span>Post-render checks · ffprobe · ebur128</span>
-              </h2>
+          <Defer tier={3} id="rg:checks" phClass="card rg__checks" minHeight={200}>
+            <Card className="rg__checks" title="Post-render checks" tag="ffprobe · ebur128">
               {!hasChecks(checks) ? (
                 <p className="sum-p" data-testid="checks-empty">
                   No post-render checks were recorded for this render.
@@ -266,15 +258,11 @@ export function RenderGatePage() {
                   </tbody>
                 </table>
               )}
-            </section>
+            </Card>
           </Defer>
 
-          <Defer tier={4} id="rg:manifest" phClass="panel rg__manifest" minHeight={200}>
-            <section className="panel rg__manifest">
-              <h2 className="sec-h">
-                <span>Provenance manifest</span>
-                <span>{m ? m.build.composition : ""}</span>
-              </h2>
+          <Defer tier={4} id="rg:manifest" phClass="card rg__manifest" minHeight={200}>
+            <Card className="rg__manifest" title="Provenance manifest" tag={m ? m.build.composition : undefined}>
               {manifest.isLoading ? (
                 <Loading what="the manifest" />
               ) : manifest.isError || !m ? (
@@ -367,7 +355,7 @@ export function RenderGatePage() {
                   </details>
                 </div>
               )}
-            </section>
+            </Card>
           </Defer>
         </div>
       )}
