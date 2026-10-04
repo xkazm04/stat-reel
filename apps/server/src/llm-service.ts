@@ -23,6 +23,18 @@ export function writeMcpConfig(): string {
   return file;
 }
 
+/**
+ * Add one run's reported cost/turns to the session row (a follow-up resumes the same row, so runs sum). A null part
+ * adds nothing: an unreported cost stays null, never 0.
+ */
+export function recordSessionSpend(db: Db, sessionId: string, s: { cost_usd: number | null; turns: number | null } | null): void {
+  if (!s || (s.cost_usd === null && s.turns === null)) return;
+  db.$client.prepare(
+    `update llm_sessions set cost_usd = case when ? is null then cost_usd else coalesce(cost_usd, 0) + ? end,
+       turns = case when ? is null then turns else coalesce(turns, 0) + ? end where id = ?`,
+  ).run(s.cost_usd, s.cost_usd, s.turns, s.turns, sessionId);
+}
+
 export class LlmService {
   constructor(
     private readonly db: Db,
@@ -64,6 +76,8 @@ export class LlmService {
       const limit = new AbortController();
       let stopped: StopReason | undefined;
       let turns = 0;
+      // the CLI's own result event (cost, turns) of this run: kept for the session ledger even when the run then fails or hits a cap
+      let spend: { cost_usd: number | null; turns: number | null } | null = null;
       const stop = (r: StopReason) => {
         stopped ??= r;
         limit.abort();
@@ -75,6 +89,7 @@ export class LlmService {
           prompt, resume, systemPromptFile, mcpConfigPath: writeMcpConfig(), cwd, signal, vars: { PROJECT: projectId }, maxBudgetUsd: this.limits.maxBudgetUsd,
           onEvent: (e: LlmEvent) => {
             emit(e);
+            if (e.type === "result") spend = { cost_usd: e.cost_usd ?? null, turns: e.turns ?? null };
             if (e.type === "tool_call" && ++turns >= this.limits.maxTurns) stop("max_turns");
           },
         });
@@ -92,6 +107,7 @@ export class LlmService {
       } finally {
         clearTimeout(timer);
         this.db.update(llmSessions).set({ ended_at: now() }).where(eq(llmSessions.id, sessionId)).run();
+        recordSessionSpend(this.db, sessionId, spend);
       }
     });
   }

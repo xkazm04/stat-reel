@@ -154,3 +154,30 @@ describe("LlmService session lifecycle", () => {
     expect(runs).toHaveLength(0);
   });
 });
+
+describe("LlmService cost ledger", () => {
+  it("writes the result event's cost and turns on the session row when a session ends", async () => {
+    const { db, runner, svc } = setup(async () => [{ type: "session", session_id: "ext-1" }, result({ cost_usd: 0.42, turns: 17 })]);
+    const { session_id } = svc.start("p1");
+    await runner.idle();
+    expect(sessionRow(db, session_id)).toMatchObject({ cost_usd: 0.42, turns: 17 });
+  });
+
+  it("keeps the cost of a run that then fails on a cap, and sums a follow-up run", async () => {
+    let n = 0;
+    const { db, runner, svc } = setup(async () => [{ type: "session", session_id: "ext-1" }, n++ === 0 ? result({ ok: false, subtype: "error_max_turns", turns: 31, cost_usd: 1.5, result: "" }) : result({ cost_usd: 0.25, turns: 4 })]);
+    const { session_id } = svc.start("p1");
+    await runner.idle();
+    expect(sessionRow(db, session_id)).toMatchObject({ cost_usd: 1.5, turns: 31 });
+    svc.start("p1", "continue", session_id);
+    await runner.idle();
+    expect(sessionRow(db, session_id)).toMatchObject({ cost_usd: 1.75, turns: 35 });
+  });
+
+  it("leaves cost null (not 0) when the CLI reported none", async () => {
+    const { db, runner, svc } = setup(happy);
+    const { session_id } = svc.start("p1");
+    await runner.idle();
+    expect(sessionRow(db, session_id)).toMatchObject({ cost_usd: null, turns: null });
+  });
+});
