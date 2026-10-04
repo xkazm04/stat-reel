@@ -13,6 +13,22 @@ import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 export const ROW_CAP = 5000;
 export const QUERY_TIMEOUT_MS = 10_000;
 
+/** What the model sees when its query is interrupted at the cap (the raw DuckDB "INTERRUPT Error" tells it nothing). */
+export const queryTimeoutMessage = (ms: number = QUERY_TIMEOUT_MS) => `query exceeded ${ms / 1000} s - add a WHERE or aggregate`;
+
+/**
+ * A fact ref is `<fact_key>#<column>`. The column is interpolated as a quoted identifier, so it is limited to
+ * lowercase letters, digits and underscores (no leading digit). Returns a format hint for a ref that cannot
+ * resolve for that reason, or undefined when the ref is well-formed.
+ */
+const FACT_COLUMN = /^[a-z_][a-z0-9_]*$/;
+export function factRefFormatHint(ref: string): string | undefined {
+  const [rowKey, column, ...rest] = ref.split("#");
+  if (!rowKey || !column || rest.length) return `'${ref}' is not '<fact_key>#<column>' (one '#', both parts non-empty)`;
+  if (!FACT_COLUMN.test(column)) return `column '${column}' in '${ref}' must match ${FACT_COLUMN} (lowercase letters, digits and underscores, not starting with a digit)`;
+  return undefined;
+}
+
 export type QueryResult = {
   columns: string[];
   rows: Record<string, unknown>[];
@@ -114,8 +130,8 @@ export class Warehouse {
     this.instance.closeSync();
   }
 
-  async rows(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
-    const r = await this.conn.runAndReadAll(sql, params as never);
+  async rows(sql: string, params: unknown[] = [], conn: DuckDBConnection = this.conn): Promise<Record<string, unknown>[]> {
+    const r = await conn.runAndReadAll(sql, params as never);
     return (r.getRowObjectsJS() as Record<string, unknown>[]).map(normalizeRow);
   }
 
@@ -125,19 +141,31 @@ export class Warehouse {
   }
 
   /** LLM entry point: guarded, capped, timed out, with lineage of the views it read. */
-  async query(sql: string): Promise<QueryResult> {
+  async query(sql: string, timeoutMs: number = QUERY_TIMEOUT_MS): Promise<QueryResult> {
     await checkReadOnlyLlmSql(this, sql);
     const views = await this.referencedViews(sql);
-    const timer = setTimeout(() => this.conn.interrupt(), QUERY_TIMEOUT_MS);
+    // interrupt() is connection-wide: on the shared connection it would also kill a concurrent facts() or
+    // describeViews() call. The LLM's query therefore gets its own connection, so the interrupt hits only it.
+    const conn = await this.instance.connect();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      conn.interrupt();
+    }, timeoutMs);
+    let rows: Record<string, unknown>[];
     try {
-      const rows = await this.rows(`select * from (${sql.replace(/;\s*$/, "")}) limit ${ROW_CAP + 1}`);
-      const truncated = rows.length > ROW_CAP;
-      const kept = rows.slice(0, ROW_CAP);
-      const lineage = await this.lineage(views);
-      return { columns: Object.keys(kept[0] ?? {}), rows: kept, truncated, ...lineage };
+      rows = await this.rows(`select * from (${sql.replace(/;\s*$/, "")}) limit ${ROW_CAP + 1}`, [], conn);
+    } catch (err) {
+      if (timedOut) throw new Error(queryTimeoutMessage(timeoutMs));
+      throw err;
     } finally {
       clearTimeout(timer);
+      conn.closeSync();
     }
+    const truncated = rows.length > ROW_CAP;
+    const kept = rows.slice(0, ROW_CAP);
+    const lineage = await this.lineage(views);
+    return { columns: Object.keys(kept[0] ?? {}), rows: kept, truncated, ...lineage };
   }
 
   private async referencedViews(sql: string): Promise<string[]> {
@@ -177,7 +205,7 @@ export class Warehouse {
     const byColumn = new Map<string, Map<string, string[]>>(); // column -> rowKey -> refs
     for (const ref of new Set(refs)) {
       const [rowKey, column] = ref.split("#");
-      if (!rowKey || !column || !/^[a-z_]+$/.test(column)) continue;
+      if (!rowKey || !column || !FACT_COLUMN.test(column)) continue; // see factRefFormatHint for the message
       const rowsOf = byColumn.get(column) ?? new Map<string, string[]>();
       rowsOf.set(rowKey, [...(rowsOf.get(rowKey) ?? []), ref]);
       byColumn.set(column, rowsOf);

@@ -1,7 +1,10 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { DuckDBInstance } from "@duckdb/node-api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { paths } from "./config";
-import { Warehouse, checkReadOnlyLlmSql } from "./warehouse";
+import { Warehouse, checkReadOnlyLlmSql, factRefFormatHint, queryTimeoutMessage } from "./warehouse";
 
 const hasWarehouse = existsSync(paths.warehouse);
 
@@ -70,5 +73,58 @@ describe.skipIf(!hasWarehouse)("warehouse (llm schema only, read-only)", () => {
     expect(era?.comment).toContain("F1DB");
     expect(era?.columns.find((c) => c.name === "rank_adjusted")?.comment).toMatch(/Rank/);
     expect(era?.sample.length).toBeGreaterThan(0);
+  });
+});
+
+describe("warehouse on a throwaway database (no repo warehouse needed)", () => {
+  let wh: Warehouse;
+  beforeAll(async () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "wh-")), "t.duckdb");
+    const seed = await DuckDBInstance.create(file);
+    const c = await seed.connect();
+    await c.run("create schema llm");
+    await c.run("create schema meta");
+    await c.run("create table meta.model_lineage as select 'big' as model, 'legal' as license_class, ['test'] as sources");
+    await c.run("create view llm.big as select range as n from range(3000000)");
+    await c.run("create view llm.facts as select 'k1' as fact_key, 7 as points_2024, 3 as rank_adjusted");
+    c.closeSync();
+    seed.closeSync();
+    wh = await Warehouse.open(file);
+  });
+  afterAll(() => wh?.close());
+
+  it("maps an interrupted query to an actionable message", async () => {
+    await expect(wh.query("select count(*) from llm.big a, llm.big b", 100)).rejects.toThrow(/^query exceeded 0\.1 s - add a WHERE or aggregate$/);
+    expect(queryTimeoutMessage()).toBe("query exceeded 10 s - add a WHERE or aggregate");
+  });
+
+  it("does not map an ordinary query error to a timeout", async () => {
+    await expect(wh.query("select cast('abc' as integer) from llm.big limit 1")).rejects.not.toThrow(/exceeded/);
+  });
+
+  it("an interrupted query does not kill a concurrent facts() call", async () => {
+    const slow = wh.query("select count(*) from llm.big a, llm.big b", 300).catch((e) => e as Error);
+    const facts = await Promise.all(Array.from({ length: 5 }, () => wh.facts(["k1#rank_adjusted"])));
+    for (const m of facts) expect(m.get("k1#rank_adjusted")).toBe(3);
+    expect(((await slow) as Error).message).toMatch(/query exceeded/);
+    await expect(wh.query("select n from llm.big where n < 3 order by n")).resolves.toMatchObject({ rows: [{ n: 0 }, { n: 1 }, { n: 2 }] });
+  });
+
+  it("resolves fact columns that contain digits", async () => {
+    expect((await wh.facts(["k1#points_2024"])).get("k1#points_2024")).toBe(7);
+  });
+});
+
+describe("factRefFormatHint", () => {
+  it("accepts well-formed refs, including digits in the column", () => {
+    expect(factRefFormatHint("f1db:driver:x:era-adjusted#rank_adjusted")).toBeUndefined();
+    expect(factRefFormatHint("k#points_2024")).toBeUndefined();
+  });
+  it("explains what is wrong with a bad ref", () => {
+    expect(factRefFormatHint("no hash")).toMatch(/'<fact_key>#<column>'/);
+    expect(factRefFormatHint("k#a#b")).toMatch(/one '#'/);
+    expect(factRefFormatHint("k#Rank")).toMatch(/lowercase letters, digits and underscores/);
+    expect(factRefFormatHint("k#2024_pts")).toMatch(/not starting with a digit/);
+    expect(factRefFormatHint('k#a"b')).toMatch(/must match/);
   });
 });
