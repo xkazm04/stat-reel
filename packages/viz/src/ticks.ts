@@ -26,6 +26,9 @@ export function niceStep(span: number, count: number): number {
 /**
  * Multiples of a nice step inside [min, max], about `count` of them (at most `count + 1`).
  * Reversed bounds are swapped; a zero-width range yields its single value; non-finite input yields [].
+ *
+ * `count` also sets the density: over [0, max], count 4 gives 2, 3 or 4 positive ticks for any max (the step is
+ * the nice step not below max / 4, so never above max / 2). DataRace uses exactly that for its gridlines.
  */
 export function niceTicks(min: number, max: number, count = 5): number[] {
   if (!Number.isFinite(min) || !Number.isFinite(max)) return [];

@@ -11,7 +11,8 @@ import { Img } from "remotion";
 import { CHIP, type RowChip } from "./chips";
 import { relativeLuminance } from "./contrast";
 import { L, LABEL_RIGHT, cardLayout, nameLayout } from "./layout";
-import { type CardState, type RaceRow, niceTicks } from "./state";
+import type { CardState, RaceRow } from "./state";
+import type { TickMark } from "./tick-fade";
 
 export { L, LABEL_RIGHT };
 
@@ -119,21 +120,22 @@ export function RankChip({ chip }: { chip: RowChip }): ReactElement {
   );
 }
 
-/** Gridlines and their labels, behind the rows. Values come from `niceTicks` (grow-free: the axis is fixed). */
-export function AxisTicks({ axisMax, rows, format }: { axisMax: number; rows: number; format: ValueFormat | undefined }): ReactElement {
-  const ticks = niceTicks(axisMax);
-  const step = ticks[0] ?? 1;
-  const decimals = Math.max(0, Math.min(3, -Math.floor(Math.log10(step) + 1e-9)));
+/**
+ * Gridlines and their labels, behind the rows. The axis maximum grows with the race, so the gridline
+ * set changes (tick-fade.ts, one `niceTicks` from packages/viz): each tick carries an `alpha` and
+ * fades in or out over a fixed frame window instead of popping. Positions follow the current max.
+ */
+export function AxisTicks({ ticks, axisMax, rows, format }: { ticks: readonly TickMark[]; axisMax: number; rows: number; format: ValueFormat | undefined }): ReactElement {
   const bottom = L.barsTop + L.rowH * rows;
   return (
     <>
-      {ticks.map((v) => {
-        const x = L.barX + (v / axisMax) * L.barMaxW;
-        const label = formatValue(v, { prefix: "", suffix: "", ...format, decimals });
+      {ticks.map((t) => {
+        const x = L.barX + (t.value / axisMax) * L.barMaxW;
+        const label = formatValue(t.value, { prefix: "", suffix: "", ...format, decimals: t.decimals });
         const w = monoWidth(label, 28, 600);
         const left = Math.min(x - w / 2, LABEL_RIGHT - w);
         return (
-          <div key={v} data-tick={v}>
+          <div key={t.value} data-tick={t.value} data-tick-alpha={t.alpha.toFixed(3)} style={{ opacity: t.alpha }}>
             <div style={{ position: "absolute", left: x - 1, top: L.barsTop, width: 2, height: bottom - L.barsTop, background: T.grid }} />
             <div style={{ position: "absolute", left, top: bottom + 6, width: w, height: 36, display: "flex", justifyContent: "center", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 600, fontSize: 28, color: T.inkFaint, whiteSpace: "nowrap", ...TNUM }}>
               {label}

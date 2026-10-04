@@ -13,11 +13,11 @@ import { DataRaceFrame } from "./DataRaceFrame";
 import { buildSampleDataRace } from "./fixture";
 import {
   FAR_PLANE_TEXT,
-  LEAD,
   farPlaneAt,
+  LEAD,
   leadChanges,
-  leadFadeActive,
   leaderColourAt,
+  leadFadeActive,
   mixHex,
   tintStrength,
 } from "./leader";

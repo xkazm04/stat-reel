@@ -63,7 +63,7 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
                 {plan.strategy.order_label}
               </div>
             ) : null}
-            <AxisTicks axisMax={st.axisMax} rows={props.entities.length} format={props.value_format} />
+            <AxisTicks ticks={st.ticks} axisMax={st.axisMax} rows={props.entities.length} format={props.value_format} />
             <div style={{ position: "absolute", left: L.barX - 2, top: L.barsTop, width: 3, height: L.rowH * props.entities.length, background: T.grid }} />
             {st.rows.map((row) => {
               const entity = byId.get(row.id);

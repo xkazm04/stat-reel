@@ -24,7 +24,7 @@ import { CHIP, CUE_BUDGET, raceChips } from "./chips";
 import { contrastRatio } from "./contrast";
 import { SPOTLIGHT_DIM, SPOTLIGHT_SCALE } from "./ending";
 import { LABEL_RIGHT, L, formatValue, valueLabelLayout } from "./parts";
-import { CARD, type DataRaceRenderProps, AXIS_HEADROOM, axisMaxAt, dataRaceState, niceTicks, orderedEvents, phaseAt } from "./state";
+import { CARD, type DataRaceRenderProps, AXIS_HEADROOM, axisMaxAt, dataRaceState, orderedEvents, phaseAt } from "./state";
 
 // Remotion's <Img> reads useCurrentFrame(), which only exists inside a registered composition. These
 // tests hash frames with renderToStaticMarkup, so the real <Img> is swapped for a plain <img>; the
@@ -214,27 +214,15 @@ describe("axis: grow-only max-so-far with nice gridline ticks (ADR scale-and-axi
     expect(dataRaceState(props, plan.sections.timeline_end - 1).axisMax).toBeCloseTo(plan.strategy.axis_max * AXIS_HEADROOM, 6);
   });
 
-  it("niceTicks gives 3-4 round values <= max (2 only where no round step fits)", () => {
-    for (const max of [0.7, 1, 4.2, 9.3, 23, 47.7, 98, 1234, 250000]) {
-      const t = niceTicks(max);
-      expect(t.length, `max ${max}`).toBeGreaterThanOrEqual(2);
-      expect(t.length, `max ${max}`).toBeLessThanOrEqual(4);
-      expect(Math.max(...t)).toBeLessThanOrEqual(max);
-      expect([...t].sort((a, b) => a - b)).toEqual(t);
-    }
-    expect(niceTicks(20.4)).toEqual([5, 10, 15, 20]);
-    expect(niceTicks(0)).toEqual([]);
-  });
-
-  it("draws 3-4 labelled gridlines at >= 28 px with tabular figures, on theme colours", () => {
+  it("draws 2-4 labelled gridlines at >= 28 px with tabular figures, on theme colours", () => {
     const html = markup(midFrame);
-    const ticks = [...html.matchAll(/data-tick="([\d.]+)"><div style="[^"]*"><\/div><div style="([^"]*)"/g)];
-    expect(ticks.length).toBeGreaterThanOrEqual(3);
-    expect(ticks.length).toBeLessThanOrEqual(4);
+    const ticks = [...html.matchAll(/data-tick="([\d.]+)" data-tick-alpha="([\d.]+)" style="[^"]*"><div style="[^"]*"><\/div><div style="([^"]*)"/g)];
+    expect(ticks.length).toBeGreaterThanOrEqual(2);
+    expect(ticks.length).toBeLessThanOrEqual(5); // 4 steady lines plus at most one still fading
     for (const m of ticks) {
-      expect(Number(/font-size:(\d+)px/.exec(m[2] as string)?.[1])).toBeGreaterThanOrEqual(28);
-      expect(m[2]).toContain("tabular-nums");
-      expect(m[2]).toContain(`color:${videoTheme.inkFaint}`);
+      expect(Number(/font-size:(\d+)px/.exec(m[3] as string)?.[1])).toBeGreaterThanOrEqual(28);
+      expect(m[3]).toContain("tabular-nums");
+      expect(m[3]).toContain(`color:${videoTheme.inkFaint}`);
     }
     expect(html).toContain(`background:${videoTheme.grid}`);
   });
@@ -462,11 +450,11 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
-        "chipNew": "76f480e0127dd55f",
-        "chipUp": "62898c92142558e0",
-        "hook0": "d0d6fbc66f230be6",
+        "chipNew": "f0e023734737bbe5",
+        "chipUp": "eddfa888a454e159",
+        "hook0": "85e398fca88abc2a",
         "like": "7e8e23affe7e97a7",
-        "mid45": "83f6257080183890",
+        "mid45": "3a255fb2fe2fde72",
         "poweredEnd": "8688d428ce072a85",
         "spotlight": "e2fb2b728f76ba13",
       }

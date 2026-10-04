@@ -12,6 +12,7 @@ import { type TimeMap, makeTimeMap, periodAtFrame } from "../timing/index";
 import { type RowChip, chipAt } from "./chips";
 import { type ClockFrame, clockAt, motionCuesAt } from "./clock";
 import { farPlaneAt } from "./leader";
+import { type TickMark, ticksAt } from "./tick-fade";
 
 export type DataRaceRenderProps = DataRaceProps & { timing_plan: TimingPlan };
 
@@ -58,6 +59,8 @@ export type DataRaceState = {
   period: number;
   /** fractional period (monotone cubic of the frame) */
   periodFloat: number;
+  /** gridlines on screen with their fade (tick-fade.ts) */
+  ticks: TickMark[];
   /** the clock: the label rolling from one period to the next (clock.ts) */
   clock: ClockFrame;
   /** the far plane colour: the sheet tinted toward the current leader (leader.ts) */
@@ -137,24 +140,6 @@ export function axisMaxAt(props: DataRaceRenderProps, i0: number, currentPeak: n
   return Math.max(Math.max(before, currentPeak) * AXIS_HEADROOM, 1e-9);
 }
 
-const tickRank = (n: number): number => (n === 4 ? 3 : n === 3 ? 2 : n === 2 ? 1 : 0);
-
-/** "Nice" gridline values up to `max`: 3-4 ticks at 1/2/2.5/5 x 10^k where possible, else 2. */
-export function niceTicks(max: number): number[] {
-  if (!(max > 0)) return [];
-  const e0 = Math.floor(Math.log10(max / 4));
-  let best: number[] = [];
-  for (const e of [e0 - 1, e0, e0 + 1]) {
-    for (const m of [1, 2, 2.5, 5]) {
-      const step = m * 10 ** e;
-      const n = Math.floor(max / step + 1e-9);
-      if (n < 2 || n > 4) continue;
-      if (tickRank(n) > tickRank(best.length)) best = Array.from({ length: n }, (_, i) => Number((step * (i + 1)).toPrecision(12)));
-    }
-  }
-  return best;
-}
-
 export const phaseAt = (plan: TimingPlan, frame: number): { phase: Phase; phaseFrame: number } => {
   const s = plan.sections;
   if (frame < s.timeline_end) return { phase: "timeline", phaseFrame: frame };
@@ -171,17 +156,39 @@ export function orderedEvents(props: DataRaceRenderProps): { id: string; index: 
     .map((e, index) => ({ id: e.id, index }));
 }
 
+/** The two periods a frame sits between and how far (0..1) from the first to the second. */
+function periodInterp(props: DataRaceRenderProps, frame: number): { periodFloat: number; i0: number; i1: number; frac: number } {
+  const plan = props.timing_plan;
+  const last = plan.periods.length - 1;
+  const periodFloat = planCache(plan).tm.at(frame);
+  const i0 = Math.min(last, Math.max(0, Math.floor(periodFloat)));
+  const i1 = Math.min(last, i0 + 1);
+  return { periodFloat, i0, i1, frac: i1 === i0 ? 0 : periodFloat - i0 };
+}
+
+/**
+ * The axis maximum at any frame, on its own (no rows, no cards): what the tick fade needs to ask
+ * "which gridlines did this frame have?" for the frames just before the one being drawn.
+ */
+export function axisMaxAtFrame(props: DataRaceRenderProps, frame: number): number {
+  const { i0, i1, frac } = periodInterp(props, frame);
+  let peak = 0;
+  for (const e of props.entities) {
+    const a = e.values[i0] ?? 0;
+    const b = e.values[i1] ?? 0;
+    peak = Math.max(peak, a + (b - a) * frac);
+  }
+  return axisMaxAt(props, i0, peak);
+}
+
 export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRaceState {
   const plan = props.timing_plan;
-  const { tm, ranks, hann } = planCache(plan);
+  const { ranks, hann } = planCache(plan);
   const s = plan.sections;
   const { phase, phaseFrame } = phaseAt(plan, frame);
   const last = plan.periods.length - 1;
-  const periodFloat = tm.at(frame);
+  const { periodFloat, i0, i1, frac } = periodInterp(props, frame);
   const period = periodAtFrame(plan.knots, frame);
-  const i0 = Math.min(last, Math.max(0, Math.floor(periodFloat)));
-  const i1 = Math.min(last, i0 + 1);
-  const frac = i1 === i0 ? 0 : periodFloat - i0;
 
   // rows
   const rows: RaceRow[] = props.entities.map((e) => {
@@ -253,6 +260,7 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
     phaseFrame,
     period,
     periodFloat,
+    ticks: ticksAt(props, frame, (f) => axisMaxAtFrame(props, f)),
     clock: clockAt(props, frame),
     farPlane: farPlaneAt(props, frame, chartOpacity),
     cues: phase === "timeline" ? motionCuesAt(props, frame) : 0,
