@@ -102,12 +102,6 @@
   min-height: 0;
   padding: var(--card-pad);
 }
-.card[data-pad="none"] > .card__body {
-  border-radius: 0 0 var(--card-radius) var(--card-radius);
-}
-.card[data-pad="none"]:not(:has(> .card__foot)) > .card__body {
-  overflow: clip;
-}
 .card[data-scroll="fill"] {
   min-height: 0;
   overflow: hidden;
@@ -129,6 +123,13 @@
 .card[aria-busy="true"] > .card__body {
   opacity: 0.55;
   transition: opacity 160ms linear;
+}
+/* flush cards clip their content to the rounded bottom edge (not when they scroll themselves) */
+.card[data-pad="none"] > .card__body {
+  border-radius: 0 0 var(--card-radius) var(--card-radius);
+}
+.card[data-pad="none"]:not([data-scroll]):not(:has(> .card__foot)) > .card__body {
+  overflow: clip;
 }
 
 .card__foot {
