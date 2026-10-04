@@ -226,12 +226,14 @@ export class Pipeline implements PipelineApi {
     });
     const timing: Timeline = { duration_s: duration, scenes: timelineScenes, words, cues, music: mix.timelineMusic, voice_lead_s: lead };
 
-    // 5. record assets (plan tier per asset) and attach timing
+    // 5. record assets and attach timing. Plan tier per asset: the tier its cache record says it was GENERATED under
+    //    (a free take reused after an upgrade stays free); only an asset with no recorded tier (fixtures, older
+    //    cache entries) takes the run's tier, as before
     stop();
     for (const a of [...voiced.map((v) => v.asset), ...musicAssets]) {
       this.db.insert(assets).values({
         id: randomUUID(), project_id: p.projectId, kind: a.kind!, provider: "elevenlabs", request_id: a.request_id ?? null, model_id: a.model_id ?? null,
-        voice_id: a.voice_id ?? null, plan_tier: planTier ?? null, prompt_sha256: a.prompt_sha256 ?? null, scene_id: a.scene_id ?? null,
+        voice_id: a.voice_id ?? null, plan_tier: a.plan_tier ?? planTier ?? null, prompt_sha256: a.prompt_sha256 ?? null, scene_id: a.scene_id ?? null,
         path: "", sha256: a.sha256!, generated_at: a.generated_at ?? now(),
       }).run();
     }

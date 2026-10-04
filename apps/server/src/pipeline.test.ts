@@ -95,6 +95,17 @@ describe("audio job cancellation (pipeline-real-cancel-cleanup)", () => {
     expect(attachTiming).toHaveBeenCalledWith("p1", expect.objectContaining({ duration_s: expect.any(Number) }), propsRow.version);
   });
 
+  it("records each asset's own generation-time plan tier; only an unrecorded one falls back to the run's", async () => {
+    const { root, runner, pipeline } = setup();
+    let n = 0;
+    tts.mockImplementation(async () => voicedTake(root, n++ === 0 ? { plan_tier: "free" } : {})); // scene a: a free-plan take from cache
+    runner.enqueue("audio", { projectId: "p1", chain: false }, "p1");
+    await runner.idle();
+    const { db } = pipeline as unknown as { db: { $client: { prepare: (q: string) => { all: () => { scene_id: string | null; plan_tier: string | null }[] } } } };
+    const rows = db.$client.prepare("select scene_id, plan_tier from assets order by rowid").all();
+    expect(rows.map((r) => r.plan_tier)).toEqual(["free", "starter"]);
+  });
+
   it("hands the job's cancel signal to the ElevenLabs client, so a cancel aborts the request in flight", async () => {
     const { root, runner } = setup();
     clientOpts.length = 0;
