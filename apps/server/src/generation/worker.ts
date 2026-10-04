@@ -44,11 +44,14 @@ export type WorkerDeps = {
 
 export type TickResult = "off" | "server-down" | "idle" | "ran";
 
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 /** No timer when the limit is not configured (Q7); otherwise a timer that calls `onTimeout`. */
 export function armTimeout(config: GenerationConfig, type: GenerationJobType, onTimeout: () => void, setT: typeof setTimeout = setTimeout): NodeJS.Timeout | null {
   const min = perTypeValue(config.timeoutMin, type);
   if (min === null) return null;
-  return setT(onTimeout, min * 60_000);
+  // Node clamps a delay above 2^31-1 ms (~24.8 days) to 1 ms, which would fail every job at once as a timeout
+  return setT(onTimeout, Math.min(min * 60_000, MAX_TIMER_MS));
 }
 
 export class GenerationWorker {
