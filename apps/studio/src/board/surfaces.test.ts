@@ -53,4 +53,15 @@ describe("board stylesheets", () => {
     );
     expect(hits).toEqual([]);
   });
+
+  it("sets no text below the --text-xs floor (12px: nothing a user must read is smaller)", () => {
+    const small = css().flatMap(([f, src]) =>
+      rules(src).flatMap((r) =>
+        [...r.body.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)]
+          .filter((m) => Number(m[1]) < 12)
+          .map((m) => `${f} ${r.sel} ${m[1]}px`),
+      ),
+    );
+    expect(small).toEqual([]);
+  });
 });
