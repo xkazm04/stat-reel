@@ -78,4 +78,13 @@ describe("board stylesheets", () => {
     );
     expect(small).toEqual([]);
   });
+
+  it("hard-codes no colour: every colour and shadow comes from a design token (repo law)", () => {
+    const raw = css().flatMap(([f, src]) =>
+      rules(src)
+        .filter((r) => /#[0-9a-fA-F]{3,8}\b|\b(rgba?|hsla?)\(/.test(r.body))
+        .map((r) => `${f} ${r.sel}`),
+    );
+    expect(raw).toEqual([]);
+  });
 });
