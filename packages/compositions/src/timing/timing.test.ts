@@ -56,6 +56,18 @@ describe("computeTimingPlan", () => {
     expect(plan.orders.at(-1)?.[0]).toBe("prism");
   });
 
+  it("an event's dwell always lands: a narrow spread on the first period keeps the plan finite and schema-valid", () => {
+    const values = { a: [1, 2, 3, 4, 5, 6], b: [2, 1, 4, 3, 6, 5] };
+    const periods = ["1", "2", "3", "4", "5", "6"];
+    for (const period of [0, 2, 5])
+      for (const spread of [1.5, 0.3, 0.02]) {
+        const p = computeTimingPlan({ periods, entities: ["a", "b"], values, events: [{ id: "e", period, label: "x", spread }] });
+        const at = `period ${period}, spread ${spread}`;
+        expect(TimingPlanSchema.safeParse(JSON.parse(JSON.stringify(p))).success, at).toBe(true);
+        expect(p.knots.at(-1)?.[0], at).toBeCloseTo(p.sections.timeline_end, 1);
+      }
+  });
+
   it("rejects an event outside the periods and a mismatched series", () => {
     const v = sampleDataRaceValues();
     const base = { periods: plan.periods, entities: plan.entities, values: v };

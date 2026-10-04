@@ -251,6 +251,9 @@ export function computeTimingPlan(input: TimingPlanInput): TimingPlan {
   for (const ev of events) {
     const sd = ev.spread ?? 1.5;
     const bump = f.map((_, i) => (i === 0 ? 0 : Math.exp(-((i - ev.period) ** 2) / (2 * sd * sd))));
+    // period 0 carries no frames, so a narrow bump around it can underflow to all zeros (0 / 0 = NaN
+    // knots); the dwell then lands whole on the first period that has frames
+    if (!(bump.reduce((a, b) => a + b, 0) > 0)) bump[Math.max(1, ev.period)] = 1;
     const bs = bump.reduce((a, b) => a + b, 0);
     f = f.map((x, i) => x + (num(bump, i) / bs) * dwellOf(ev));
   }
