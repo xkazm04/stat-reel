@@ -160,6 +160,9 @@ importers:
       '@statreel/schemas':
         specifier: workspace:*
         version: link:../schemas
+      '@statreel/viz':
+        specifier: workspace:*
+        version: link:../viz
       react:
         specifier: ^19.1.0
         version: 19.3.0

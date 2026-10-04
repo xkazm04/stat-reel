@@ -24,6 +24,7 @@ export {
 export {
   AVG_CHAR_EM,
   CAPTION_STYLE,
+  CAPTION_WEIGHT,
   type CaptionBox,
   captionBox,
   captionSafeZoneViolations,

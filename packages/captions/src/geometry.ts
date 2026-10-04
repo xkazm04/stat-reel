@@ -1,5 +1,6 @@
 import { safeZoneLandscape, safeZoneVertical } from "@statreel/design-tokens";
 import type { Cue, Format } from "@statreel/schemas";
+import { measureText } from "@statreel/viz";
 
 /** Burn-in type spec per format (DESIGN.md §6.5): Inter bold, white on the theme-driven sheet plate (ADR 009; colours come from the theme, not from this table). */
 export const CAPTION_STYLE = {
@@ -14,8 +15,15 @@ export const CAPTION_STYLE = {
   },
 } as const;
 
-/** Conservative average advance width of Inter Bold, in em (mixed case, digits, spaces). */
+/**
+ * Average advance width of Inter Bold in em (mixed case, digits, spaces). Only the character-count
+ * proxy behind `fitCharsPerLine`; whether a line fits is decided by `estimateLineWidth`, which
+ * measures real advances (upper case runs ~0.65 em, so this average under-measures it).
+ */
 export const AVG_CHAR_EM = 0.56;
+
+/** CSS weight the burn-in style sets (BurnedCaptions `fontWeight`), so lines are measured at it. */
+export const CAPTION_WEIGHT = 700;
 
 export type CaptionBox = { x: number; y: number; width: number; maxHeight: number };
 
@@ -36,9 +44,13 @@ export function captionBox(format: Format): CaptionBox {
   };
 }
 
-/** Estimated pixel width of one caption line at the burn-in font size. */
+/**
+ * Pixel width of one caption line at the burn-in size and weight: the sum of real Inter advances
+ * from the OFL font table in @statreel/viz (kerning ignored, so an upper bound), the same
+ * measurement DataRace text fit uses (DESIGN.md §6.2).
+ */
 export const estimateLineWidth = (line: string, format: Format): number =>
-  line.length * AVG_CHAR_EM * CAPTION_STYLE[format].fontSize;
+  measureText(line, CAPTION_STYLE[format].fontSize, "ui", 0, CAPTION_WEIGHT);
 
 /** Inner text width available inside the caption box. */
 export const captionTextWidth = (format: Format): number => captionBox(format).width - 2 * CAPTION_STYLE[format].padX;

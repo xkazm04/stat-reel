@@ -1,7 +1,7 @@
 import type { VideoTheme } from "@statreel/design-tokens";
 import type { Cue, Format, WordTiming } from "@statreel/schemas";
 import { Fragment, type ReactElement } from "react";
-import { CAPTION_STYLE, captionBox } from "./geometry";
+import { CAPTION_STYLE, CAPTION_WEIGHT, captionBox } from "./geometry";
 import { isGlued, joinDisplay } from "./text";
 
 /** The cue whose [start_s, end_s) contains t, or null. */
@@ -73,7 +73,7 @@ export function BurnedCaptions({ cues, t, format, theme }: BurnedCaptionsProps):
           background: theme.captionBox,
           color: theme.captionInk,
           fontFamily: theme.fonts.ui,
-          fontWeight: 700,
+          fontWeight: CAPTION_WEIGHT,
           fontSize: s.fontSize,
           lineHeight: s.lineHeight,
           // proportional: a cue is static text, and Inter's tnum also widens hyphens ("43rd - highest")

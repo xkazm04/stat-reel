@@ -11,7 +11,8 @@
   "dependencies": {
     "react": "^19.1.0",
     "@statreel/schemas": "workspace:*",
-    "@statreel/design-tokens": "workspace:*"
+    "@statreel/design-tokens": "workspace:*",
+    "@statreel/viz": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.1.0"

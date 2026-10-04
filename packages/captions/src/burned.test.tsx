@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { safeZoneVertical, videoTheme } from "@statreel/design-tokens";
 import type { Cue, WordTiming } from "@statreel/schemas";
+import { measureText } from "@statreel/viz";
 import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,6 +11,8 @@ import {
   buildCues,
   captionBox,
   captionSafeZoneViolations,
+  captionTextWidth,
+  estimateLineWidth,
 } from "./index";
 
 // react-dom/server is not resolvable from packages/captions (not a dependency), so the component is
@@ -151,6 +154,17 @@ describe("caption box geometry and safe zone", () => {
     expect(captionSafeZoneViolations([wide, ok], "landscape")).toBe(0);
     const three: Cue = { start_s: 0, end_s: 3, lines: ["a", "b", "c"], words: [] };
     expect(captionSafeZoneViolations([three], "landscape")).toBe(1);
+  });
+
+  it("measures lines with real Inter Bold advances, so an upper-case line the 0.56 em average passes is counted", () => {
+    // 19 chars: the old estimate (19 x 0.56 x 76 = 809 px) fit the 837 px inner box; Inter Bold sets it at ~935 px
+    const caps: Cue = { start_s: 0, end_s: 3, lines: ["MAXIMUM WORLD TITLE"], words: [] };
+    const mixed: Cue = { start_s: 4, end_s: 6, lines: ["Fangio won 24 races"], words: [] };
+    expect(estimateLineWidth("MAXIMUM WORLD TITLE", "vertical")).toBeGreaterThan(captionTextWidth("vertical"));
+    expect(estimateLineWidth("Fangio won 24 races", "vertical")).toBeLessThan(captionTextWidth("vertical"));
+    expect(captionSafeZoneViolations([caps, mixed], "vertical")).toBe(1);
+    // same OFL face, same weight as the burn-in style: the width the layout trusts is the width viz measures
+    expect(estimateLineWidth("MAXIMUM WORLD TITLE", "landscape")).toBeCloseTo(measureText("MAXIMUM WORLD TITLE", 52, "ui", 0, 700), 6);
   });
 
   it("cues built by buildCues have zero safe-zone violations in both formats", () => {
