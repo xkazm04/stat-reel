@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { SLOT_STATUSES } from "./api";
 import {
   bucketByDay,
   checkSchedule,
   mapScheduleError,
   needsDecision,
   parseCalendarSearch,
+  SLOT_META,
   slotDrift,
   channelLabel,
   dayKey,
@@ -170,12 +172,21 @@ describe("mapScheduleError", () => {
 describe("drift and missed", () => {
   it("narrows the drift field and flags slots the owner must decide on", () => {
     expect(slotDrift({ drift: "superseded_render" })).toBe("superseded_render");
-    expect(slotDrift({ drift: "nope" })).toBeNull();
-    expect(slotDrift({})).toBeNull();
+        expect(slotDrift({})).toBeNull();
     expect(needsDecision({ status: "missed" })).toBe(true);
-    expect(needsDecision({ status: "scheduled", drift: "gate_denied" } as { status: string })).toBe(true);
+    expect(needsDecision({ status: "scheduled", drift: "gate_denied" } )).toBe(true);
     expect(needsDecision({ status: "scheduled" })).toBe(false);
     expect(slotStatus("missed")).toBe("missed");
+  });
+});
+
+describe("slot status parity with the server", () => {
+  // Fixture: the statuses apps/server/src/calendar.ts writes (header "Slot states and the transitions"); the
+  // server has no exported list, so a new status there must land here, in SLOT_STATUSES and in SLOT_META.
+  const SERVER_STATUSES = ["scheduled", "publishing", "published", "failed", "cancelled", "missed"];
+  it("types exactly the server's statuses and gives each a label", () => {
+    expect([...SLOT_STATUSES].sort()).toEqual([...SERVER_STATUSES].sort());
+    expect(Object.keys(SLOT_META).sort()).toEqual([...SERVER_STATUSES].sort());
   });
 });
 

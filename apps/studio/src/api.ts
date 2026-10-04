@@ -162,14 +162,18 @@ export type Channel = {
   note: string | null;
   created_at: string;
 };
-export type SlotStatus = "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+/** Every schedule status the server writes (apps/server/src/calendar.ts header: transitions); pinned in calendar.test.ts. */
+export const SLOT_STATUSES = ["scheduled", "publishing", "published", "failed", "cancelled", "missed"] as const;
+export type SlotStatus = (typeof SLOT_STATUSES)[number];
+/** Why a still-scheduled slot will not fire (apps/server/src/calendar.ts SlotView.drift). */
+export type SlotDrift = "superseded_render" | "gate_denied";
 export type CalendarSlot = {
   id: string;
   project_id: string;
   render_id: string;
   channel_id: string;
   publish_at: string;
-  status: SlotStatus | string;
+  status: SlotStatus;
   title: string | null;
   description: string | null;
   tags_json: string | null;
@@ -177,6 +181,9 @@ export type CalendarSlot = {
   publication_id: string | null;
   error: string | null;
   created_at: string;
+  /** when the tick found the slot overdue past the missed-run window; null otherwise */
+  missed_at: string | null;
+  drift: SlotDrift | null;
   project: Project | null;
 };
 /** A composed video: its latest render passed the gate and it is not on the calendar yet. */
@@ -257,7 +264,13 @@ export type StyleEntry = {
   owner_note: string | null;
   hero_item_id: string | null;
   accepts: number;
+  /** reject_style + reject_both */
   style_rejects: number;
+  /** the two kinds of style reject, counted apart */
+  reject_style: number;
+  reject_both: number;
+  /** the newest decision is a style reject yet the verdict is not "rejected": one click from flipping */
+  at_risk?: true;
   pending: number;
   total: number;
   item_ids: string[];

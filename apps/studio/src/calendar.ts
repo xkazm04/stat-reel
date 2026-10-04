@@ -4,6 +4,8 @@
  * (unit-tested in calendar.test.ts).
  */
 
+import type { SlotDrift, SlotStatus } from "./api";
+
 export type SlotLike = { id: string; project_id: string; publish_at: string; status: string; created_at: string };
 export type ChannelLike = { id: string; name: string; status: string; note: string | null };
 
@@ -56,7 +58,7 @@ export function nextFullHour(now: Date): Date {
   return d;
 }
 
-export type SlotStatusKey = "scheduled" | "publishing" | "published" | "failed" | "cancelled" | "missed";
+export type SlotStatusKey = SlotStatus;
 /** Every slot status as shape + label (the label is literal text, never colour-only). */
 export const SLOT_META: Record<SlotStatusKey, { label: string; hint: string }> = {
   scheduled: { label: "SCHEDULED", hint: "waits for its time; the server tick publishes it" },
@@ -69,18 +71,15 @@ export const SLOT_META: Record<SlotStatusKey, { label: string; hint: string }> =
 export const slotStatus = (s: string): SlotStatusKey => (s in SLOT_META ? (s as SlotStatusKey) : "failed");
 export const isUpcoming = (s: string): boolean => s === "scheduled" || s === "publishing";
 
-/** Drift the server reports on a slot (apps/server/src/calendar.ts SlotView). api.ts does not type it yet: narrow here. */
-export type SlotDrift = "superseded_render" | "gate_denied";
-export const slotDrift = (s: unknown): SlotDrift | null => {
-  const d = (s as { drift?: unknown } | null)?.drift;
-  return d === "superseded_render" || d === "gate_denied" ? d : null;
-};
+/** Drift the server reports on a slot (apps/server/src/calendar.ts SlotView; typed in api.ts). */
+export type { SlotDrift };
+export const slotDrift = (s: { drift?: SlotDrift | null }): SlotDrift | null => s.drift ?? null;
 export const DRIFT_META: Record<SlotDrift, { label: string; hint: string }> = {
   superseded_render: { label: "RE-RENDERED", hint: "the project was re-rendered after this slot was set; it will not fire until you reschedule it onto the new render" },
   gate_denied: { label: "GATE DENIED", hint: "the publish gate no longer allows this render; it will not fire" },
 };
 /** A slot the owner has to act on: missed, or held back by drift. */
-export const needsDecision = (s: { status: string }): boolean =>
+export const needsDecision = (s: { status: string; drift?: SlotDrift | null }): boolean =>
   s.status === "missed" || (s.status === "scheduled" && slotDrift(s) !== null);
 
 /** The newest slot (by created_at, then publish_at) of each project. */
