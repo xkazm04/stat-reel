@@ -188,3 +188,51 @@ describe("POST /api/projects reports through the shared error door", () => {
     }
   });
 });
+
+describe("an optional JSON body is optional, not ignorable", () => {
+  function appRecording() {
+    const calls: { llm: unknown[][]; produce: unknown[][] } = { llm: [], produce: [] };
+    const app = buildApp({
+      bus: new EventBus(),
+      topics: {},
+      runner: { list: () => [] },
+      llm: {
+        start: (...a: unknown[]) => {
+          calls.llm.push(a);
+          return { session_id: "s", job_id: "j" };
+        },
+      },
+      pipeline: {
+        produce: (...a: unknown[]) => {
+          calls.produce.push(a);
+          return { job_id: "j" };
+        },
+      },
+    } as unknown as AppDeps);
+    return { app, calls };
+  }
+  const post = (app: ReturnType<typeof appRecording>["app"], path: string, raw?: string) =>
+    app.request(path, { method: "POST", headers: raw === undefined ? {} : { "content-type": "application/json" }, body: raw });
+
+  it("a malformed body is a 400 and starts nothing (no paid co-pilot run, no render on a default target)", async () => {
+    const { app, calls } = appRecording();
+    for (const path of ["/api/projects/p1/llm", "/api/projects/p1/produce"]) {
+      const r = await post(app, path, '{"prompt": "make the bars blue", "session": "s1"');
+      expect(r.status, path).toBe(400);
+      expect((await body(r)).error).toMatch(/malformed JSON/);
+    }
+    const typed = await post(app, "/api/projects/p1/llm", JSON.stringify({ prompt: 42 }));
+    expect(typed.status).toBe(400);
+    expect(calls).toEqual({ llm: [], produce: [] });
+  });
+
+  it("an empty body still means the defaults (draft prompt, default target)", async () => {
+    const { app, calls } = appRecording();
+    expect((await post(app, "/api/projects/p1/llm")).status).toBe(200);
+    expect((await post(app, "/api/projects/p1/produce")).status).toBe(200);
+    expect(calls.llm).toEqual([["p1", undefined, undefined]]);
+    expect(calls.produce[0]?.[1]).toMatchObject({ platform: "youtube", monetized: true, ai_disclosure: true, visibility: "private" });
+    expect((await post(app, "/api/projects/p1/llm", JSON.stringify({ prompt: "hi", session: "s1" }))).status).toBe(200);
+    expect(calls.llm[1]).toEqual(["p1", "hi", "s1"]);
+  });
+});

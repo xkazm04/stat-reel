@@ -67,6 +67,19 @@ export function mapError(e: unknown, fallback: 400 | 500): { status: number; bod
   return { status: fallback, body: { error: message } };
 }
 
+/**
+ * A body the route can go without: an empty body means the defaults, but a body that is there must parse.
+ * `c.req.json().catch(() => ({}))` read a truncated `{"prompt": ...` as "no body" and started a default run;
+ * a SyntaxError here is a 400 through onError, a non-object body a 400 of its own.
+ */
+async function optionalJson(c: Context): Promise<Record<string, unknown>> {
+  const raw = await c.req.text();
+  if (!raw.trim()) return {};
+  const v: unknown = JSON.parse(raw);
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new HTTPException(400, { message: "the request body must be a JSON object" });
+  return v as Record<string, unknown>;
+}
+
 export function buildApp(d: AppDeps) {
   const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -131,14 +144,16 @@ export function buildApp(d: AppDeps) {
 
   // ---- LLM co-pilot
   app.post("/api/projects/:id/llm", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { prompt?: string; session?: string };
-    return c.json(d.llm.start(c.req.param("id"), body.prompt, body.session));
+    const body = await optionalJson(c);
+    for (const k of ["prompt", "session"] as const)
+      if (body[k] !== undefined && typeof body[k] !== "string") throw new HTTPException(400, { message: `${k} must be a string` });
+    return c.json(d.llm.start(c.req.param("id"), body.prompt as string | undefined, body.session as string | undefined));
   });
   app.get("/api/llm/:session/events", (c) => c.json({ events: d.llm.events(c.req.param("session")) }));
 
   // ---- produce (audio -> render -> checks -> gate) and publish
   app.post("/api/projects/:id/produce", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { target?: unknown };
+    const body = await optionalJson(c);
     return c.json(d.pipeline.produce(c.req.param("id"), PublishTargetSchema.parse(body.target ?? { platform: "youtube", monetized: true, ai_disclosure: true })));
   });
   app.post("/api/projects/:id/publish", async (c) => {
