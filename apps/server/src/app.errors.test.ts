@@ -117,3 +117,41 @@ describe("/events", () => {
     await vi.waitFor(() => expect((bus as unknown as { listeners: Set<unknown> }).listeners.size).toBe(0));
   });
 });
+
+describe("HTTP doors validate like their tool twins", () => {
+  // an app whose pipeline records what reached it
+  function appWithPipeline() {
+    const calls: unknown[][] = [];
+    const app = buildApp({
+      bus: new EventBus(),
+      topics: {},
+      runner: { list: () => [] },
+      pipeline: {
+        renderKeyframes: async (...a: unknown[]) => {
+          calls.push(a);
+          return { stills: [] };
+        },
+      },
+    } as unknown as AppDeps);
+    return { app, calls };
+  }
+  const post = (app: ReturnType<typeof appWithPipeline>["app"], body: unknown) =>
+    app.request("/api/projects/p1/keyframes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("POST /keyframes refuses what render_keyframes refuses (over MAX_FRAMES, negative, missing) and never renders it", async () => {
+    const { app, calls } = appWithPipeline();
+    for (const bad of [{ frames_s: [0, 1, 2, 3, 4, 5, 6] }, { frames_s: [-1] }, {}, { frames_s: [] }]) {
+      const r = await post(app, bad);
+      expect(r.status).toBe(400);
+      expect((await body(r)).error).toMatch(/frames_s/);
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("POST /keyframes passes a valid request through unchanged", async () => {
+    const { app, calls } = appWithPipeline();
+    const r = await post(app, { frames_s: [0, 4.5] });
+    expect(r.status).toBe(200);
+    expect(calls).toEqual([["p1", [0, 4.5]]]);
+  });
+});

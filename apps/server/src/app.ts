@@ -19,6 +19,7 @@ import { buildGenerationMcpServer, buildMcpServer, handleMcp } from "./mcp";
 import type { Pipeline } from "./pipeline";
 import { type ProjectService, StalePropsError } from "./projects";
 import type { Tools } from "./tools";
+import { parseToolInput } from "./tool-schemas";
 import { metricsOverview } from "./metrics";
 import type { CalendarService } from "./calendar";
 import { ArchivedError, type BoardService, DECISIONS, type Decision, NotArchivedError } from "./board";
@@ -143,8 +144,11 @@ export function buildApp(d: AppDeps) {
     return c.json(await d.pipeline.policyProbe(c.req.param("id"), PublishTargetSchema.parse(body.target), body.with_source));
   });
   app.post("/api/projects/:id/keyframes", async (c) => {
-    const body = (await c.req.json()) as { frames_s: number[] };
-    return c.json(await d.pipeline.renderKeyframes(c.req.param("id"), body.frames_s));
+    // the render_keyframes tool's own schema (MAX_FRAMES, seconds >= 0): this door must not render what the MCP door refuses
+    const body = (await c.req.json()) as { frames_s?: unknown } | null;
+    const input = parseToolInput("render_keyframes", { project: c.req.param("id"), frames_s: body?.frames_s });
+    if (!input.ok) return c.json({ error: input.error, issues: input.issues }, 400);
+    return c.json(await d.pipeline.renderKeyframes(c.req.param("id"), input.value.frames_s as number[]));
   });
 
   // ---- calendar (channels + scheduling of composed videos; ADR 006)
