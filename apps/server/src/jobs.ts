@@ -24,6 +24,9 @@ const CAUSES: readonly string[] = ["owner", "shutdown", "timeout"];
 export type JobContext = { id: string; signal: AbortSignal; progress: (p: number, note?: string) => void };
 export type Handler = (params: Record<string, unknown>, ctx: JobContext) => Promise<Record<string, unknown>>;
 export type Job = typeof jobs.$inferSelect;
+export type RetentionCounts = { jobs: number; llm: number; generation: number };
+/** `error` of a row resume() found `running`: the process that ran it is gone (crash, kill, a stop that timed out). */
+const INTERRUPTED_BY_EXIT = "interrupted: the server stopped while this job was running; re-queued at startup";
 
 /** Terminal job rows (and the event rows of terminal sessions/generation jobs) older than this many days are pruned at startup and daily (STATREEL_JOB_RETENTION_DAYS, default 30). */
 export function jobRetentionDays(env: Record<string, string | undefined> = process.env): number {
@@ -106,13 +109,14 @@ export class JobRunner {
     return { llm, generation };
   }
 
-  /** Both retention sweeps; a failure is logged, never thrown (it runs from a timer and from boot). */
-  retain(days = jobRetentionDays()): void {
+  /** Both retention sweeps with their counts; a failure is logged, never thrown (it runs from a timer and from boot) and yields null. */
+  retain(days = jobRetentionDays()): RetentionCounts | null {
     try {
-      this.prune(days);
-      this.pruneEvents(days);
+      const jobsPruned = this.prune(days);
+      return { jobs: jobsPruned, ...this.pruneEvents(days) };
     } catch (err) {
       console.warn(`[jobs] retention sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
     }
   }
 
@@ -160,8 +164,12 @@ export class JobRunner {
     this.startupHooks.push(hook);
   }
 
-  /** Run the startup sweeps, re-queue jobs a previous process left running, then start every kind's queue. */
-  resume(): void {
+  /**
+   * Run the startup sweeps, re-queue jobs a previous process left running, then start every kind's queue.
+   * The sweep is attributed (startup-sweeps): a re-queued row says why in `error`, and one log line counts
+   * what was repaired and pruned, so a silent boot is never mistaken for one whose sweep did not run.
+   */
+  resume(): { requeued: number; pruned: RetentionCounts | null } {
     for (const hook of this.startupHooks) {
       try {
         hook();
@@ -169,11 +177,15 @@ export class JobRunner {
         console.warn(`[jobs] startup sweep failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    this.retain();
+    const pruned = this.retain();
     this.resumed = true;
-    this.db.update(jobs).set({ status: "queued", started_at: null, progress: 0 }).where(eq(jobs.status, "running")).run();
+    const requeued = this.db.update(jobs).set({ status: "queued", started_at: null, progress: 0, error: INTERRUPTED_BY_EXIT })
+      .where(eq(jobs.status, "running")).run().changes;
     const kinds = new Set(this.db.select({ kind: jobs.kind }).from(jobs).where(eq(jobs.status, "queued")).all().map((r) => r.kind));
+    const prunedText = pruned ? `pruned ${pruned.jobs} job row(s), ${pruned.llm} llm event(s), ${pruned.generation} generation event(s)` : "retention sweep failed (see above)";
+    console.log(`[jobs] startup: re-queued ${requeued} interrupted job(s); ${prunedText}; ${kinds.size} kind(s) with queued work`);
     for (const k of kinds) this.pump(k);
+    return { requeued, pruned };
   }
 
   /** Resolves when no job is queued or running for any registered kind. */

@@ -108,6 +108,28 @@ describe("JobRunner", () => {
     expect(resumedWith).toEqual({ project: "p1" });
   });
 
+  it("the boot sweep is attributed: a crash re-queue records why, and resume() reports what it repaired and pruned", async () => {
+    const { db } = setup();
+    const first = new JobRunner(db, new EventBus());
+    first.register("render", () => new Promise(() => {}));
+    const id = first.enqueue("render", {});
+    await tick();
+    db.$client
+      .prepare("insert into jobs (id, kind, status, params_json, created_at, finished_at) values ('old', 'render', 'succeeded', '{}', ?, ?)")
+      .run("2020-01-01T00:00:00Z", "2020-01-01T00:00:00Z");
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const second = new JobRunner(db, new EventBus());
+      const report = second.resume();
+      expect(second.get(id)).toMatchObject({ status: "queued", error: expect.stringMatching(/interrupted/) });
+      expect(report).toMatchObject({ requeued: 1, pruned: { jobs: 1, llm: 0, generation: 0 } });
+      expect(String(log.mock.calls.at(-1)?.[0])).toMatch(/re-queued 1 interrupted job.*pruned 1 job/);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("a kind registered after resume() (main.ts registers gen_render late) still runs its re-queued rows", async () => {
     const { db } = setup();
     const first = new JobRunner(db, new EventBus());
