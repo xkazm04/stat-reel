@@ -148,6 +148,13 @@ describe("MCP wrapper", () => {
     expect("isError" in text({ ok: true })).toBe(false);
   });
 
+  it("the wire text is the serialization the cap measured and replay emits (no pretty-print overhead)", () => {
+    const capped = capQueryResult({ columns: ["fact_key", "v"], rows: rows(5000) });
+    const wire = text(capped).content[0]?.text ?? "";
+    expect(wire).toBe(JSON.stringify(capped)); // ReplayEngine stores JSON.stringify(live): live and replay agree
+    expect(Buffer.byteLength(wire)).toBeLessThanOrEqual(MAX_RESULT_BYTES + 1024); // the cap holds on the wire, + the note
+  });
+
   async function connect() {
     const { tools } = deps();
     const server = buildMcpServer(tools);

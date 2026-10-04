@@ -20,7 +20,9 @@ import { MAX_FRAMES, toolShapes } from "./tool-schemas";
 export const isFailedResult = isFailedToolResult;
 
 export const text = (v: unknown) => ({
-  content: [{ type: "text" as const, text: JSON.stringify(v, null, 1) }],
+  // compact: the size cap (tool-output.ts) and the replay transcript (ReplayEngine) both use JSON.stringify(v);
+  // pretty-printing added ~34 % to the recorded run's tool results and pushed a capped 64 KB result past the cap
+  content: [{ type: "text" as const, text: JSON.stringify(v) }],
   ...(isFailedResult(v) ? { isError: true } : {}),
 });
 
