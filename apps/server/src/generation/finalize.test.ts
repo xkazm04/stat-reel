@@ -8,6 +8,7 @@ import { paths as appPaths } from "../config";
 import { type Db, openDb } from "../db";
 import { FinalizeError, GenerationFinalizer } from "./finalize";
 import { jobPaths } from "./paths";
+import { snapshotFacts } from "./sample-fixtures";
 import { GenerationQueue } from "./queue";
 import { CASE_A, insertCase } from "./testing";
 
@@ -25,7 +26,7 @@ beforeEach(() => {
   board = new BoardService(db, path.join(dir, "board"));
   mkdirSync(path.join(dir, "board"), { recursive: true });
   queue = new GenerationQueue(db);
-  fin = new GenerationFinalizer({ db, board, dataRoot: dir, boardRoot: path.join(dir, "board") });
+  fin = new GenerationFinalizer({ db, board, dataRoot: dir, boardRoot: path.join(dir, "board"), facts: snapshotFacts });
   insertCase(db, CASE_A, { data_status: "new-source" });
 });
 afterEach(() => {
@@ -153,4 +154,77 @@ describe("finalize generate_video", () => {
     writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, "utf8")), data_provenance: "sample" }));
     await expect(fin.finalize(job, body)).rejects.toThrow(/needs data_provenance "real"/);
   }, 60_000);
+
+  describe("the data gate: fact verification of a real video", () => {
+    type EditableProps = { entities: [{ value_ref: string }, { value_ref: string }]; events: [{ facts: [{ text: string; ref: string }] }]; spotlight: { facts: [{ value_text: string }] } };
+    const editProps = (p: ReturnType<typeof videoJob>["p"], fn: (o: EditableProps) => void) => {
+      const f = path.join(p.out, "props.json");
+      const o = JSON.parse(readFileSync(f, "utf8"));
+      fn(o);
+      writeFileSync(f, JSON.stringify(o));
+    };
+    const none = (job: ReturnType<typeof videoJob>["job"]) => (db.$client.prepare("select count(*) n from videos where generation_job_id = ?").get(job.id) as { n: number }).n;
+
+    it("resolves every ref (entities, events, spotlight) and records the video", async () => {
+      const v = videoJob();
+      const seen: string[][] = [];
+      const spy = new GenerationFinalizer({ db, board, dataRoot: dir, boardRoot: path.join(dir, "board"), facts: async (refs) => {
+        seen.push(refs);
+        return snapshotFacts(refs);
+      } });
+      await expect(spy.finalize(v.job, v.body)).resolves.toMatchObject({ video_id: expect.any(String) });
+      expect(seen[0]).toHaveLength(19); // 22 refs, three of them shared (an entity's peak season is also a card or the spotlight)
+      expect(seen[0]?.every((r) => r.startsWith("f1db:driver:"))).toBe(true);
+    }, 60_000);
+
+    it("an unresolved ref is refused, naming it, and records nothing", async () => {
+      const v = videoJob();
+      editProps(v.p, (o) => { o.events[0].facts[0].ref = "f1db:driver:nobody:season:1999#wins"; });
+      await expect(fin.finalize(v.job, v.body)).rejects.toThrow(/fact verification failed.*unknown fact f1db:driver:nobody:season:1999#wins/);
+      expect(none(v.job)).toBe(0);
+    }, 60_000);
+
+    it("a figure in an event card that differs from its fact is refused", async () => {
+      const a = videoJob();
+      editProps(a.p, (o) => { o.events[0].facts[0].text = "14 wins in 2004"; });
+      await expect(fin.finalize(a.job, a.body)).rejects.toThrow(/'14' in "14 wins in 2004" != fact .*#wins = 13/);
+    }, 60_000);
+
+    it("a spotlight value that differs from its fact is refused", async () => {
+      const b = videoJob();
+      editProps(b.p, (o) => { o.spotlight.facts[0].value_text = "999"; });
+      await expect(fin.finalize(b.job, b.body)).rejects.toThrow(/spotlight .*'999'/);
+    }, 60_000);
+
+    it("an entity ref whose value is not in its values series is refused", async () => {
+      const v = videoJob();
+      editProps(v.p, (o) => { o.entities[0].value_ref = o.entities[1].value_ref; });
+      await expect(fin.finalize(v.job, v.body)).rejects.toThrow(/does not appear in its values series/);
+    }, 60_000);
+
+    it("a sample: ref under real is refused without asking the warehouse", async () => {
+      const v = videoJob();
+      editProps(v.p, (o) => { o.entities[0].value_ref = "sample:app:ember#users"; });
+      await expect(fin.finalize(v.job, v.body)).rejects.toThrow(/sample: namespace is invented data/);
+    }, 60_000);
+
+    it("no resolver fails closed with a named error", async () => {
+      const v = videoJob();
+      const bare = new GenerationFinalizer({ db, board, dataRoot: dir, boardRoot: path.join(dir, "board") });
+      await expect(bare.finalize(v.job, v.body)).rejects.toThrow(/fact verification unavailable: no fact resolver/);
+      expect(none(v.job)).toBe(0);
+    }, 60_000);
+
+    it("a resolver that throws is a named unavailable error, not a pass", async () => {
+      const v = videoJob();
+      const down = new GenerationFinalizer({ db, board, dataRoot: dir, boardRoot: path.join(dir, "board"), facts: async () => { throw new Error("warehouse closed"); } });
+      await expect(down.finalize(v.job, v.body)).rejects.toThrow(/fact verification unavailable.*warehouse closed/);
+    }, 60_000);
+
+    it("visual_options with sample provenance stays allowed without a resolver", async () => {
+      const bare = new GenerationFinalizer({ db, board, dataRoot: dir, boardRoot: path.join(dir, "board") });
+      const { job, body } = runningJob();
+      await expect(bare.finalize(job, body)).resolves.toHaveProperty("board_item_ids");
+    });
+  });
 });
