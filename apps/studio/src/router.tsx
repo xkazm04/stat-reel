@@ -13,7 +13,6 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import { api, qk } from "./api";
 import { parseBoardSearch } from "./board/search";
 import { parseCalendarSearch } from "./calendar";
 import { PagePending } from "./components/arrive";
@@ -22,6 +21,7 @@ import { useNavFocus } from "./hooks/useNavFocus";
 import { WipeProvider } from "./components/ui";
 import { boardQuery, lineTopicsQuery } from "./workQuery";
 import { calendarQuery, heatmapQuery, heatmapTopicsQuery, metricsQuery, projectQuery, projectsQuery, sourcesQuery } from "./data";
+import { SPORTS } from "./logic";
 import { isModuleLoadError } from "./moduleError";
 import { queryClient } from "./queryClient";
 
@@ -109,11 +109,10 @@ function RouteError({ error, reset }: { error: unknown; reset?: () => void }) {
   );
 }
 
-const SPORTS: readonly string[] = ["F1", "NBA", "NHL", "Soccer"];
 export const asMode = (v: unknown): Mode | undefined =>
   v === "non_commercial" ? "non_commercial" : v === "monetized" ? "monetized" : undefined;
 export const asSport = (v: unknown): Sport | undefined =>
-  typeof v === "string" && SPORTS.includes(v) ? (v as Sport) : undefined;
+  typeof v === "string" && (SPORTS as string[]).includes(v) ? (v as Sport) : undefined;
 
 const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: NotFound });
 
@@ -202,7 +201,7 @@ const boardRoute = createRoute({
   // filters live in the URL (board-triage-first): a reload lands on the same queue
   validateSearch: parseBoardSearch,
   component: BoardPage,
-  loader: () => warm({ queryKey: qk.board, queryFn: () => api.board() }),
+  loader: () => warm(boardQuery),
 });
 const metricsRoute = createRoute({
   getParentRoute: () => rootRoute,

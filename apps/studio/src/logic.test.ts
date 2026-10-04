@@ -1,4 +1,4 @@
-import { type HeatmapCell, JobKind } from "@statreel/schemas";
+import { type HeatmapCell, JobKind, Sport } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import {
   checkRows,
@@ -10,6 +10,7 @@ import {
   needsYou,
   nextAction,
   relTime,
+  SPORTS,
   stageIndex,
   summarizeToolInput,
   timecode,
@@ -171,6 +172,12 @@ describe("formatting helpers", () => {
         "monetized",
       ),
     ).toEqual([1, 0]);
+  });
+});
+
+describe("vocabulary", () => {
+  it("the sport list is the schema's Sport enum (the router validates ?sport= against it)", () => {
+    expect(SPORTS).toEqual(Sport.options);
   });
 });
 
