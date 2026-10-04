@@ -5,6 +5,7 @@ import {
   axisVerdict,
   caseOf,
   countItems,
+  emptyView,
   decisionForKey,
   factRefs,
   filterItems,
@@ -326,5 +327,25 @@ describe("provenance", () => {
       { key: "f1db:driver:x:season:2004", cols: ["wins", "season"] },
       { key: "f1db:driver:y", cols: ["wins"] },
     ]);
+  });
+});
+
+describe("emptyView (nothing in the list)", () => {
+  const counts = (o: { p?: number; a?: number; r?: number }) =>
+    countItems([
+      ...Array.from({ length: o.p ?? 0 }, () => item()),
+      ...Array.from({ length: o.a ?? 0 }, () => item({ status: "accepted", decision: "accept" })),
+      ...Array.from({ length: o.r ?? 0 }, () => item({ status: "rejected", decision: "reject_style" })),
+    ]);
+  it("an empty review queue never claims shots are open for review", () => {
+    const v = emptyView(counts({ a: 7, r: 3 }), DEFAULT_FILTER);
+    expect(v.title).toBe("Nothing left to review");
+    expect(v.line).toBe("0 pending · 7 accepted · 3 rejected (listed under Rejected).");
+    expect(v.line).not.toMatch(/open for review/);
+  });
+  it("names the filter case and the rejected lane", () => {
+    expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, status: "rejected" }).title).toBe("No rejected shots");
+    expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, style: "style:x" }).title).toBe("Nothing matches these filters");
+    expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, status: "rejected" }).line).toBe("2 pending · 0 accepted · 0 rejected.");
   });
 });

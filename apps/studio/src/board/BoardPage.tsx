@@ -27,6 +27,7 @@ import {
   type BoardFilter,
   countItems,
   DEFAULT_FILTER,
+  emptyView,
   filterItems,
   isDefaultFilter,
   NO_FILTER,
@@ -70,8 +71,6 @@ const STATUS_WORD: Record<StatusFilter, string> = {
   accepted: "Accepted",
   rejected: "Rejected",
 };
-
-const hasAxisFilter = (f: BoardFilter) => f.style !== "all" || f.case !== "all";
 
 function useVariant(): [Variant, (v: Variant) => void] {
   const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
@@ -319,17 +318,8 @@ export function BoardPage() {
           ) : (
             <>
               {!items.length ? (
-                <Empty
-                  title={
-                    filter.status === "rejected" && !hasAxisFilter(filter)
-                      ? "No rejected shots"
-                      : filter.status === "pending" && !hasAxisFilter(filter)
-                        ? "Nothing left to review"
-                        : "Nothing matches these filters"
-                  }
-                  className="bd-empty"
-                >
-                  {counts.total - counts.rejected} shots are open for review ({counts.rejected} rejected are hidden).{" "}
+                <Empty title={emptyView(counts, filter).title} className="bd-empty">
+                  {emptyView(counts, filter).line}{" "}
                   <button type="button" className="bd-linkbtn" onClick={() => setFilter(NO_FILTER)}>
                     Show every shot
                   </button>

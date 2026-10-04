@@ -195,6 +195,23 @@ export function countItems(items: readonly BoardItem[]): BoardCounts {
   return c;
 }
 
+const hasAxisFilter = (f: BoardFilter): boolean => f.style !== "all" || f.case !== "all";
+
+/**
+ * The empty list's title and its line of counts. The line says what exists by state, so an empty review
+ * queue never claims shots are "open for review" when every remaining one is already accepted.
+ */
+export function emptyView(c: BoardCounts, f: BoardFilter): { title: string; line: string } {
+  const title =
+    f.status === "rejected" && !hasAxisFilter(f)
+      ? "No rejected shots"
+      : f.status === "pending" && !hasAxisFilter(f)
+        ? "Nothing left to review"
+        : "Nothing matches these filters";
+  const where = c.rejected && f.status !== "rejected" ? " (listed under Rejected)" : "";
+  return { title, line: `${c.pending} pending · ${c.accepted} accepted · ${c.rejected} rejected${where}.` };
+}
+
 /** Filter options for one axis, in first-seen order, each with its item count. */
 export function axisOptions(items: readonly BoardItem[], axis: "style" | "case", names?: ReadonlyMap<string, string>) {
   const out = new Map<string, { key: string; label: string; n: number; proposed: boolean }>();
