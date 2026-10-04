@@ -386,8 +386,19 @@ export class YouTubeClient {
         }
         if (res.status === 200 || res.status === 201) return res.json();
         if (res.status === 308) {
-          offset = nextOffset(res.headers.get("range"));
-          attempt = 0;
+          const next = nextOffset(res.headers.get("range"));
+          if (next > offset) {
+            offset = next;
+            attempt = 0;
+            continue;
+          }
+          // the server kept nothing of this chunk: a stall spends the retry budget, it never resets it
+          await this.backoff(
+            ++attempt,
+            new YouTubeApiError(`chunk upload made no progress at byte ${offset}`, 308),
+            null,
+          );
+          offset = next;
           continue;
         }
         if (res.status === 404 || res.status === 410) throw new SessionGoneError(res.status);

@@ -380,6 +380,31 @@ describe("idempotent uploads (mocked fetch)", () => {
     expect(f).toHaveBeenCalledTimes(1);
   });
 
+  it("a 308 that keeps nothing of the chunk spends the retry budget instead of looping forever", async () => {
+    const calls: string[] = [];
+    const sleeps: number[] = [];
+    const f = vi.fn(async (_url: string, init: RequestInit) => {
+      calls.push(String(init.method));
+      if (calls.length > 60) throw new Error("runaway: the upload never stopped");
+      if (init.method === "POST") return new Response(null, { status: 200, headers: { Location: session } });
+      // the first chunk lands, then the server never keeps another byte
+      return new Response(null, { status: 308, headers: { Range: `bytes=0-${CHUNK_QUANTUM - 1}` } });
+    });
+    const yt = new YouTubeClient({
+      mode: "live",
+      tokenProvider: tokens,
+      fetch: f as unknown as typeof fetch,
+      chunkSize: CHUNK_QUANTUM,
+      maxRetries: 3,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    await expect(yt.uploadVideo(req())).rejects.toThrow(/made no progress at byte 262144/);
+    expect(sleeps).toEqual([2000, 4000, 8000]);
+    expect(calls).toHaveLength(1 + 1 + 4); // init, the landed chunk, 1 + maxRetries stalled resends
+  });
+
   it("refuses a file whose sha256 differs from expectedSha256 before any request", async () => {
     const { yt, f } = harness([]);
     await expect(yt.uploadVideo(req(), { expectedSha256: "0".repeat(64) })).rejects.toThrow(/does not match/);
