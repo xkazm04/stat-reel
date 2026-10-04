@@ -93,4 +93,14 @@ describe("wrapText / fitText / ellipsize", () => {
     expect(measureText(cut, 28, "ui", 0, 500)).toBeLessThanOrEqual(300);
     expect(ellipsize("short", 300, 28, "ui")).toBe("short");
   });
+
+  it("fitText tries `min` itself when max - min is odd (it fits there, so it must say so)", () => {
+    const text = "Hello world";
+    const maxWidth = measureText(text, 29, "ui", 0, 500) + 0.1;
+    expect(fitText(text, { maxWidth, face: "ui", min: 29, max: 40, maxLines: 1 })).toEqual({
+      fontSize: 29,
+      lines: [text],
+      fits: true,
+    });
+  });
 });

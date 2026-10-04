@@ -209,7 +209,11 @@ export function fitText(
     flow?: boolean;
   },
 ): { fontSize: number; lines: string[]; fits: boolean } {
-  for (let size = max; size >= min; size -= 2) {
+  // max, max - 2, ... and always `min` itself, even when max - min is odd
+  const sizes: number[] = [];
+  for (let s = max; s > min; s -= 2) sizes.push(s);
+  if (max >= min) sizes.push(min);
+  for (const size of sizes) {
     const ls = letterSpacingEm * size;
     const lines = wrapText(text, maxWidth, size, face, ls, { weight, breakWords, flow });
     const fits =
