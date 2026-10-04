@@ -13,7 +13,8 @@ import { MAX_FRAMES, parseToolInput } from "./tool-schemas";
 import type { Warehouse } from "./warehouse";
 
 export interface PipelineApi {
-  generateAudio(projectId: string, kind: "tts" | "music" | "all"): Promise<{ job_id: string }>;
+  /** queues the one audio job, which always makes voice (per scene) AND music: there is no voice-only or music-only run */
+  generateAudio(projectId: string): Promise<{ job_id: string }>;
   renderKeyframes(projectId: string, frames_s: number[]): Promise<{ stills: string[] }>;
   renderReport(projectId: string): Promise<unknown>;
   policyCheck(projectId: string, target: PublishTarget): Promise<unknown>;
@@ -70,7 +71,11 @@ export function makeTools(d: ToolDeps) {
       return unknownProject(input.project) ?? d.projects.writeScript(input.project, input.script);
     },
     async generate_audio(input: { project: string; kind?: "tts" | "music" | "all" }) {
-      return unknownProject(input.project) ?? d.pipeline.generateAudio(input.project, input.kind ?? "all");
+      const kind = input.kind ?? "all";
+      // the schema still advertises tts|music (a schema edit waits for the co-pilot re-record); the pipeline would
+      // ignore it and spend on both, so a narrower request is refused rather than silently widened
+      if (kind !== "all") return { error: `kind "${kind}" is not supported: the audio job always generates voice and music together. Call generate_audio with kind "all" (or omit kind).` };
+      return unknownProject(input.project) ?? d.pipeline.generateAudio(input.project);
     },
     async render_keyframes(input: { project: string; frames_s: number[] }) {
       // the schema rejects more than MAX_FRAMES; direct callers get the same error rather than a silent slice

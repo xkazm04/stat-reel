@@ -75,6 +75,22 @@ describe("unknown ids list the valid ones", () => {
   });
 });
 
+describe("generate_audio kind (the audio job always makes voice AND music)", () => {
+  it("a voice-only or music-only request is refused, not silently widened to a full (paid) audio run", async () => {
+    const generateAudio = vi.fn(async () => ({ job_id: "j" }));
+    const { d } = deps();
+    const tools = makeTools({ ...d, pipeline: { ...d.pipeline, generateAudio } });
+    for (const kind of ["tts", "music"] as const) {
+      const r = (await tools.generate_audio({ project: "p-1", kind })) as { error: string };
+      expect(r.error).toMatch(new RegExp(`kind "${kind}" is not supported.*voice and music together.*kind "all"`));
+    }
+    expect(generateAudio).not.toHaveBeenCalled();
+    expect(await tools.generate_audio({ project: "p-1", kind: "all" })).toEqual({ job_id: "j" });
+    expect(await tools.generate_audio({ project: "p-1" })).toEqual({ job_id: "j" });
+    expect(generateAudio).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("one schema for replay and live", () => {
   it("executor rejects what the MCP schema rejects: missing frames_s is an error, not a TypeError", async () => {
     const { tools, renderKeyframes } = deps();
