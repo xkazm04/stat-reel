@@ -6,7 +6,7 @@
 const NICE = [1, 2, 2.5, 5, 10] as const;
 
 /** Round away binary float noise (0.1 * 3 -> 0.3) and normalise -0 to 0. */
-const tidy = (x: number): number => {
+export const tidy = (x: number): number => {
   const r = Number(x.toPrecision(12));
   return r === 0 ? 0 : r;
 };

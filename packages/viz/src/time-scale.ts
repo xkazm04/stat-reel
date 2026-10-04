@@ -5,7 +5,7 @@
  * No React, no DOM.
  */
 import { clamp, type LinearScale, scaleLinear } from "./scales";
-import { niceStep } from "./ticks";
+import { niceStep, tidy } from "./ticks";
 
 export type TimeValue = number | string;
 
@@ -93,7 +93,8 @@ export function declaredDomain(config: DomainConfig | undefined, { nice = false,
   }
   if (!nice) return [min, max];
   const step = niceStep(max - min, count);
-  return [Math.floor(min / step) * step, Math.ceil(max / step) * step];
+  // the same 1e-9 tolerance as niceTicks: 0.07 / 0.01 = 7.000000000000001 must not widen to 0.08
+  return [tidy(Math.floor(min / step + 1e-9) * step), tidy(Math.ceil(max / step - 1e-9) * step)];
 }
 
 /** Position of `value` within a declared domain as 0..1 (clamped); the DataClock progress bar uses it. */

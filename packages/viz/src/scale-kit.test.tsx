@@ -124,6 +124,12 @@ describe("declaredDomain", () => {
     expect(declaredDomain([0, 93], { nice: true, count: 5 })).toEqual([0, 100]);
     expect(declaredDomain([3, 97], { nice: true, count: 5 })).toEqual([0, 100]);
   });
+  it("nice keeps an end that is already a tick multiple, and returns tidy numbers (same tolerance as niceTicks)", () => {
+    expect(declaredDomain([0, 0.07], { nice: true, count: 8 })).toEqual([0, 0.07]);
+    expect(declaredDomain([0, 0.14], { nice: true, count: 8 })).toEqual([0, 0.14]);
+    expect(declaredDomain([0.1, 1.1], { nice: true, count: 5 })).toEqual([0, 1.2]);
+    expect(declaredDomain([0, 0.7], { nice: true, count: 7 })).toEqual([0, 0.7]);
+  });
   it("refuses a missing or degenerate declaration instead of falling back to the sample", () => {
     expect(() => declaredDomain(undefined)).toThrow(/declared/);
     expect(() => declaredDomain([5, 5])).toThrow();
