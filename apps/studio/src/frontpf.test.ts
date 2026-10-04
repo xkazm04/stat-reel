@@ -56,11 +56,17 @@ describe("frontpf", () => {
       { id: "s2", kind: "close" },
     ];
     const m = sceneStrip(scenes, { duration_s: 10, scenes: [{ scene_id: "s1", start_s: 0, end_s: 3 }, { scene_id: "s2", start_s: 3, end_s: 10 }] }, 60);
-    expect(m.measured).toBe(true);
-    expect(m.scenes[1]).toEqual({ id: "s2", label: "close", start: 3, end: 10 });
+    expect(m?.measured).toBe(true);
+    expect(m?.scenes[1]).toEqual({ id: "s2", label: "close", start: 3, end: 10 });
     const d = sceneStrip(scenes, null, 60);
-    expect(d.measured).toBe(false);
-    expect(d.scenes[1]?.start).toBe(30);
+    expect(d?.measured).toBe(false);
+    expect(d?.scenes[1]?.start).toBe(30);
+  });
+  it("draws no strip and claims no length while the draft duration is unknown (no player yet)", () => {
+    const scenes = [{ id: "s1", kind: "hook" }];
+    // the player's meta has not arrived (composition loading, or not built): no "0:01 draft length"
+    expect(sceneStrip(scenes, null, 0)).toBeNull();
+    expect(sceneStrip(scenes, { duration_s: 0, scenes: [] }, 0)).toBeNull();
   });
   it("formats words and the clock", () => {
     expect(numberWord(10)).toBe("Ten");

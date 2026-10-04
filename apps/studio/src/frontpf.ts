@@ -143,13 +143,14 @@ export type StripScene = { id: string; label: string; start: number; end: number
 
 /**
  * Scenes on a time strip: measured timing when Produce has run, else an even split over the
- * draft duration (labelled as such by the caller).
+ * draft duration (labelled as such by the caller). Null while neither is known (the player's meta
+ * has not arrived, or the composition has no player): a strip then would print an invented length.
  */
 export function sceneStrip(
   scenes: { id: string; kind: string }[],
   timing: { duration_s: number; scenes: { scene_id: string; start_s: number; end_s: number }[] } | null | undefined,
   draftDuration: number,
-): { scenes: StripScene[]; duration: number; measured: boolean } {
+): { scenes: StripScene[]; duration: number; measured: boolean } | null {
   if (timing && timing.duration_s > 0) {
     const kind = new Map(scenes.map((s) => [s.id, s.kind]));
     return {
@@ -158,7 +159,8 @@ export function sceneStrip(
       measured: true,
     };
   }
-  const d = draftDuration > 0 ? draftDuration : 1;
+  if (!(draftDuration > 0)) return null;
+  const d = draftDuration;
   const w = scenes.length ? d / scenes.length : d;
   return {
     scenes: scenes.map((s, i) => ({ id: s.id, label: s.kind, start: i * w, end: (i + 1) * w })),
