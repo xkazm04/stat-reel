@@ -240,6 +240,3 @@ export function Callout(props: CalloutProps): ReactElement {
     </svg>
   );
 }
-
-/** Width of one digit column at `fontSize`. */
-export const calloutDigitWidth = (fontSize: number): number => fontSize * DIGIT_EM;

@@ -5,7 +5,6 @@
 export {
   Callout,
   type CalloutProps,
-  calloutDigitWidth,
   DIGIT_EM,
   type DigitColumn,
   digitCount,
