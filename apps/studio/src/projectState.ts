@@ -6,7 +6,7 @@
  * No React, no DOM (unit-tested in projectState.test.ts).
  */
 import type { ProjectStatus } from "@statreel/schemas";
-import { MODE_LABEL, STAGE_LABEL } from "./logic";
+import { JOB_LABEL, MODE_LABEL, STAGE_LABEL } from "./logic";
 
 /** The Front's count buckets; they partition the projects, so the buckets always sum to the total. */
 export type ProjectBucket = "published" | "refused" | "gated" | "notGated";
@@ -34,23 +34,15 @@ export const PROJECT_STATE: Record<ProjectStatus, ProjectState> = {
 export const projectState = (status: string): ProjectState =>
   PROJECT_STATE[status as ProjectStatus] ?? { word: status, bucket: "notGated", flag: null };
 
-/** Job kind -> the owner's word for it (logic.ts has the present-tense verbs for running jobs). */
-export const JOB_LABEL: Record<string, string> = {
-  llm: "Co-pilot draft",
-  audio: "Audio",
-  render: "Render",
-  publish: "Publish",
-  ingest: "Ingest",
-  transform: "Transform",
-  metrics: "Metrics pull",
-};
+/** Job kind -> the owner's word for it: logic.ts owns the one table (logic.ts also has the present-tense verbs). */
+export { JOB_LABEL };
 const JOB_OUTCOME: Record<string, string> = { failed: "failed", refused: "refused" };
 
 /** Flag copy of a failed / refused job ("Render failed: ffmpeg died"); null for any other job state. */
 export function jobFlag(job: { kind: string; status: string; error?: string | null }): string | null {
   const outcome = JOB_OUTCOME[job.status];
   if (!outcome) return null;
-  return `${JOB_LABEL[job.kind] ?? "A job"} ${outcome}${job.error ? `: ${job.error}` : ""}`;
+  return `${JOB_LABEL[job.kind as keyof typeof JOB_LABEL] ?? "A job"} ${outcome}${job.error ? `: ${job.error}` : ""}`;
 }
 
 export type ProjectBucketCounts = Record<ProjectBucket, number> & { total: number };

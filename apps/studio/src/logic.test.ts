@@ -1,4 +1,4 @@
-import type { HeatmapCell } from "@statreel/schemas";
+import { type HeatmapCell, JobKind } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import {
   checkRows,
@@ -115,7 +115,16 @@ describe("stage logic", () => {
     // the same words projectState's jobFlag gives the Rundown (one vocabulary per concept)
     expect(f.hint).toBe(jobFlag({ kind: "audio", status: "refused", error: "refused by elevenlabs: x" }));
     expect(nextAction("scripted", { kind: "weird", status: "failed" }).hint).toBe("A job failed");
+    expect(nextAction("scripted", { kind: "weird", status: "running" }).verb).toBe("Working");
     expect(nextAction("scripted", { kind: "render", status: "queued" }).hint).toBe("waiting in the queue");
+    // every job kind the server can run has owner words: no raw kind token, no fallback
+    for (const kind of JobKind.options) {
+      const run = nextAction("scripted", { kind, status: "running" });
+      const fail = nextAction("scripted", { kind, status: "failed" });
+      expect(run.verb).not.toMatch(/_|^Working$/);
+      expect(fail.hint).not.toMatch(/_|^A job /);
+      expect(fail.hint).toBe(jobFlag({ kind, status: "failed" }));
+    }
     expect(needsYou("published")).toBe(false);
     expect(needsYou("scripted", { kind: "render", status: "queued" })).toBe(false);
   });

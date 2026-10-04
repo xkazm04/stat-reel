@@ -2,7 +2,7 @@
  * Pure studio helpers: mode vocabulary, stage logic, the heatmap decision aid, file URLs and log
  * summaries. No React, no DOM: unit-tested in logic.test.ts.
  */
-import type { CellStatus, HeatmapCell, LicenseClass, Mode, ProjectStatus, Sport } from "@statreel/schemas";
+import type { CellStatus, HeatmapCell, JobKind, LicenseClass, Mode, ProjectStatus, Sport } from "@statreel/schemas";
 
 // ------------------------------------------------------------------ vocabulary
 
@@ -134,7 +134,7 @@ export type JobLike = { kind: string; status: string; progress?: number | null; 
 export type NextAction = { verb: string; hint: string; tone: "you" | "wait" | "done" | "blocked" };
 
 const ACTIVE = new Set(["queued", "running"]);
-const JOB_VERB: Record<string, string> = {
+const JOB_VERB: Record<JobKind, string> = {
   llm: "Co-pilot drafting",
   audio: "Generating audio",
   render: "Rendering",
@@ -142,15 +142,15 @@ const JOB_VERB: Record<string, string> = {
   ingest: "Ingesting",
   transform: "Transforming",
   metrics: "Pulling metrics",
+  gen_render: "Rendering a design",
 };
 
 /**
- * Job kind -> the owner's noun for it, and a job status -> its phrase. These mirror projectState.ts
- * (JOB_LABEL / jobFlag), which imports this module's stage words at load time, so importing it back
- * here would be a cycle; its jobFlag test pins the same wording. No raw `${kind} ${status}` token
- * reaches the owner (status-vocabulary).
+ * Job kind -> the owner's noun for it, and a job status -> its phrase. ONE table: projectState.ts
+ * (jobFlag) reads this one, and the JobKind key type makes a new kind without words a type error.
+ * No raw `${kind} ${status}` token reaches the owner (status-vocabulary).
  */
-const JOB_NOUN: Record<string, string> = {
+export const JOB_LABEL: Record<JobKind, string> = {
   llm: "Co-pilot draft",
   audio: "Audio",
   render: "Render",
@@ -158,6 +158,7 @@ const JOB_NOUN: Record<string, string> = {
   ingest: "Ingest",
   transform: "Transform",
   metrics: "Metrics pull",
+  gen_render: "Design render",
 };
 const ACTIVE_PHRASE: Record<string, string> = { queued: "waiting in the queue", running: "running" };
 
@@ -172,7 +173,7 @@ export function nextAction(status: string, latestJob?: JobLike | null): NextActi
         ? ` · ${Math.round(latestJob.progress * 100)} %`
         : "";
     return {
-      verb: JOB_VERB[latestJob.kind] ?? `Job ${latestJob.kind}`,
+      verb: JOB_VERB[latestJob.kind as JobKind] ?? "Working",
       hint: `${ACTIVE_PHRASE[latestJob.status] ?? "working"}${pct}`,
       tone: "wait",
     };
@@ -180,7 +181,7 @@ export function nextAction(status: string, latestJob?: JobLike | null): NextActi
   if (latestJob && (latestJob.status === "failed" || latestJob.status === "refused") && status !== "published") {
     return {
       verb: latestJob.status === "refused" ? "Review refusal" : "Fix failed job",
-      hint: `${JOB_NOUN[latestJob.kind] ?? "A job"} ${latestJob.status}${latestJob.error ? `: ${latestJob.error}` : ""}`,
+      hint: `${JOB_LABEL[latestJob.kind as JobKind] ?? "A job"} ${latestJob.status}${latestJob.error ? `: ${latestJob.error}` : ""}`,
       tone: "blocked",
     };
   }
