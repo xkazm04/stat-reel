@@ -8,6 +8,7 @@ import {
   clampPos,
   emptyCellLabel,
   gridColCount,
+  gridWidth,
   newTabLabel,
   nextPos,
   sortTopics,
@@ -27,6 +28,21 @@ describe("topic heatmap helpers", () => {
     expect(visibleColumns(0)).toEqual({ first: 1, last: 1, earlier: 0 });
     expect(visibleColumns(24)).toEqual({ first: 1, last: 24, earlier: 0 });
     expect(visibleColumns(30)).toEqual({ first: 7, last: 30, earlier: 6 });
+  });
+  it("gridWidth leaves room for the ghost cell of the widest row's queued or rendering video", () => {
+    const row = (videos: number, queued = 0, running = false) => ({
+      videos: Array.from({ length: videos }, (_, i) => ({ n: i + 1 }) as TopicVideoCell),
+      pending: { queued, running },
+    });
+    // the server's max_videos counts finished videos only (apps/server/src/topics.ts)
+    expect(gridWidth(1, [row(1, 1)])).toBe(2);
+    expect(gridWidth(2, [row(2, 0, true), row(1)])).toBe(3);
+    expect(gridWidth(3, [row(3), row(1, 1)])).toBe(3);
+    expect(gridWidth(0, [row(0, 1)])).toBe(1);
+    expect(gridWidth(0, [])).toBe(0);
+    // with the ghost the widest row's next ordinal is a drawn column
+    const cols = visibleColumns(gridWidth(1, [row(1, 1)]));
+    expect(cols.last).toBe(2);
   });
   it("sortTopics: newest video first, empty rows last, then by label", () => {
     const rows = [

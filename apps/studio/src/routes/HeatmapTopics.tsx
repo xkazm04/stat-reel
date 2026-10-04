@@ -25,6 +25,7 @@ import {
   emptyCellLabel,
   gridColCount,
   type GridPos,
+  gridWidth,
   newTabLabel,
   nextPos,
   sortTopics,
@@ -40,7 +41,7 @@ export function HeatmapTopics() {
   const q = useHeatmapTopics(all);
   const data = q.data;
   const rows = data ? sortTopics(data.topics) : [];
-  const cols = visibleColumns(data?.max_videos ?? 0);
+  const cols = visibleColumns(gridWidth(data?.max_videos ?? 0, rows));
   const n = cols.last - cols.first + 1;
   const ordinals = Array.from({ length: n }, (_, i) => cols.first + i);
   const totalVideos = rows.reduce((a, t) => a + t.videos.length, 0);

@@ -28,6 +28,17 @@ export function visibleColumns(max: number, cap = 24): { first: number; last: nu
   return { first: last - cap + 1, last, earlier: last - cap };
 }
 
+/**
+ * Widest row to draw. The server's `max_videos` counts finished videos only, so a row whose next
+ * video is queued or rendering needs one more column, or its ghost cell falls off the grid.
+ */
+export function gridWidth(maxVideos: number, rows: readonly Pick<TopicRow, "videos" | "pending">[]): number {
+  return rows.reduce(
+    (m, t) => Math.max(m, t.videos.length + (t.pending.running || t.pending.queued > 0 ? 1 : 0)),
+    maxVideos,
+  );
+}
+
 /** Last video first (never-produced rows last), then label A-Z; the server sorts the same way. */
 export function sortTopics<T extends { last_at: string | null; label: string }>(topics: readonly T[]): T[] {
   return [...topics].sort((a, b) => {
