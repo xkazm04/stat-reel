@@ -114,11 +114,17 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
 /**
  * Connection-state wiring of the one EventSource. /events has no replay, so events emitted while the stream
  * was down (every server restart, tsx watch included) are lost; the first open after an error therefore
- * refetches the active queries once. The first open never does (the pages just loaded), and a flapping
+ * refetches the active queries once. The first open never does (the pages just loaded) unless `missed`
+ * says this stream replaces one that was lost (keepConnected), and a flapping
  * connection invalidates once per successful reopen, not per error. Returns the detach function.
  */
-export function watchConnection(es: EventSource, qc: QueryClient, setState: (s: ConnectionState) => void): () => void {
-  let dropped = false;
+export function watchConnection(
+  es: EventSource,
+  qc: QueryClient,
+  setState: (s: ConnectionState) => void,
+  missed = false,
+): () => void {
+  let dropped = missed;
   const onOpen = () => {
     setState("open");
     if (!dropped) return;
@@ -137,6 +143,68 @@ export function watchConnection(es: EventSource, qc: QueryClient, setState: (s: 
   };
 }
 
+/** Delay before re-opening a stream the browser gave up on: 1 s, 2 s, 4 s ... capped at 30 s. */
+export const reopenDelay = (attempt: number): number => Math.min(30_000, 1_000 * 2 ** attempt);
+
+type Schedule = (fn: () => void, ms: number) => () => void;
+const timer: Schedule = (fn, ms) => {
+  const t = setTimeout(fn, ms);
+  return () => clearTimeout(t);
+};
+
+/**
+ * Keep one stream alive. The browser retries a dropped stream by itself (readyState CONNECTING), but it
+ * gives up for good (CLOSED) when a reconnect is answered with a non-200 or a non-SSE body - which is what
+ * the Vite dev proxy returns (500 text/plain) while the API restarts. A CLOSED stream is therefore
+ * replaced after `reopenDelay`, and the replacement's first open refetches the active queries (the gap
+ * lost events). `attach` wires the listeners of each stream and returns their detach. Returns the stop.
+ */
+export function keepConnected(
+  create: () => EventSource,
+  qc: QueryClient,
+  setState: (s: ConnectionState) => void,
+  attach: (es: EventSource) => () => void,
+  schedule: Schedule = timer,
+): () => void {
+  let attempt = 0;
+  let stopped = false;
+  let close: (() => void) | null = null;
+  let cancel: (() => void) | null = null;
+  const start = (missed: boolean) => {
+    cancel = null;
+    const es = create();
+    const detach = attach(es);
+    let unwatch = () => {};
+    close = () => {
+      close = null;
+      unwatch();
+      detach();
+      es.close();
+    };
+    unwatch = watchConnection(
+      es,
+      qc,
+      (s) => {
+        setState(s);
+        if (s === "open") attempt = 0;
+        if (s !== "closed" || stopped) return;
+        close?.();
+        cancel = schedule(() => {
+          setState("connecting");
+          start(true);
+        }, reopenDelay(attempt++));
+      },
+      missed,
+    );
+  };
+  start(false);
+  return () => {
+    stopped = true;
+    cancel?.();
+    close?.();
+  };
+}
+
 export function EventsProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const listeners = useRef(new Set<Listener>());
@@ -147,8 +215,6 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       setState("closed");
       return;
     }
-    const es = new EventSource("/events");
-    const unwatch = watchConnection(es, qc, setState);
     const handle = (msg: MessageEvent<string>) => {
       let data: Record<string, unknown> = {};
       try {
@@ -161,13 +227,19 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       invalidate(qc, e);
       for (const fn of listeners.current) fn(e);
     };
-    es.addEventListener("message", handle);
-    for (const name of NAMED) es.addEventListener(name, handle as EventListener);
-    return () => {
-      unwatch();
-      for (const name of NAMED) es.removeEventListener(name, handle as EventListener);
-      es.close();
-    };
+    return keepConnected(
+      () => new EventSource("/events"),
+      qc,
+      setState,
+      (es) => {
+        es.addEventListener("message", handle);
+        for (const name of NAMED) es.addEventListener(name, handle as EventListener);
+        return () => {
+          es.removeEventListener("message", handle);
+          for (const name of NAMED) es.removeEventListener(name, handle as EventListener);
+        };
+      },
+    );
   }, [qc]);
 
   const hub = useMemo<Hub>(
