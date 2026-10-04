@@ -3,11 +3,11 @@
  * Budget is reserved only inside `produce`, so cache hits and replay fixtures cost nothing.
  */
 import type { AudioAssetSchema, CharAlignment } from "@statreel/schemas";
-import type { Budget } from "./budget";
+import type { Budget, Reservation } from "./budget";
 import { estimateTtsSeconds } from "./budget";
 import { type AudioCache, type CacheEntry, canonicalJson, sha256 } from "./cache";
 import { buildMusicRequest, buildTtsRequest, type ElevenLabsClient, type MusicParams, type TtsParams } from "./client";
-import { TakeRejected } from "./errors";
+import { ProviderError, TakeRejected } from "./errors";
 import { acceptTake } from "./music";
 import type { PlanTierValue } from "./plan-tier";
 
@@ -36,6 +36,16 @@ export interface TtsGeneration {
   asset: DraftAudioAsset;
 }
 
+/**
+ * `Budget.release` means "the provider produced nothing billable", and only an error status from
+ * the provider proves that. A 200 whose body we then reject was generated (and billed); a network
+ * failure or abort after the request left may have been. Those keep the reservation (fail closed).
+ */
+function settleOrRelease(budget: Budget, r: Reservation, e: unknown) {
+  if (e instanceof ProviderError && e.httpStatus >= 400) budget.release(r);
+  else budget.settle(r, r.seconds);
+}
+
 const alignmentEndS = (a: CharAlignment) => a.character_end_times_seconds.reduce((m, x) => Math.max(m, x), 0);
 
 export async function generateTts(
@@ -51,7 +61,7 @@ export async function generateTts(
       deps.budget.settle(r, alignmentEndS(out.alignment));
       return { ...out, model: tts.modelId };
     } catch (e) {
-      deps.budget.release(r);
+      settleOrRelease(deps.budget, r, e);
       throw e;
     }
   });
@@ -112,7 +122,7 @@ export async function generateMusic(
         deps.budget.settle(r, music.musicLengthMs / 1000);
         return { ...out, model: String(base.body?.model_id) };
       } catch (e) {
-        deps.budget.release(r);
+        settleOrRelease(deps.budget, r, e);
         throw e;
       }
     });

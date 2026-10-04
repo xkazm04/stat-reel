@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Budget } from "./budget";
 import { AudioCache } from "./cache";
 import { ElevenLabsClient } from "./client";
-import { AudioRefused, BudgetExceeded, TakeRejected } from "./errors";
+import { AudioRefused, BudgetExceeded, ProviderError, TakeRejected } from "./errors";
 import { generateMusic, generateTts } from "./generate";
 
 let root: string;
@@ -78,6 +78,25 @@ describe("generateTts", () => {
     expect(d.fetch).not.toHaveBeenCalled();
   });
 
+  it("keeps the reservation when the provider answered 200 and the result is unusable (billed)", async () => {
+    const d = deps([
+      () => new Response(JSON.stringify({ audio_base64: "AAAA", alignment: null }), { status: 200 }),
+    ]);
+    await expect(generateTts(d, { voiceId: "v", text, modelId: "m" })).rejects.toBeInstanceOf(ProviderError);
+    expect(d.budget.used("tts")).toBe(4);
+    expect(d.budget.snapshot().tts.generations).toBe(1);
+  });
+
+  it("keeps the reservation when the outcome is unknown (network failure after send)", async () => {
+    const d = deps([
+      () => {
+        throw new TypeError("socket hang up");
+      },
+    ]);
+    await expect(generateTts(d, { voiceId: "v", text, modelId: "m" })).rejects.toBeInstanceOf(ProviderError);
+    expect(d.budget.used("tts")).toBe(4);
+  });
+
   it("releases the reservation when the provider refuses", async () => {
     const d = deps([
       () =>
@@ -103,6 +122,15 @@ describe("generateMusic", () => {
     expect(d.budget.used("music")).toBe(8);
     expect(r.asset).toMatchObject({ kind: "music", model_id: "music_v2" });
     expect(r.asset.prompt_sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("charges a 200 with an empty body: the provider billed the generation", async () => {
+    const d = deps([() => new Response(new Uint8Array(0), { status: 200 })], undefined, async () => 8);
+    const err = await generateMusic(d, { prompt: "bed", musicLengthMs: 8000, forceInstrumental: true }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(ProviderError);
+    expect(d.budget.used("music")).toBe(8);
   });
 
   it("rejects off-length takes, tries the next take, and gives up after maxTakes", async () => {
