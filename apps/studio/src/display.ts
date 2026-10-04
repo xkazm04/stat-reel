@@ -2,7 +2,7 @@
  * Pure display helpers for the front, the heatmap, the rundown and the sources desk. Every figure
  * they return is counted from API data; no React, no DOM (unit-tested in display.test.ts).
  */
-import type { CellStatus, HeatmapCell, LicenseClass, Mode } from "@statreel/schemas";
+import type { CellStatus, HeatmapCell, LicenseClass, Mode, UseCase } from "@statreel/schemas";
 import { type JobLike, needsYou, SPORTS, stageIndex } from "./logic";
 
 /** The status words the UI writes as text (never colour-only; e2e reads them). */
@@ -22,7 +22,10 @@ export const STATUS_AIR: Record<CellStatus, string> = {
 const STATUS_RANK: Record<CellStatus, number> = { go: 3, "data-ready": 2, ask: 1, blocked: 0 };
 export const STATUS_ORDER: CellStatus[] = ["go", "data-ready", "ask", "blocked"];
 
-const KIND_LONG: Record<string, string> = {
+/** The schema's DataKind (packages/schemas exports the zod enum, not its type). */
+type DataKind = UseCase["requires"]["kinds"][number];
+/** Keyed by DataKind: a kind added to the schema without words here is a type error, not a raw token. */
+const KIND_LONG: Record<DataKind, string> = {
   hist: "Historical results",
   bio: "Biographical",
   events: "Event data",
@@ -30,7 +33,7 @@ const KIND_LONG: Record<string, string> = {
   live: "Live / recent results",
   money: "Money / transfers",
 };
-export const kindLong = (k: string): string => KIND_LONG[k] ?? k;
+export const kindLong = (k: string): string => KIND_LONG[k as DataKind] ?? k;
 
 export const LICENCE_WORD: Record<LicenseClass, string> = {
   legal: "Legal",

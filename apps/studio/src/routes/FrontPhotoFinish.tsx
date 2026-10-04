@@ -8,7 +8,7 @@
  * owner. Every number comes from the API; missing data is a labelled state.
  */
 import type { PlayerRef } from "@remotion/player";
-import type { EraAdjustedProps, HeatmapCell, Mode, Source, Sport, UseCase } from "@statreel/schemas";
+import type { EraAdjustedProps, Format, HeatmapCell, Mode, Source, Sport, UseCase } from "@statreel/schemas";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   type CSSProperties,
@@ -75,7 +75,8 @@ import { useProgramme } from "./useProgramme";
 const css = (o: Record<string, string | number>): CSSProperties => o as CSSProperties;
 /** A use case's lane colour: its ident token (Photo Finish maps idents onto the ten lane colours). */
 const laneOf = (id: string | undefined): string => (id ? identVar(id) : "var(--color-text-muted)");
-const FMT_WORD: Record<string, string> = { vertical: "9:16 short", landscape: "16:9 explainer" };
+/** Keyed by the schema's Format, so a new format without words is a type error. */
+const FMT_WORD: Record<Format, string> = { vertical: "9:16 short", landscape: "16:9 explainer" };
 
 // ------------------------------------------------------------------ shared: the opening row
 
