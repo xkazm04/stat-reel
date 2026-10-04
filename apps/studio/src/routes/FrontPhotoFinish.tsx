@@ -401,7 +401,8 @@ function Frame({
               <span>
                 {heatState === "ready" ? (
                   <>
-                    <b className="num">{perMode}</b> lanes in {MODE_LABEL[mode].toLowerCase()} mode: {heatNum}
+                    <b className="num">{perMode}</b> cell{perMode === 1 ? "" : "s"} (use case × sport) in{" "}
+                    {MODE_LABEL[mode].toLowerCase()} mode: {heatNum}
                   </>
                 ) : heatState === "error" ? (
                   // the way itself opens the heatmap, whose Failure retries; no second control inside a link
