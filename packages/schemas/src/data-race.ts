@@ -185,7 +185,7 @@ const DataRacePropsObject = z
         suffix: z.string().max(6).default(""),
       })
       .default({}),
-    /** fixed axis maximum; omit for an axis that follows the current leader */
+    /** fixed axis maximum, >= the largest value (see the refinement); omit for the grow-only axis (max so far, never shrinks) */
     axis_max: z.number().positive().optional(),
     /** attribution line (data source, licence) */
     source_line: z.string().min(1).max(DATA_RACE_LIMITS.sourceLineMaxChars, tooLong("source line", DATA_RACE_LIMITS.sourceLineMaxChars)),
