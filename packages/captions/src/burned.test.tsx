@@ -89,6 +89,15 @@ describe("BurnedCaptions", () => {
     expect(hi.map((e) => text(e))).toEqual(["24"]);
   });
 
+  it("a blank-display word renders no extra space and keeps the word grouping", () => {
+    const ws = [W("Fangio", 0, 0.4), W("", 0.4, 0.6), W("won", 0.6, 1.0)];
+    const [cue] = buildCues(ws, { format: "vertical", fps: 30 });
+    const el = BurnedCaptions({ cues: [cue as Cue], t: 0.7, format: "vertical", theme: videoTheme });
+    expect(text(el)).toBe("Fangio won");
+    const hi = elements(el).filter((e) => e.props.style?.color === videoTheme.captionActive);
+    expect(hi.map((e) => text(e))).toEqual(["won"]);
+  });
+
   it("highlights nothing in a pause between words", () => {
     const hi = elements(render(0.9)).filter((e) => e.props.style?.color === videoTheme.captionActive);
     expect(hi).toHaveLength(0);

@@ -102,6 +102,20 @@ describe("segmentation preferences", () => {
     expect(c?.lines).toEqual(["Wait! Really"]);
   });
 
+  it("a token with a blank display form adds no text: no doubled spaces in lines or burn-in grouping", () => {
+    const words: WordTiming[] = [
+      { scene_id: "s", display: "Fangio", spoken: "Fangio", start_s: 0, end_s: 0.4 },
+      { scene_id: "s", display: "", spoken: "uh", start_s: 0.4, end_s: 0.6 },
+      { scene_id: "s", display: "won", spoken: "won", start_s: 0.6, end_s: 0.9 },
+      { scene_id: "s", display: " ", spoken: "well", start_s: 0.9, end_s: 1.1 },
+      { scene_id: "s", display: "again.", spoken: "again.", start_s: 1.1, end_s: 1.5 },
+    ];
+    const cues = buildCues(words, { format: "vertical", fps: FPS });
+    expect(cues.flatMap((c) => c.lines)).toEqual(["Fangio won again."]);
+    expect(cues.flatMap((c) => c.words)).toEqual(words);
+    expect(joinDisplay(["Fangio", "", "won", " ", "again."])).toBe("Fangio won again.");
+  });
+
   it("returns no cues for no words", () => {
     expect(buildCues([], { format: "vertical", fps: FPS })).toEqual([]);
   });
