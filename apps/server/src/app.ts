@@ -3,19 +3,21 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import type { HttpBindings } from "@hono/node-server";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { compress } from "hono/compress";
 import { etag } from "hono/etag";
 import { streamSSE } from "hono/streaming";
+import { ZodError } from "zod";
 import { PublishTargetSchema, TopicInputSchema, TopicPatchSchema } from "@statreel/schemas";
 import { paths } from "./config";
-import type { EventBus } from "./events";
+import { type EventBus, throttleProgress } from "./events";
 import type { HeatmapService } from "./heatmap-service";
-import type { JobRunner } from "./jobs";
+import { type JobRunner, Refusal } from "./jobs";
 import type { LlmService } from "./llm-service";
 import { buildGenerationMcpServer, buildMcpServer, handleMcp } from "./mcp";
 import type { Pipeline } from "./pipeline";
-import type { ProjectService } from "./projects";
+import { type ProjectService, StalePropsError } from "./projects";
 import type { Tools } from "./tools";
 import { metricsOverview } from "./metrics";
 import type { CalendarService } from "./calendar";
@@ -25,6 +27,8 @@ import type { Db } from "./db";
 import { TopicService } from "./topics";
 import { type GenerationGuard, noGenerationJobs } from "./generation-guard";
 import { GenerationFlow } from "./generation/flow";
+import { FinalizeError } from "./generation/finalize";
+import { QueueConflict } from "./generation/queue";
 import { defaultGate, type GenerationRouteDeps, registerGenerationRoutes } from "./generation/routes";
 
 export type AppDeps = {
@@ -40,8 +44,37 @@ export type AppDeps = {
 const SERVABLE = [paths.renders, paths.audio, paths.board, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
 const TYPES: Record<string, string> = { ".mp4": "video/mp4", ".png": "image/png", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".srt": "text/plain", ".vtt": "text/vtt", ".json": "application/json" };
 
+/**
+ * One place that decides how a thrown value becomes `{error}` + status. Named errors carry their own
+ * status; validation-ish ones (ZodError, bad JSON) are 400; `fallback` is what a plain Error gets
+ * (500 at the top-level handler, 400 inside the legacy inline catches that report user input errors).
+ */
+export function mapError(e: unknown, fallback: 400 | 500): { status: number; body: { error: string; [k: string]: unknown } } {
+  if (e instanceof HTTPException) return { status: e.status, body: { error: e.message } };
+  if (e instanceof QueueConflict) return { status: 409, body: { error: e.message, job: e.job } };
+  if (e instanceof StalePropsError) return { status: 409, body: { error: e.message } };
+  if (e instanceof FinalizeError) return { status: e.status, body: { error: e.message } };
+  if (e instanceof Refusal) return { status: 422, body: { error: e.message } };
+  if (e instanceof ZodError) return { status: 400, body: { error: e.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ") } };
+  if (e instanceof SyntaxError) return { status: 400, body: { error: `malformed JSON: ${e.message}` } };
+  if (e instanceof Error && e.name === "SqliteError") {
+    console.error(`[api] database error: ${e.stack ?? e.message}`);
+    return { status: 500, body: { error: "database error" } };
+  }
+  const message = e instanceof Error ? e.message : String(e);
+  return { status: fallback, body: { error: message } };
+}
+
 export function buildApp(d: AppDeps) {
   const app = new Hono<{ Bindings: HttpBindings }>();
+
+  // JSON for every failure: the studio's request() parses `{error}`, Hono's default is a plain-text 500/404.
+  app.onError((err, c) => {
+    const { status, body } = mapError(err, 500);
+    if (status >= 500) console.error(`[api] ${c.req.method} ${c.req.path} -> ${status}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+    return c.json(body, status as 500);
+  });
+  app.notFound((c) => (/^\/(api|events|mcp)(\/|$)/.test(c.req.path) ? c.json({ error: "not found" }, 404) : c.text("404 Not Found", 404)));
 
   // Reads revalidate instead of re-downloading: gzip, a strong ETag (a matching If-None-Match gets a
   // bodyless 304) and `no-cache`, so a screen always sees fresh data but unchanged JSON costs no bytes.
@@ -114,7 +147,11 @@ export function buildApp(d: AppDeps) {
   });
 
   // ---- calendar (channels + scheduling of composed videos; ADR 006)
-  const bad = (c: { json: (b: unknown, s: 400) => Response }, e: unknown) => c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+  // Validation errors stay 400 (plain Error, ZodError, bad JSON); a failing database is a server bug, so it is 500 and logged.
+  const bad = (c: Context, e: unknown) => {
+    const { status, body } = mapError(e, 400);
+    return c.json(body, status as 400);
+  };
   app.get("/api/calendar", (c) => {
     const titles = new Map(d.projects.list().map((p) => [p.id, p]));
     const slots = d.calendar.list({ from: c.req.query("from"), to: c.req.query("to") }).map((s) => ({ ...s, project: titles.get(s.project_id) ?? null }));
@@ -278,11 +315,25 @@ export function buildApp(d: AppDeps) {
   // ---- SSE
   app.get("/events", (c) =>
     streamSSE(c, async (stream) => {
-      const off = d.bus.subscribe((e) => void stream.writeSSE({ event: e.type, data: JSON.stringify(e) }));
-      const ping = setInterval(() => void stream.writeSSE({ event: "ping", data: "{}" }), 15_000);
-      await new Promise<void>((resolve) => stream.onAbort(() => resolve()));
-      clearInterval(ping);
-      off();
+      let off = () => {};
+      const throttle = throttleProgress((e) => {
+        // a failed write means the client is gone: unsubscribe now instead of failing on every later event
+        stream.writeSSE({ event: e.type, data: JSON.stringify(e) }).catch(() => cleanup());
+      });
+      const ping = setInterval(() => stream.writeSSE({ event: "ping", data: "{}" }).catch(() => cleanup()), 15_000);
+      let release = () => {};
+      const cleanup = () => {
+        clearInterval(ping);
+        throttle.dispose();
+        off();
+        release();
+      };
+      off = d.bus.subscribe((e) => throttle.push(e));
+      await new Promise<void>((resolve) => {
+        release = resolve;
+        stream.onAbort(cleanup);
+      });
+      cleanup();
     }),
   );
 
