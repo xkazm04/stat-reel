@@ -84,16 +84,20 @@ export function runWorker(o: RunWorkerOpts): Promise<WorkerMessage> {
     const note = (n: string) => {
       if (notes++ < MAX_NOTES) o.onNote?.(n);
     };
+    const onLine = (line: string) => {
+      const parsed = parseWorkerLine(line);
+      if (parsed.kind === "bad") note(parsed.note);
+      if (parsed.kind !== "msg") return;
+      if (parsed.msg.type === "done") done = parsed.msg;
+      else if (parsed.msg.type === "error") error = parsed.msg.message ?? "render failed";
+      o.onMessage?.(parsed.msg);
+    };
     child.stdout.on("data", (d: Buffer) => {
       buf += d.toString("utf8");
       for (let nl = buf.indexOf("\n"); nl >= 0; nl = buf.indexOf("\n")) {
-        const parsed = parseWorkerLine(buf.slice(0, nl));
+        const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        if (parsed.kind === "bad") note(parsed.note);
-        if (parsed.kind !== "msg") continue;
-        if (parsed.msg.type === "done") done = parsed.msg;
-        else if (parsed.msg.type === "error") error = parsed.msg.message ?? "render failed";
-        o.onMessage?.(parsed.msg);
+        onLine(line);
       }
       if (buf.length > STDOUT_LINE_CAP) {
         note(`worker line over ${STDOUT_LINE_CAP} bytes dropped`);
@@ -112,6 +116,9 @@ export function runWorker(o: RunWorkerOpts): Promise<WorkerMessage> {
     });
     child.on("close", (code) => {
       cleanup();
+      // stdout has ended: a last line written without "\n" (process.stdout.write, then exit) is still a line
+      if (buf.trim()) onLine(buf);
+      buf = "";
       if (reason === "cancelled") return reject(new Error("render cancelled"));
       if (reason === "timeout") return reject(new Error(`render worker timed out after ${Math.round(o.timeoutMs / 1000)} s and was killed`));
       if (done && code === 0) return resolve(done);

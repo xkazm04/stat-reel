@@ -35,6 +35,11 @@ describe("runWorker", () => {
     expect(notes[0]).toContain("malformed worker line");
   });
 
+  it("a last line without a trailing newline is still read (the done message is not lost at exit)", async () => {
+    const done = await node(`process.stdout.write(JSON.stringify({type:"done",output:"tail"}))`);
+    expect(done).toMatchObject({ type: "done", output: "tail" });
+  });
+
   it("caps stderr: a flood of stderr does not grow the error beyond the tail", async () => {
     const err = await node(`process.stderr.write("x".repeat(${STDERR_CAP * 4})+"THE-END"); process.exit(3)`).catch((e: Error) => e);
     expect((err as Error).message).toContain("exited 3");
