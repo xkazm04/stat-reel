@@ -19,8 +19,8 @@ every sweep too.
 - always: `pnpm -s typecheck` (tsc -b) and targeted `npx vitest run <files>`; `pnpm -s test` before a round's last commit
 - touched TS: `npx biome lint <touched files>` - never `--write` on directories (HEAD is not Biome-clean); `pnpm lint:ratchet` must stay green
 - pipeline/**: `uv run --project pipeline pytest`
-- policy/**: `opa test policy`
-- pipeline/dbt/**: `pnpm check --only dbt` (dbt parse)
+- policy/**: `pnpm check --only opa` (uses `.tools/opa`; bare `opa` is not on PATH)
+- pipeline/dbt/**: `pnpm check --only dbt-parse`
 - whole offline suite: `pnpm check` (PASS/FAIL table) - run by the director after each wave
 - slow: `pnpm e2e` (replay) - director only, at the end of the loop
 
