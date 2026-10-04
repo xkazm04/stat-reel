@@ -23,13 +23,18 @@ export type GenerationMcpTools = {
   validate_generation_output(input: { job_id: string }): Promise<unknown>;
 };
 
+/**
+ * The plan's props must match it exactly (checkGenerationRules: same entities, same period count, an event per
+ * plan event), so the plan takes the props' limits: a plan the props can never carry is refused here, not after
+ * the session has written props around it.
+ */
 const TimingInput = z.object({
-  periods: z.array(z.string().min(1)).min(2).max(600),
-  entities: z.array(z.string().min(1)).min(1).max(40),
-  values: z.record(z.array(z.number().finite().nullable()).max(600)),
+  periods: z.array(z.string().min(1)).min(2).max(DATA_RACE_LIMITS.maxPeriods),
+  entities: z.array(z.string().min(1)).min(2).max(DATA_RACE_LIMITS.maxEntities),
+  values: z.record(z.array(z.number().finite().nullable()).max(DATA_RACE_LIMITS.maxPeriods)),
   events: z
     .array(z.object({ id: z.string().min(1), period: z.number().int().nonnegative(), label: z.string().min(1).max(80), dwell: z.number().nonnegative().max(200).optional(), spread: z.number().positive().max(10).optional() }))
-    .max(30)
+    .max(DATA_RACE_LIMITS.maxEvents)
     .default([]),
   opts: z
     .object({

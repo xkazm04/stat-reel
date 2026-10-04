@@ -87,6 +87,23 @@ describe("generation MCP tools", () => {
     expect(await t.compute_timing_plan({ ...input(), events: [{ id: "x", period: 999, label: "x" }] })).toMatchObject({ ok: false, error: expect.stringMatching(/outside/) });
   });
 
+  it("compute_timing_plan refuses a plan the props could never match (DATA_RACE_LIMITS: entities 2-10, periods <= 120, events <= 12)", async () => {
+    start();
+    const t = tools();
+    const base = input();
+    const n = base.periods.length;
+    const eleven = { ...base, entities: [...base.entities, "extra"], values: { ...base.values, extra: Array.from({ length: n }, () => 1) } };
+    expect(await t.compute_timing_plan(eleven)).toMatchObject({ ok: false, error: expect.stringMatching(/^entities:/) });
+    const first = base.entities[0] as string;
+    expect(await t.compute_timing_plan({ ...base, entities: [first], values: { [first]: base.values[first] } })).toMatchObject({ ok: false, error: expect.stringMatching(/^entities:/) });
+    const periods = Array.from({ length: 121 }, (_, i) => `p${i}`);
+    const long = { ...base, periods, values: Object.fromEntries(base.entities.map((e) => [e, periods.map(() => 1)])), events: [] };
+    expect(await t.compute_timing_plan(long)).toMatchObject({ ok: false, error: expect.stringMatching(/periods/) });
+    const events = Array.from({ length: 13 }, (_, i) => ({ id: `e${i}`, period: i, label: `event ${i}` }));
+    expect(await t.compute_timing_plan({ ...base, events })).toMatchObject({ ok: false, error: expect.stringMatching(/^events:/) });
+    expect(await t.compute_timing_plan({ ...base, events: events.slice(0, 12) })).toMatchObject({ ok: true });
+  });
+
   it("validate_generation_output is the finalize validation: errors verbatim, then clean on the fixture", async () => {
     const p = start();
     const t = tools();
