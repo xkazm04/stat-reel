@@ -75,6 +75,7 @@ export function migrateTopics(db: Database.Database, now: () => string = () => n
      values (?, ?, ?, ?, null, ?, ?, null, ?, ?, ?, ?, ?)`,
   );
   const known = (key: string | null | undefined): key is string => !!key && !!db.prepare("select 1 from topics where key = ?").get(key);
+  // the id carries the whole render id: an 8-hex prefix collided (insert or ignore dropped the row, every run)
   for (const r of rows) {
     const fromSport = r.sport ? SPORT_TOPIC[r.sport] : undefined;
     const [key, source] = known(r.topic) ? [r.topic, "project.topic"] : known(fromSport) ? [fromSport, "project.sport"] : [UNASSIGNED_TOPIC, "unassigned"];
@@ -86,6 +87,6 @@ export function migrateTopics(db: Database.Database, now: () => string = () => n
     } catch {
       duration = null;
     }
-    ins.run(`vd-${r.render_id.replace(/-/g, "").slice(0, 8)}`, key, label, source, r.project_id, r.render_id, r.title ?? r.project_id, r.format, duration, relativeToData(r.path), r.created_at);
+    ins.run(`vd-${r.render_id.replace(/-/g, "")}`, key, label, source, r.project_id, r.render_id, r.title ?? r.project_id, r.format, duration, relativeToData(r.path), r.created_at);
   }
 }

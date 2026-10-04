@@ -118,7 +118,8 @@ export class TopicService {
    */
   recordVideo(v: NewVideo): string {
     const topic = this.get(v.topic_key) ?? this.get(UNASSIGNED_TOPIC)!;
-    const id = `vd-${randomUUID().slice(0, 8)}`;
+    // a full UUID: with 8 hex digits a collision on the primary key was ignored and then reported as a missing row
+    const id = `vd-${randomUUID().replace(/-/g, "")}`;
     const abs = v.path.replace(/\\/g, "/");
     const rel = /^([a-zA-Z]:)?\//.test(abs) ? relativeToData(abs) : abs;
     const res = this.sql

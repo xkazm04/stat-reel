@@ -99,6 +99,24 @@ describe("seed and migrations", () => {
     again.$client.close();
   });
 
+  it("backfills one ledger row per render even when two render ids share their first 8 hex digits", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "topics-")), "old.sqlite");
+    const old = new Database(file);
+    old.exec(`
+      create table projects (id text primary key, title text not null, use_case_id text not null, sport text not null, format text not null, mode text not null, status text not null, created_at text not null);
+      create table renders (id text primary key, project_id text not null, job_id text not null, format text not null, path text not null, manifest_path text not null, checks_json text not null, policy_json text, created_at text not null);
+      insert into projects values ('p-1', 'Fangio', 'era-adjusted-rankings', 'F1', 'landscape', 'x', 'rendered', '2026-10-01T00:00:00.000Z');
+      insert into renders values ('3f2a9c1e-0001-4000-8000-000000000001', 'p-1', 'j1', 'landscape', '/d/renders/p-1/a/video.mp4', 'm', '{}', null, '2026-10-02T00:00:00.000Z');
+      insert into renders values ('3f2a9c1e-0002-4000-8000-000000000002', 'p-1', 'j2', 'landscape', '/d/renders/p-1/b/video.mp4', 'm', '{}', null, '2026-10-03T00:00:00.000Z');
+    `);
+    old.close();
+    const db = openDb(file);
+    const ids = (db.$client.prepare("select id, render_id from videos order by created_at").all() as { id: string; render_id: string }[]);
+    expect(ids.map((v) => v.render_id)).toEqual(["3f2a9c1e-0001-4000-8000-000000000001", "3f2a9c1e-0002-4000-8000-000000000002"]);
+    expect(new Set(ids.map((v) => v.id)).size).toBe(2);
+    db.$client.close();
+  });
+
   it("does not overwrite a topic the owner already picked when the backfill runs again", () => {
     const { db, cases } = setup();
     const c = cases.create({ ...idea, domain: "f1", topic: "motorsport-endurance" });
