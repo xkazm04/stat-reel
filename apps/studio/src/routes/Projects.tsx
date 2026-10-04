@@ -284,7 +284,9 @@ function RaceLane({
       </div>
       <div className="rs-next" role="cell">
         {job ? (
-          <span className="rs-job" role="status">
+          // not a live region: render progress ticks up to once per percent, and a polite region per
+          // running lane would narrate every tick; the sheet's one status line says what is running
+          <span className="rs-job">
             <span className="bar-track">
               <span className="bar-fill" style={{ width: pct(lp?.progress ?? job.progress) }} />
             </span>
