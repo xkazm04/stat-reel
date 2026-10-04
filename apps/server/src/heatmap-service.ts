@@ -13,12 +13,25 @@ import type { Warehouse } from "./warehouse";
 /** The pipeline's own freshness windows, keyed sport|kind|source - one number, read from where it is declared. */
 function stalenessWindows(): Map<string, number> {
   const out = new Map<string, number>();
+  const file = path.join(paths.repo, "pipeline", "capabilities.yaml");
+  let text: string;
   try {
-    const specs = (parse(readFileSync(path.join(paths.repo, "pipeline", "capabilities.yaml"), "utf8")) ?? []) as Array<{
-      sport: string; kind: string; source_id: string; checks?: { max_staleness_days?: number };
-    }>;
-    for (const s of specs) if (typeof s.checks?.max_staleness_days === "number") out.set(`${s.sport}|${s.kind}|${s.source_id}`, s.checks.max_staleness_days);
-  } catch { /* no spec file: no windows, evidence is judged only at evaluation time */ }
+    text = readFileSync(file, "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return out; // no spec file: no windows, evidence is judged only at evaluation time
+    throw e;
+  }
+  // a spec that does not parse must not read as "no windows": every stale pass would count as fresh evidence
+  let specs: unknown;
+  try {
+    specs = parse(text) ?? [];
+  } catch (e) {
+    throw new Error(`pipeline/capabilities.yaml does not parse: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (!Array.isArray(specs)) throw new Error("pipeline/capabilities.yaml must be a list of capability specs");
+  for (const s of specs as Array<{ sport: string; kind: string; source_id: string; checks?: { max_staleness_days?: number } }>) {
+    if (typeof s?.checks?.max_staleness_days === "number") out.set(`${s.sport}|${s.kind}|${s.source_id}`, s.checks.max_staleness_days);
+  }
   return out;
 }
 

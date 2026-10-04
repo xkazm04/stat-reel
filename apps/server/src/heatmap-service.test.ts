@@ -1,4 +1,8 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { paths } from "./config";
 import { heatmapSnapshots, openDb } from "./db";
 import type { Capability } from "./heatmap";
 import { HeatmapService } from "./heatmap-service";
@@ -71,5 +75,23 @@ describe("HeatmapService snapshots (freshness)", () => {
     const caps = (await svc.capabilities()) as Capability[];
     expect(caps.find((c) => c.kind === "live")!.max_staleness_days).toBe(35);
     expect(caps.find((c) => c.kind === "hist")!.max_staleness_days).toBeNull();
+  });
+
+  it("a capabilities.yaml that does not parse is an error, not 'no freshness windows' (stale evidence would count as fresh)", async () => {
+    const repo = paths.repo;
+    const root = mkdtempSync(path.join(tmpdir(), "statreel-heatmap-"));
+    try {
+      Object.assign(paths, { repo: root });
+      const svc = new HeatmapService(openDb(":memory:"), fakeWh(() => [cap("live", "2026-10-01T00:00:00")]), new Set());
+      // no spec file at all: no windows, evidence is judged only at evaluation time
+      expect((await svc.capabilities())[0]?.max_staleness_days).toBeNull();
+      mkdirSync(path.join(root, "pipeline"));
+      for (const bad of ["- sport: F1\n  checks: {max_staleness_days: 35\n", "sport: F1\n"]) {
+        writeFileSync(path.join(root, "pipeline", "capabilities.yaml"), bad);
+        await expect(svc.capabilities()).rejects.toThrow(/capabilities\.yaml/);
+      }
+    } finally {
+      Object.assign(paths, { repo });
+    }
   });
 });
