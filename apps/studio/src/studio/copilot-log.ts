@@ -99,3 +99,24 @@ export function draftBlockReason(jobs: readonly { kind: string; status: string }
     ? "A produce is running; draft once it ends (new props would leave the render without timing)."
     : null;
 }
+
+/**
+ * The newest llm job of one co-pilot session (its params name the session), else null. The panel's status
+ * chip reads this, so viewing an older session shows how THAT session ended, not the project's newest draft.
+ */
+export function sessionJob<J extends { kind: string; params_json: string }>(
+  jobs: readonly J[],
+  sessionId: string | null,
+): J | null {
+  if (!sessionId) return null;
+  return (
+    jobs.find((j) => {
+      if (j.kind !== "llm") return false;
+      try {
+        return (JSON.parse(j.params_json) as { sessionId?: unknown } | null)?.sessionId === sessionId;
+      } catch {
+        return false;
+      }
+    }) ?? null
+  );
+}

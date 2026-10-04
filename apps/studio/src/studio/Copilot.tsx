@@ -10,7 +10,7 @@ import { StatusChip } from "../components/glyphs";
 import { Failure } from "../components/ui";
 import { useEvents } from "../events";
 import { relTime, summarizeToolInput, toolResultStatus } from "../logic";
-import { activeLlmJob, draftBlockReason, isNearBottom, mergeEvents, toRows } from "./copilot-log";
+import { activeLlmJob, draftBlockReason, isNearBottom, mergeEvents, sessionJob, toRows } from "./copilot-log";
 
 const shortTool = (t: string) => t.replace(/^mcp__statreel__/, "");
 
@@ -27,7 +27,6 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
 
   // live events for this project since mount (they may arrive before the POST returns)
   const live = useEvents((e) => e.type === "llm.event" && e.project_id === pid);
-  const job = detail.jobs.find((j) => j.kind === "llm");
   const activeJob = activeLlmJob(detail.jobs);
   const running = !!activeJob;
   // a produce chain reads the latest props: no draft may store new ones under it (useProduce blocks the converse)
@@ -47,6 +46,8 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
   }, [log.data, live, session]);
   const rows = useMemo(() => toRows(events), [events]);
 
+  // the chip speaks for the session on screen: its own newest job, not the project's newest draft
+  const job = sessionJob(detail.jobs, session);
   const lastResult = [...events].reverse().find((e): e is Extract<LlmEvent, { type: "result" }> => e.type === "result");
   const refused = job?.status === "refused" || !!lastResult?.refusal;
 
@@ -83,7 +84,7 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
   };
 
   const state = running
-    ? { s: "data-ready" as const, l: job?.status === "queued" ? "QUEUED" : "DRAFTING" }
+    ? { s: "data-ready" as const, l: activeJob?.status === "queued" ? "QUEUED" : "DRAFTING" }
     : refused
       ? { s: "ask" as const, l: "REFUSED" }
       : job?.status === "failed"
