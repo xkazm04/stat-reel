@@ -115,6 +115,9 @@ export async function checkReadOnlyLlmSql(wh: Warehouse, sql: string): Promise<v
   });
 }
 
+/** The one statement the guard accepted, without its closing `;` (and any line comments after it) so it can be wrapped. */
+const stripTrailingTerminator = (sql: string) => sql.replace(/;\s*(--[^\n]*\s*)*$/, "");
+
 /** JSON-safe values: BIGINT -> number (ids and counts are far below 2^53), dates -> ISO strings. */
 function normalizeValue(v: unknown): unknown {
   if (typeof v === "bigint") return Number(v);
@@ -166,7 +169,8 @@ export class Warehouse {
     }, timeoutMs);
     let rows: Record<string, unknown>[];
     try {
-      rows = await this.rows(`select * from (${sql.replace(/;\s*$/, "")}) limit ${ROW_CAP + 1}`, [], conn);
+      // the wrap sits on its own lines: a trailing `-- comment` would otherwise swallow the closing paren
+      rows = await this.rows(`select * from (\n${stripTrailingTerminator(sql)}\n) limit ${ROW_CAP + 1}`, [], conn);
     } catch (err) {
       if (timedOut) throw new Error(queryTimeoutMessage(timeoutMs));
       throw err;

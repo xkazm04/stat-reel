@@ -54,6 +54,15 @@ describe.skipIf(!hasWarehouse)("warehouse (llm schema only, read-only)", () => {
     expect(m.get(`${k}#rank_adjusted`)).toBe(1);
   });
 
+  it("runs a valid query that ends in a line comment (with or without a semicolon before it)", async () => {
+    for (const sql of [
+      "select display_name from llm.f1_driver_era_adjusted where rank_adjusted <= 3 -- the top three",
+      "select display_name from llm.f1_driver_era_adjusted where rank_adjusted <= 3; -- the top three",
+    ]) {
+      expect((await wh.query(sql)).rows.length).toBeGreaterThan(0);
+    }
+  });
+
   it("caps rows and reports lineage licence class", async () => {
     const res = await wh.query("select a.fact_key from llm.f1_driver_seasons a, llm.f1_driver_seasons b where b.season = 2024");
     expect(res.rows.length).toBeLessThanOrEqual(5000);
