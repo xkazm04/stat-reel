@@ -21,7 +21,7 @@ import { GenerationQueue } from "./generation/queue";
 import { queueGuard } from "./generation-guard";
 import { GenerationEventsRelay } from "./generation/relay";
 import { HeatmapService } from "./heatmap-service";
-import { JobRunner } from "./jobs";
+import { JobRunner, startRetention } from "./jobs";
 import { CaseIdeas, StyleLibrary } from "./library";
 import { LlmService } from "./llm-service";
 import { IMPLEMENTED_COMPOSITIONS, Pipeline } from "./pipeline";
@@ -58,6 +58,7 @@ export async function createServer() {
   const finalizer = new GenerationFinalizer({ db, board, dataRoot: genData, boardRoot: paths.board, bus, facts: (refs) => wh.facts(refs) });
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
+  startRetention(runner); // daily: resume() prunes at boot only
   const app = buildApp({ generationGuard: queueGuard(queue), db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, finalizer, gate: makeGate(db), mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });
   const dist = path.join(repoRoot, "apps", "studio", "dist");
   if (existsSync(dist)) {

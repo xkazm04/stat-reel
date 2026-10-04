@@ -25,7 +25,7 @@ export type JobContext = { id: string; signal: AbortSignal; progress: (p: number
 export type Handler = (params: Record<string, unknown>, ctx: JobContext) => Promise<Record<string, unknown>>;
 export type Job = typeof jobs.$inferSelect;
 
-/** Terminal job rows older than this many days are pruned at startup (STATREEL_JOB_RETENTION_DAYS, default 30). */
+/** Terminal job rows (and the event rows of terminal sessions/generation jobs) older than this many days are pruned at startup and daily (STATREEL_JOB_RETENTION_DAYS, default 30). */
 export function jobRetentionDays(env: Record<string, string | undefined> = process.env): number {
   const n = Number(env.STATREEL_JOB_RETENTION_DAYS);
   return Number.isFinite(n) && n > 0 ? n : 30;
@@ -77,6 +77,35 @@ export class JobRunner {
     const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
     const stale = and(inArray(jobs.status, ["succeeded", "failed", "cancelled", "refused"]), or(lt(jobs.finished_at, cutoff), and(lt(jobs.created_at, cutoff), isNull(jobs.finished_at))));
     return this.db.delete(jobs).where(stale).run().changes;
+  }
+
+  /**
+   * Retention for the append-only event tables: `llm_events` of sessions that ended, and
+   * `generation_job_events` of generation jobs that reached a terminal status, both more than `days` ago.
+   * The session / job rows stay (videos and board items reference them). The generation relay only reads
+   * `id > max(id)` seen at start (AUTOINCREMENT ids never come back), and a terminal job's events were
+   * relayed long before the cutoff, so pruning cannot lose or replay a relayed event.
+   */
+  pruneEvents(days = jobRetentionDays()): { llm: number; generation: number } {
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const raw = this.db.$client;
+    const llm = raw.prepare("delete from llm_events where session_id in (select id from llm_sessions where ended_at is not null and ended_at < ?)").run(cutoff).changes;
+    const generation = raw
+      .prepare(
+        "delete from generation_job_events where job_id in (select id from generation_jobs where status in ('done','failed','cancelled') and coalesce(finished_at, updated_at) < ?)",
+      )
+      .run(cutoff).changes;
+    return { llm, generation };
+  }
+
+  /** Both retention sweeps; a failure is logged, never thrown (it runs from a timer and from boot). */
+  retain(days = jobRetentionDays()): void {
+    try {
+      this.prune(days);
+      this.pruneEvents(days);
+    } catch (err) {
+      console.warn(`[jobs] retention sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   cancel(id: string, cause: CancelCause = "owner"): void {
@@ -132,7 +161,7 @@ export class JobRunner {
         console.warn(`[jobs] startup sweep failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    this.prune();
+    this.retain();
     this.db.update(jobs).set({ status: "queued", started_at: null, progress: 0 }).where(eq(jobs.status, "running")).run();
     const kinds = new Set(this.db.select({ kind: jobs.kind }).from(jobs).where(eq(jobs.status, "queued")).all().map((r) => r.kind));
     for (const k of kinds) this.pump(k);
@@ -198,4 +227,12 @@ export class JobRunner {
     const job = this.get(id);
     this.bus.emit({ type: `job.${status}`, id, kind: job?.kind, project_id: job?.project_id, error, result });
   }
+}
+
+/** Daily retention sweep for a long-lived server (resume() only covers boot); the timer never keeps the process alive. */
+export const RETENTION_INTERVAL_MS = 86_400_000;
+export function startRetention(runner: JobRunner, everyMs = RETENTION_INTERVAL_MS): NodeJS.Timeout {
+  const t = setInterval(() => runner.retain(), everyMs);
+  t.unref();
+  return t;
 }
