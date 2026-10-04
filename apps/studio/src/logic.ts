@@ -317,9 +317,13 @@ export function relTime(iso: string | null | undefined, now = Date.now()): strin
   if (!iso) return "—";
   const d = (now - new Date(iso).getTime()) / 1000;
   if (Number.isNaN(d)) return iso;
-  if (d < 60) return `${Math.max(0, Math.round(d))} s ago`;
-  if (d < 3600) return `${Math.round(d / 60)} min ago`;
-  if (d < 86400) return `${Math.round(d / 3600)} h ago`;
+  // each unit is chosen AFTER rounding, so 59.6 s reads "1 min", never "60 s" (and 3599 s "1 h")
+  const s = Math.max(0, Math.round(d));
+  if (s < 60) return `${s} s ago`;
+  const m = Math.round(d / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(d / 3600);
+  if (h < 24) return `${h} h ago`;
   return `${Math.round(d / 86400)} d ago`;
 }
 

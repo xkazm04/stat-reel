@@ -9,6 +9,7 @@ import {
   fileUrl,
   needsYou,
   nextAction,
+  relTime,
   stageIndex,
   summarizeToolInput,
   timecode,
@@ -170,6 +171,25 @@ describe("formatting helpers", () => {
         "monetized",
       ),
     ).toEqual([1, 0]);
+  });
+});
+
+describe("relTime", () => {
+  const now = Date.parse("2026-10-04T12:00:00Z");
+  const ago = (s: number) => relTime(new Date(now - s * 1000).toISOString(), now);
+  it("words an age in the largest unit it fills", () => {
+    expect(ago(0)).toBe("0 s ago");
+    expect(ago(30)).toBe("30 s ago");
+    expect(ago(90)).toBe("2 min ago");
+    expect(ago(3 * 3600)).toBe("3 h ago");
+    expect(ago(3 * 86400)).toBe("3 d ago");
+    expect(relTime(null, now)).toBe("—");
+    expect(relTime("not a date", now)).toBe("not a date");
+  });
+  it("never rounds up to a full next unit (no 60 s, 60 min or 24 h)", () => {
+    expect(ago(59.6)).toBe("1 min ago");
+    expect(ago(3599)).toBe("1 h ago");
+    expect(ago(86399)).toBe("1 d ago");
   });
 });
 
