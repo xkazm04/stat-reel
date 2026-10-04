@@ -148,7 +148,12 @@ export function planBedFromTimingPlan(plan: BedTimingPlan, opts: BedOptions): Be
     cues.push(mk(0, "bed", 0, musicEnd, Math.min(fadeIn, musicEnd / 2), fadeOutS));
   } else {
     // one take of length L, placed n times with overlap xf so n segments exactly tile [0, musicEnd]
-    const l0 = Math.max(minTakeS, Math.min(opts.loopS ?? 30, budgetS / 2));
+    const loopS = opts.loopS ?? 30;
+    if (!(loopS > 0)) throw new RangeError(`loopS must be a positive number of seconds, got ${loopS}`);
+    const l0 = Math.max(minTakeS, Math.min(loopS, budgetS / 2));
+    // each segment must advance: a crossfade >= the take never tiles the bed (n -> Infinity)
+    if (!(xf >= 0 && xf < l0))
+      throw new RangeError(`crossfadeS must be >= 0 and shorter than the ${l0} s loop take, got ${xf}`);
     const n = Math.max(2, Math.ceil((musicEnd - xf) / (l0 - xf)));
     const len = Math.ceil(((musicEnd + (n - 1) * xf) / n) * 1000) / 1000;
     takes.push({ takeId: "bed-loop", lengthMs: Math.round(len * 1000) });

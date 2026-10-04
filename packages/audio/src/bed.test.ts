@@ -103,6 +103,22 @@ describe("planBedFromTimingPlan", () => {
     expect(() => attachBedSources(b.cues, {})).toThrow(/bed-loop/);
   });
 
+  it("rejects loop options that leave gaps or no cues instead of planning them", () => {
+    const p = plan(90, []);
+    // a negative crossfade left 1 s holes between loop segments while coverage claimed them scored
+    expect(() => planBedFromTimingPlan(p, { fps: FPS, budgetS: 75, crossfadeS: -1 })).toThrow(/crossfadeS/);
+    // NaN loopS planned zero cues and a NaN-length take
+    expect(() => planBedFromTimingPlan(p, { fps: FPS, budgetS: 75, loopS: Number.NaN })).toThrow(/loopS/);
+  });
+
+  it("rejects a crossfade as long as the loop take (it never advanced: an endless loop)", () => {
+    const p = plan(90, []);
+    expect(() => planBedFromTimingPlan(p, { fps: FPS, budgetS: 75, crossfadeS: 30 })).toThrow(/crossfadeS/);
+    expect(() => planBedFromTimingPlan(p, { fps: FPS, budgetS: 75, loopS: 10, crossfadeS: 12 })).toThrow(/crossfadeS/);
+    // the default crossfade on the smallest legal budget still plans
+    expect(planBedFromTimingPlan(p, { fps: FPS, budgetS: 6 }).generation.strategy).toBe("loop");
+  });
+
   it("rejects an impossible budget or disordered sections", () => {
     expect(() => planBedFromTimingPlan(plan(45, []), { fps: FPS, budgetS: 5 })).toThrow(RangeError);
     const bad = plan(45, []);
