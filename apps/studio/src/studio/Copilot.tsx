@@ -10,7 +10,7 @@ import { StatusChip } from "../components/glyphs";
 import { Failure } from "../components/ui";
 import { useEvents } from "../events";
 import { relTime, summarizeToolInput, toolResultStatus } from "../logic";
-import { activeLlmJob, isNearBottom, mergeEvents, toRows } from "./copilot-log";
+import { activeLlmJob, draftBlockReason, isNearBottom, mergeEvents, toRows } from "./copilot-log";
 
 const shortTool = (t: string) => t.replace(/^mcp__statreel__/, "");
 
@@ -30,6 +30,8 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
   const job = detail.jobs.find((j) => j.kind === "llm");
   const activeJob = activeLlmJob(detail.jobs);
   const running = !!activeJob;
+  // a produce chain reads the latest props: no draft may store new ones under it (useProduce blocks the converse)
+  const blocked = draftBlockReason(detail.jobs);
   // While a draft runs the persisted log is never trusted as fresh: coming back mid-draft refetches
   // on mount, so tool results that landed while the panel was away are present. Once the job ends the
   // log is final (events.ts also invalidates it at job end).
@@ -92,7 +94,7 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
 
   const send = (e: FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim() || !session) return;
+    if (!prompt.trim() || !session || blocked) return;
     start.mutate({ prompt: prompt.trim(), session });
   };
 
@@ -113,7 +115,8 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
             className="btn btn--primary btn--sm"
             data-testid="draft-with-claude"
             onClick={() => start.mutate({})}
-            disabled={start.isPending || running}
+            disabled={start.isPending || running || !!blocked}
+            title={blocked ?? undefined}
           >
             {start.isPending
               ? "Starting"
@@ -150,6 +153,11 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
         <p className="copilot__note">
           Through MCP tools only: validated props, read-only SQL on llm.* views, the narration. Never composition code.
         </p>
+        {blocked && !running ? (
+          <p className="copilot__note" data-testid="draft-blocked">
+            {blocked}
+          </p>
+        ) : null}
         {start.isError ? (
           <p className="joberr" title={errorText(start.error)}>
             Could not start: {serverError(start.error)}
@@ -287,7 +295,7 @@ export function Copilot({ detail }: { detail: ProjectDetail }) {
         <button
           type="submit"
           className="btn btn--sm"
-          disabled={!session || running || !prompt.trim() || start.isPending}
+          disabled={!session || running || !!blocked || !prompt.trim() || start.isPending}
         >
           Send
         </button>

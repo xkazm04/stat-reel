@@ -85,3 +85,17 @@ export const isNearBottom = (scrollHeight: number, scrollTop: number, clientHeig
 export function activeLlmJob<J extends { kind: string; status: string }>(jobs: readonly J[]): J | null {
   return jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running")) ?? null;
 }
+
+/**
+ * Why the co-pilot may not start or continue a draft now, or null. A produce chain reads the latest props
+ * at each step: props a draft stores between the audio and the render carry no timing, so the render
+ * fails. useProduce already blocks a produce while a draft runs; this is the converse half of that rule.
+ */
+export function draftBlockReason(jobs: readonly { kind: string; status: string }[]): string | null {
+  const producing = jobs.some(
+    (j) => (j.kind === "audio" || j.kind === "render") && (j.status === "queued" || j.status === "running"),
+  );
+  return producing
+    ? "A produce is running; draft once it ends (new props would leave the render without timing)."
+    : null;
+}
