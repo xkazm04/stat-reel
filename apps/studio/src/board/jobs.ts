@@ -37,7 +37,8 @@ export const ERROR_WORDS: Record<string, string> = {
 export const WORKER_OFFLINE_RUNNING = "worker offline - resumes or fails when it restarts";
 
 /** Cancel is always available for a live job (ADR 010, caps off); finished jobs have nothing to cancel. */
-export const canCancel = (job: Pick<JobRow, "status"> | null | undefined): boolean => job?.status === "queued" || job?.status === "running";
+export const canCancel = (job: Pick<JobRow, "status"> | null | undefined): boolean =>
+  job?.status === "queued" || job?.status === "running";
 
 /**
  * "$0.42 · 17 turns" for a job's ledger columns. Unknown (null/undefined/NaN) gives null so nothing renders:
@@ -46,7 +47,8 @@ export const canCancel = (job: Pick<JobRow, "status"> | null | undefined): boole
 export function formatSpend(s: { cost_usd?: number | null; turns?: number | null } | null | undefined): string | null {
   const parts: string[] = [];
   if (typeof s?.cost_usd === "number" && Number.isFinite(s.cost_usd)) parts.push(`$${s.cost_usd.toFixed(2)}`);
-  if (typeof s?.turns === "number" && Number.isFinite(s.turns)) parts.push(`${s.turns} turn${s.turns === 1 ? "" : "s"}`);
+  if (typeof s?.turns === "number" && Number.isFinite(s.turns))
+    parts.push(`${s.turns} turn${s.turns === 1 ? "" : "s"}`);
   return parts.length ? parts.join(" · ") : null;
 }
 
@@ -79,13 +81,36 @@ export type BadgeInput = {
 const jobBadge = (job: JobRow | undefined, workerOnline: boolean, now: number): Badge | null => {
   if (!job) return null;
   if (job.status === "queued") {
-    return { kind: "queued", label: `Queued${job.queue_position ? ` · #${job.queue_position}` : ""}`, detail: workerOnline ? undefined : "waiting for worker", actions: ["cancel", "log"], jobId: job.id };
+    return {
+      kind: "queued",
+      label: `Queued${job.queue_position ? ` · #${job.queue_position}` : ""}`,
+      detail: workerOnline ? undefined : "waiting for worker",
+      actions: ["cancel", "log"],
+      jobId: job.id,
+    };
   }
   if (job.status === "running") {
-    return { kind: "running", label: `Running · ${elapsed(job.started_at, now)}${job.last_tool ? ` · ${job.last_tool}` : ""}`, detail: workerOnline ? (job.progress_note ?? undefined) : WORKER_OFFLINE_RUNNING, actions: ["cancel", "log"], jobId: job.id };
+    return {
+      kind: "running",
+      label: `Running · ${elapsed(job.started_at, now)}${job.last_tool ? ` · ${job.last_tool}` : ""}`,
+      detail: workerOnline ? (job.progress_note ?? undefined) : WORKER_OFFLINE_RUNNING,
+      actions: ["cancel", "log"],
+      jobId: job.id,
+    };
   }
-  if (job.status === "failed") return withCost({ kind: "failed", label: `Failed · ${errorWords(job.error_kind)}`, detail: job.error ?? undefined, actions: ["retry", "log"], jobId: job.id }, job);
-  if (job.status === "cancelled") return withCost({ kind: "cancelled", label: "Cancelled", actions: ["retry"], jobId: job.id }, job);
+  if (job.status === "failed")
+    return withCost(
+      {
+        kind: "failed",
+        label: `Failed · ${errorWords(job.error_kind)}`,
+        detail: job.error ?? undefined,
+        actions: ["retry", "log"],
+        jobId: job.id,
+      },
+      job,
+    );
+  if (job.status === "cancelled")
+    return withCost({ kind: "cancelled", label: "Cancelled", actions: ["retry"], jobId: job.id }, job);
   return null;
 };
 
@@ -104,10 +129,14 @@ export function badgeForCase(i: BadgeInput): Badge | null {
     case "visuals_failed":
       return jobBadge(visual, i.workerOnline, i.now) ?? { kind: "queued", label: "Visuals not started", actions: [] };
     case "visuals_ready": {
-      if (entry.accepted_item_id) return withCost({ kind: "ready", label: "Design accepted", actions: ["generate", "variants"] }, visual);
+      if (entry.accepted_item_id)
+        return withCost({ kind: "ready", label: "Design accepted", actions: ["generate", "variants"] }, visual);
       // the count comes from the board on the client; unknown (not loaded, or a cache older than the job) is not invented
       const n = i.pendingVariants;
-      return withCost({ kind: "ready", label: n ? `${n} visual${n === 1 ? "" : "s"} ready` : "Visuals ready", actions: ["variants"] }, visual);
+      return withCost(
+        { kind: "ready", label: n ? `${n} visual${n === 1 ? "" : "s"} ready` : "Visuals ready", actions: ["variants"] },
+        visual,
+      );
     }
     case "data_blocked":
       return { kind: "blocked", label: "Data blocked", detail: entry.gate?.reason, actions: ["sources", "generate"] };
@@ -133,7 +162,11 @@ export function stripState(o: GenerationOverview | undefined): StripState {
   const offline = !o.worker.online;
   if (o.running && offline) {
     // a dead worker must not read as live progress: say it, keep the title so the owner knows which job is stuck
-    return { text: `${o.running.title}: ${WORKER_OFFLINE_RUNNING}${queued ? ` · ${queued} queued` : ""}`, offline, active: true };
+    return {
+      text: `${o.running.title}: ${WORKER_OFFLINE_RUNNING}${queued ? ` · ${queued} queued` : ""}`,
+      offline,
+      active: true,
+    };
   }
   if (o.running) {
     return { text: `Generating: ${o.running.title}${queued ? ` · ${queued} queued` : ""}`, offline, active: true };

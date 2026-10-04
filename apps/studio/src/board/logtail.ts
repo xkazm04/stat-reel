@@ -5,7 +5,8 @@
  */
 
 /** Live jobs still write their log; an unknown status (the job is still loading) is not the end either. */
-export const jobLive = (status: string | undefined): boolean => status === undefined || status === "queued" || status === "running";
+export const jobLive = (status: string | undefined): boolean =>
+  status === undefined || status === "queued" || status === "running";
 
 export type LogRead = (offset: number) => Promise<{ text: string; next: number }>;
 

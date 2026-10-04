@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { BoardItem } from "../api";
 import {
+  asStatusFilter,
   axisOptions,
   axisVerdict,
   caseOf,
   countItems,
-  emptyView,
+  DEFAULT_FILTER,
   decisionForKey,
+  emptyView,
   factRefs,
   filterItems,
   groupFacts,
   groupItems,
+  isDefaultFilter,
   itemState,
   justify,
   ledger,
@@ -20,17 +23,14 @@ import {
   nextPending,
   parseVariant,
   prevPending,
-  DEFAULT_FILTER,
-  isDefaultFilter,
   provenance,
   ratioOf,
+  STATUS_FILTERS,
   shapeOf,
   spatialMove,
   stateLabel,
-  STATUS_FILTERS,
   styleOf,
   visibleItems,
-  asStatusFilter,
 } from "./board";
 
 let n = 0;
@@ -345,7 +345,11 @@ describe("emptyView (nothing in the list)", () => {
   });
   it("names the filter case and the rejected lane", () => {
     expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, status: "rejected" }).title).toBe("No rejected shots");
-    expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, style: "style:x" }).title).toBe("Nothing matches these filters");
-    expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, status: "rejected" }).line).toBe("2 pending · 0 accepted · 0 rejected.");
+    expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, style: "style:x" }).title).toBe(
+      "Nothing matches these filters",
+    );
+    expect(emptyView(counts({ p: 2 }), { ...DEFAULT_FILTER, status: "rejected" }).line).toBe(
+      "2 pending · 0 accepted · 0 rejected.",
+    );
   });
 });

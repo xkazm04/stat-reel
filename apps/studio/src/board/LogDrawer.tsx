@@ -21,13 +21,28 @@ export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => vo
   const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
   const close = useRef(onClose);
   close.current = onClose;
-  const job = useQuery({ queryKey: [...qk.generation, "job", jobId], queryFn: () => api.generationJob(jobId), refetchInterval: (q) => (q.state.data?.job.status === "running" || q.state.data?.job.status === "queued" ? 2000 : false) });
+  const job = useQuery({
+    queryKey: [...qk.generation, "job", jobId],
+    queryFn: () => api.generationJob(jobId),
+    refetchInterval: (q) =>
+      q.state.data?.job.status === "running" || q.state.data?.job.status === "queued" ? 2000 : false,
+  });
   const live = job.data?.job.status === "running" || job.data?.job.status === "queued";
   const statusRef = useRef<string | undefined>(undefined);
   statusRef.current = job.data?.job.status;
 
   // read in increments until the job is over and its log is read to the end (logtail.ts)
-  useEffect(() => tailLog({ read: (at) => api.generationLog(jobId, at), status: () => statusRef.current, onText: (t) => setText((x) => x + t), onError: setReadError, every: 2000 }), [jobId]);
+  useEffect(
+    () =>
+      tailLog({
+        read: (at) => api.generationLog(jobId, at),
+        status: () => statusRef.current,
+        onText: (t) => setText((x) => x + t),
+        onError: setReadError,
+        every: 2000,
+      }),
+    [jobId],
+  );
 
   // focus in on open, back to the opener on close
   useEffect(() => {
@@ -59,10 +74,20 @@ export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => vo
   const j = job.data?.job;
   const spend = formatSpend(j);
   return (
-    <aside className="jlog" role="dialog" aria-label="Generation log" data-testid="job-log" data-keys-block="" tabIndex={-1} ref={root}>
+    <aside
+      className="jlog"
+      role="dialog"
+      aria-label="Generation log"
+      data-testid="job-log"
+      data-keys-block=""
+      tabIndex={-1}
+      ref={root}
+    >
       <header className="jlog__head">
         <b className="mono">{jobId}</b>
-        <span className="jlog__state">{j ? `${j.type} · ${j.status}${j.error_kind ? ` · ${j.error_kind}` : ""}` : "loading"}</span>
+        <span className="jlog__state">
+          {j ? `${j.type} · ${j.status}${j.error_kind ? ` · ${j.error_kind}` : ""}` : "loading"}
+        </span>
         {spend ? (
           <span className="jlog__state mono" data-testid="job-log-cost">
             {spend}

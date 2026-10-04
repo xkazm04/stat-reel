@@ -348,7 +348,8 @@ function Lightbox({
     dlg.current?.querySelector(".bd-lb__panel")?.scrollTo({ top: 0 });
     // the decided shot's gate unmounted (focus fell to <body>): keep it inside the modal
     const a = document.activeElement;
-    if (dlg.current && (!a || a === document.body || !dlg.current.contains(a))) closeBtn.current?.focus({ preventScroll: true });
+    if (dlg.current && (!a || a === document.body || !dlg.current.contains(a)))
+      closeBtn.current?.focus({ preventScroll: true });
   }, [item.id]);
 
   useEffect(() => {

@@ -17,7 +17,8 @@ const sources = (ext: string): [string, string][] =>
 
 describe("board mutations", () => {
   it("every component that runs a Board mutation renders its failure (no silent decide / undo / restore)", () => {
-    const hooks = /const (\w+) = (useDecide|useUndoDecision|useDecideCase|useUndoCase|useRestore|usePatchStyle|useSetTopic)\(\)/g;
+    const hooks =
+      /const (\w+) = (useDecide|useUndoDecision|useDecideCase|useUndoCase|useRestore|usePatchStyle|useSetTopic)\(\)/g;
     const silent: string[] = [];
     let seen = 0;
     for (const [file, src] of sources(".tsx")) {
@@ -39,7 +40,8 @@ describe("board reads", () => {
     const views = sources(".tsx").filter(([f]) => f.endsWith("View.tsx") || f === "BoardPage.tsx");
     expect(views.length).toBeGreaterThanOrEqual(4);
     for (const [file, src] of views) {
-      for (const m of src.matchAll(reads)) if (!src.includes(`${m[1]}.isError`)) silent.push(`${file}: ${m[1]} = ${m[2]}()`);
+      for (const m of src.matchAll(reads))
+        if (!src.includes(`${m[1]}.isError`)) silent.push(`${file}: ${m[1]} = ${m[2]}()`);
     }
     expect(silent).toEqual([]);
   });

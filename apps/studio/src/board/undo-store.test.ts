@@ -120,16 +120,24 @@ describe("undo store", () => {
 
 describe("undo of an accept whose job still runs", () => {
   const conflict = Object.assign(new Error("409"), { status: 409 });
-  const make = () => createUndoStore({ isConflict: (e) => (e as { status?: number }).status === 409, conflictNotice: "Cancel it first" });
+  const make = () =>
+    createUndoStore({
+      isConflict: (e) => (e as { status?: number }).status === 409,
+      conflictNotice: "Cancel it first",
+    });
 
   it("a 409 on an entry with a job keeps it, offers that job's cancel and restarts its clock", async () => {
     vi.useFakeTimers();
     try {
       const s = make();
       let refuse = true;
-      s.show("Accepted · video queued", async () => {
-        if (refuse) throw conflict;
-      }, { jobId: "gj-1" });
+      s.show(
+        "Accepted · video queued",
+        async () => {
+          if (refuse) throw conflict;
+        },
+        { jobId: "gj-1" },
+      );
       expect(await s.undoLatest()).toBe(false);
       expect(s.getState()).toMatchObject({ notice: "Cancel it first", cancelJobId: "gj-1" });
       expect(s.getState().stack).toHaveLength(1);

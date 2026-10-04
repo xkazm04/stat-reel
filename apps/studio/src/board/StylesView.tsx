@@ -9,7 +9,16 @@ import { useMemo, useState } from "react";
 import { api, type BoardItem, qk, type StyleEntry, type StylePatch, serverError } from "../api";
 import { Card } from "../components/Card";
 import { Empty, Failure, Loading } from "../components/ui";
-import { atRiskCount, atRiskWords, DEFAULT_STYLE_FILTER, filterStyles, groupStyles, rejectSplitWords, type StyleFilter, styleItems } from "./library";
+import {
+  atRiskCount,
+  atRiskWords,
+  DEFAULT_STYLE_FILTER,
+  filterStyles,
+  groupStyles,
+  rejectSplitWords,
+  type StyleFilter,
+  styleItems,
+} from "./library";
 import { Shot, shotAlt, useBoard } from "./shared";
 
 const STATUS_WORD: Record<StyleEntry["status"], string> = {
@@ -65,17 +74,30 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
       <p className="bd-lib__intro">
         <b className="num">{n("locked")}</b> locked · <b className="num">{n("accepted")}</b> accepted ·{" "}
         <b className="num">{n("open")}</b> not judged · <b className="num">{n("retired")}</b> retired ·{" "}
-        <b className="num">{n("rejected")}</b> rejected{filter.showRejected || filter.atRiskOnly ? "" : " (hidden unless you show them)"}. Loops build on accepted and locked styles, rebuild
-        locked ones faithfully, and never reuse retired or rejected ones. Text size is not part of a style.
+        <b className="num">{n("rejected")}</b> rejected
+        {filter.showRejected || filter.atRiskOnly ? "" : " (hidden unless you show them)"}. Loops build on accepted and
+        locked styles, rebuild locked ones faithfully, and never reuse retired or rejected ones. Text size is not part
+        of a style.
       </p>
       <fieldset className="bd-lib__filters" data-testid="style-filters">
         <legend className="sr-only">Which styles to list</legend>
         <label>
-          <input type="checkbox" checked={filter.showRejected} disabled={filter.atRiskOnly} data-testid="style-filter-rejected" onChange={(e) => setFilter((f) => ({ ...f, showRejected: e.target.checked }))} />
+          <input
+            type="checkbox"
+            checked={filter.showRejected}
+            disabled={filter.atRiskOnly}
+            data-testid="style-filter-rejected"
+            onChange={(e) => setFilter((f) => ({ ...f, showRejected: e.target.checked }))}
+          />
           Show rejected styles <span className="num">({n("rejected")})</span>
         </label>
         <label>
-          <input type="checkbox" checked={filter.atRiskOnly} data-testid="style-filter-atrisk" onChange={(e) => setFilter((f) => ({ ...f, atRiskOnly: e.target.checked }))} />
+          <input
+            type="checkbox"
+            checked={filter.atRiskOnly}
+            data-testid="style-filter-atrisk"
+            onChange={(e) => setFilter((f) => ({ ...f, atRiskOnly: e.target.checked }))}
+          />
           Only styles at risk <span className="num">({atRisk})</span>
         </label>
       </fieldset>
@@ -87,7 +109,13 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
         </Empty>
       ) : null}
       {groups.map((g) => (
-        <Card key={g.status} className={`bd-lib__group bd-lib__group--${g.status}`} title={g.title} titleId={`sg-${g.status}`} tag={g.styles.length}>
+        <Card
+          key={g.status}
+          className={`bd-lib__group bd-lib__group--${g.status}`}
+          title={g.title}
+          titleId={`sg-${g.status}`}
+          tag={g.styles.length}
+        >
           <p className="bd-lib__hint">{g.hint}</p>
           <div className="bd-lib__grid">
             {g.styles.map((s) => (
@@ -137,8 +165,8 @@ function StyleCard({
           <span className={`bd-style__mark bd-style__mark--${style.status}`}>{STATUS_WORD[style.status]}</span>
         </header>
         <p className="bd-style__tally num">
-          {style.accepts} accepted · {rejectSplitWords(style) ?? "0 style-rejected"} · {style.pending} pending · {style.total}{" "}
-          design{style.total === 1 ? "" : "s"}
+          {style.accepts} accepted · {rejectSplitWords(style) ?? "0 style-rejected"} · {style.pending} pending ·{" "}
+          {style.total} design{style.total === 1 ? "" : "s"}
         </p>
         {risk ? (
           <p className="bd-style__risk" data-testid={`style-atrisk-${style.id}`}>

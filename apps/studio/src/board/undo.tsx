@@ -25,7 +25,11 @@ import "./undo.css";
 
 export { UNDO_CAP, UNDO_MS };
 
-const store = createUndoStore({ describeError: serverError, isConflict: isRunningConflict, conflictNotice: CANCEL_FIRST });
+const store = createUndoStore({
+  describeError: serverError,
+  isConflict: isRunningConflict,
+  conflictNotice: CANCEL_FIRST,
+});
 
 export const showUndo = store.show;
 export const dismissUndo = store.reset;
@@ -102,7 +106,9 @@ export function UndoToastHost() {
               Sources
             </Link>
           ) : null}
-          {s.cancelJobId ? <CancelJobButton jobId={s.cancelJobId} title={top.message} testId="undo-toast-cancel" /> : null}
+          {s.cancelJobId ? (
+            <CancelJobButton jobId={s.cancelJobId} title={top.message} testId="undo-toast-cancel" />
+          ) : null}
           <button
             type="button"
             className="btn btn--sm"

@@ -13,6 +13,8 @@ import { api, CASE_DECISIONS, type CaseDecision, type CaseIdea, type CasesRespon
 import { Card } from "../components/Card";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useHeatmap } from "../data";
+import { JobBadge } from "./JobBadge";
+import { plainPress } from "./keys";
 import {
   CASE_DECISION_META,
   type CaseRow,
@@ -20,21 +22,23 @@ import {
   caseRows,
   DATA_STATUS_LABEL,
   DOMAIN_LABEL,
-  inbox,
   ideaTopic,
+  inbox,
   KIND_LABEL,
   needsTopic,
   nextUndecided,
   topicGroups,
   visibleCaseRows,
 } from "./library";
-import { JobBadge } from "./JobBadge";
-import { plainPress } from "./keys";
 import { acceptOutcome } from "./outcome";
 import { useBoard } from "./shared";
 import { forgetUndo, showUndo } from "./undo";
 
-const ORIGIN_WORD: Record<CaseRow["origin"], string> = { registry: "Registry", design: "From designs", idea: "Case loop" };
+const ORIGIN_WORD: Record<CaseRow["origin"], string> = {
+  registry: "Registry",
+  design: "From designs",
+  idea: "Case loop",
+};
 
 function useCases() {
   return useQuery({ queryKey: qk.cases, queryFn: () => api.cases() });
@@ -49,7 +53,11 @@ function useDecideCase() {
       // an accept says what it queued (or why data blocked it) and carries its job: the owner has left the view by now
       if (v.decision === "accept") {
         const o = acceptOutcome(r, r.idea.title);
-        showUndo(o.message, () => api.undoCaseDecision(r.idea.id), { jobId: o.jobId, blocked: o.blocked, key: `case:${r.idea.id}` });
+        showUndo(o.message, () => api.undoCaseDecision(r.idea.id), {
+          jobId: o.jobId,
+          blocked: o.blocked,
+          key: `case:${r.idea.id}`,
+        });
       }
       return r.idea;
     },
@@ -60,9 +68,13 @@ function useDecideCase() {
       void qc.invalidateQueries({ queryKey: qk.cases });
       // a rejected idea leaves the lists: offer to take it back (D.1)
       if (v.decision !== "accept")
-        showUndo(`Rejected · ${CASE_DECISION_META[v.decision].label.toLowerCase()} · ${idea.title}`, () => api.undoCaseDecision(idea.id), {
-          key: `case:${idea.id}`,
-        });
+        showUndo(
+          `Rejected · ${CASE_DECISION_META[v.decision].label.toLowerCase()} · ${idea.title}`,
+          () => api.undoCaseDecision(idea.id),
+          {
+            key: `case:${idea.id}`,
+          },
+        );
     },
   });
 }
@@ -111,7 +123,10 @@ export function CasesView() {
   const [open, setOpen] = useState<{ id: string; order: string[] } | null>(null);
   const ideas = cases.data?.ideas ?? [];
   const byId = useMemo(() => new Map(ideas.map((i) => [i.id, i])), [ideas]);
-  const allRows = useMemo(() => caseRows(hm.data?.usecases ?? [], board.data?.items ?? [], ideas), [hm.data, board.data, ideas]);
+  const allRows = useMemo(
+    () => caseRows(hm.data?.usecases ?? [], board.data?.items ?? [], ideas),
+    [hm.data, board.data, ideas],
+  );
   const rows = useMemo(() => visibleCaseRows(allRows), [allRows]);
   const pending = useMemo(
     () => inbox(ideas).filter((i) => (domain === "all" || i.domain === domain) && (kind === "all" || i.kind === kind)),
@@ -135,23 +150,33 @@ export function CasesView() {
   return (
     <div className="bd-cases" data-testid="board-cases">
       <p className="bd-lib__intro">
-        A use case is judged on its own here, without an art style. Approve stories that hold for a decade or all time
-        ({cases.data?.min_span_years ?? 10}+ years) and reveal something as the clock runs. <b className="num">{rejectedCount}</b>{" "}
-        rejected are hidden; loops still read them as feedback. Ideas come from{" "}
+        A use case is judged on its own here, without an art style. Approve stories that hold for a decade or all time (
+        {cases.data?.min_span_years ?? 10}+ years) and reveal something as the clock runs.{" "}
+        <b className="num">{rejectedCount}</b> rejected are hidden; loops still read them as feedback. Ideas come from{" "}
         <code className="mono">node .claude/skills/board/scripts/board.mjs cases --id cs-002</code>.
       </p>
 
       <Card className="bd-lib__group" title="Ideas inbox" titleId="cs-inbox" tag={inbox(ideas).length}>
         <p className="bd-lib__hint">
-            Enter opens an idea · in the idea <kbd>A</kbd> accept <kbd>N</kbd> not interesting <kbd>S</kbd> too short{" "}
-            <kbd>I</kbd> no insight <kbd>D</kbd> no data <kbd>U</kbd> duplicate · <kbd>←</kbd>
-            <kbd>→</kbd> step · <kbd>Esc</kbd> back
-          </p>
+          Enter opens an idea · in the idea <kbd>A</kbd> accept <kbd>N</kbd> not interesting <kbd>S</kbd> too short{" "}
+          <kbd>I</kbd> no insight <kbd>D</kbd> no data <kbd>U</kbd> duplicate · <kbd>←</kbd>
+          <kbd>→</kbd> step · <kbd>Esc</kbd> back
+        </p>
         {ideas.length ? (
           <div className="bd-cs__filters">
-            <Seg label="Domain" value={domain} set={setDomain} opts={domains.map((d) => [d, DOMAIN_LABEL[d as CaseIdea["domain"]] ?? d])} />
+            <Seg
+              label="Domain"
+              value={domain}
+              set={setDomain}
+              opts={domains.map((d) => [d, DOMAIN_LABEL[d as CaseIdea["domain"]] ?? d])}
+            />
             {kinds.length > 1 ? (
-              <Seg label="Kind" value={kind} set={setKind} opts={kinds.map((k) => [k, KIND_LABEL[k as CaseIdea["kind"]] ?? k])} />
+              <Seg
+                label="Kind"
+                value={kind}
+                set={setKind}
+                opts={kinds.map((k) => [k, KIND_LABEL[k as CaseIdea["kind"]] ?? k])}
+              />
             ) : null}
             <span className="bd-filters__n num">{pending.length} undecided in view</span>
           </div>
@@ -166,7 +191,13 @@ export function CasesView() {
       </Card>
 
       <CaseList id="cs-acc" title="Accepted" hint="Loops build designs on these." rows={accepted} onOpen={setOpen} />
-      <CaseList id="cs-wait" title="Waiting on designs" hint="Registry formats and design proposals with no verdict yet." rows={waiting} onOpen={setOpen} />
+      <CaseList
+        id="cs-wait"
+        title="Waiting on designs"
+        hint="Registry formats and design proposals with no verdict yet."
+        rows={waiting}
+        onOpen={setOpen}
+      />
 
       {open && openIdea ? (
         <IdeaDialog
@@ -184,7 +215,17 @@ export function CasesView() {
   );
 }
 
-function Seg({ label, value, set, opts }: { label: string; value: string; set: (v: string) => void; opts: [string, string][] }) {
+function Seg({
+  label,
+  value,
+  set,
+  opts,
+}: {
+  label: string;
+  value: string;
+  set: (v: string) => void;
+  opts: [string, string][];
+}) {
   return (
     <fieldset className="seg seg--sm">
       <legend className="sr-only">{label}</legend>
@@ -208,7 +249,12 @@ function TitleList({ ideas, onOpen }: { ideas: CaseIdea[]; onOpen: (id: string) 
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
     const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button[data-idea]") ?? [])];
     const i = btns.indexOf(document.activeElement as HTMLButtonElement);
-    const to = e.key === "Home" ? 0 : e.key === "End" ? btns.length - 1 : Math.max(0, Math.min(btns.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+    const to =
+      e.key === "Home"
+        ? 0
+        : e.key === "End"
+          ? btns.length - 1
+          : Math.max(0, Math.min(btns.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
     e.preventDefault();
     btns[to]?.focus();
   };
@@ -257,7 +303,9 @@ function CaseList({
               <b>{r.name}</b>
               <span className={`bd-tag bd-tag--${r.origin}`}>{ORIGIN_WORD[r.origin]}</span>
               {r.idea ? <span className="bd-tag">{DOMAIN_LABEL[r.idea.domain]}</span> : null}
-              {r.idea && r.idea.kind !== "observed" ? <span className={`bd-tag bd-tag--${r.idea.kind}`}>{KIND_LABEL[r.idea.kind]}</span> : null}
+              {r.idea && r.idea.kind !== "observed" ? (
+                <span className={`bd-tag bd-tag--${r.idea.kind}`}>{KIND_LABEL[r.idea.kind]}</span>
+              ) : null}
               {r.span ? <span className="bd-caserow__span mono">{r.span}</span> : null}
               {r.origin !== "idea" ? (
                 <span className="bd-caserow__tally num">
@@ -268,7 +316,12 @@ function CaseList({
               ) : null}
               {r.idea?.status === "accepted" ? <JobBadge caseId={r.key} /> : null}
               {r.idea ? (
-                <button type="button" className="bd-linkbtn" data-idea={r.key} onClick={() => onOpen({ id: r.key, order })}>
+                <button
+                  type="button"
+                  className="bd-linkbtn"
+                  data-idea={r.key}
+                  onClick={() => onOpen({ id: r.key, order })}
+                >
                   Open
                 </button>
               ) : null}
@@ -388,10 +441,20 @@ function IdeaDialog({
           Idea {idx + 1} of {order.length}
         </span>
         <div className="bd-lb__nav">
-          <button type="button" className="btn btn--ghost btn--sm" disabled={!prev} onClick={() => prev && onGo(prev.id)}>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            disabled={!prev}
+            onClick={() => prev && onGo(prev.id)}
+          >
             Previous <kbd>←</kbd>
           </button>
-          <button type="button" className="btn btn--ghost btn--sm" disabled={!next} onClick={() => next && onGo(next.id)}>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            disabled={!next}
+            onClick={() => next && onGo(next.id)}
+          >
             Next <kbd>→</kbd>
           </button>
         </div>
@@ -481,7 +544,10 @@ function TopicPicker({ idea, asked }: { idea: CaseIdea; asked: boolean }) {
             {auto && auto.source === "case.domain" ? `From domain: ${label.get(auto.key) ?? auto.key}` : "Pick topic"}
           </option>
           {topicGroups(topics.data?.topics ?? []).map((g) => (
-            <optgroup key={g.family} label={g.family === "geoeconomy" ? "Geo-economy" : g.family[0]!.toUpperCase() + g.family.slice(1)}>
+            <optgroup
+              key={g.family}
+              label={g.family === "geoeconomy" ? "Geo-economy" : g.family[0]!.toUpperCase() + g.family.slice(1)}
+            >
               {g.topics.map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.label}
@@ -491,7 +557,11 @@ function TopicPicker({ idea, asked }: { idea: CaseIdea; asked: boolean }) {
           ))}
         </select>
       </label>
-      <span id={`tp-${idea.id}`} className={asked && missing ? "bd-style__err" : "bd-dim"} role={asked && missing ? "alert" : undefined}>
+      <span
+        id={`tp-${idea.id}`}
+        className={asked && missing ? "bd-style__err" : "bd-dim"}
+        role={asked && missing ? "alert" : undefined}
+      >
         {asked && missing
           ? "Pick a topic before accepting: this domain has no default."
           : missing
@@ -515,7 +585,9 @@ function IdeaBody({ idea, picker }: { idea: CaseIdea; picker?: ReactNode }) {
       <header className="bd-idea__head">
         <div className="bd-idea__tags">
           <span className="bd-tag">{DOMAIN_LABEL[idea.domain]}</span>
-          {idea.kind !== "observed" ? <span className={`bd-tag bd-tag--${idea.kind}`}>{KIND_LABEL[idea.kind]}</span> : null}
+          {idea.kind !== "observed" ? (
+            <span className={`bd-tag bd-tag--${idea.kind}`}>{KIND_LABEL[idea.kind]}</span>
+          ) : null}
         </div>
         <h2 className="bd-lb__title" id="bd-idlg-title">
           {idea.title}

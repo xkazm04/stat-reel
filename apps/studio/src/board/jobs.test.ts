@@ -1,25 +1,87 @@
 import { describe, expect, it } from "vitest";
 import type { GenerationOverview } from "../api";
-import { badgeForCase, canCancel, elapsed, errorWords, formatSpend, hasActiveJobs, type JobRow, type OverviewCase, stripState, WORKER_OFFLINE_RUNNING } from "./jobs";
+import {
+  badgeForCase,
+  canCancel,
+  elapsed,
+  errorWords,
+  formatSpend,
+  hasActiveJobs,
+  type JobRow,
+  type OverviewCase,
+  stripState,
+  WORKER_OFFLINE_RUNNING,
+} from "./jobs";
 
 const job = (o: Partial<JobRow>): JobRow =>
   ({
-    id: "gj-00000001", type: "visual_options", case_id: "ci-00000001", board_item_id: null, dedupe_key: "k", status: "queued", attempts: 0, max_attempts: 2, params_json: "{}",
-    result_json: null, error: null, error_kind: null, log_path: null, output_dir: null, pid: null, phase: null, progress_note: null, last_tool: null, cancel_requested_at: null,
-    heartbeat_at: null, created_at: "2026-10-03T10:00:00.000Z", started_at: null, finished_at: null, updated_at: "2026-10-03T10:00:00.000Z", ...o,
+    id: "gj-00000001",
+    type: "visual_options",
+    case_id: "ci-00000001",
+    board_item_id: null,
+    dedupe_key: "k",
+    status: "queued",
+    attempts: 0,
+    max_attempts: 2,
+    params_json: "{}",
+    result_json: null,
+    error: null,
+    error_kind: null,
+    log_path: null,
+    output_dir: null,
+    pid: null,
+    phase: null,
+    progress_note: null,
+    last_tool: null,
+    cancel_requested_at: null,
+    heartbeat_at: null,
+    created_at: "2026-10-03T10:00:00.000Z",
+    started_at: null,
+    finished_at: null,
+    updated_at: "2026-10-03T10:00:00.000Z",
+    ...o,
   }) as JobRow;
-const entry = (o: Partial<OverviewCase>): OverviewCase => ({ title: "Case", stage: "visuals_queued", gate: null, visual_job_id: "gj-00000001", video_job_id: null, accepted_item_id: null, videos: 0, ...o });
+const entry = (o: Partial<OverviewCase>): OverviewCase => ({
+  title: "Case",
+  stage: "visuals_queued",
+  gate: null,
+  visual_job_id: "gj-00000001",
+  video_job_id: null,
+  accepted_item_id: null,
+  videos: 0,
+  ...o,
+});
 const badge = (e: Partial<OverviewCase>, jobs: JobRow[], o: { online?: boolean; now?: number; n?: number } = {}) =>
-  badgeForCase({ entry: entry(e), jobs: new Map(jobs.map((j) => [j.id, j])), workerOnline: o.online ?? true, now: o.now ?? Date.parse("2026-10-03T10:03:12.000Z"), pendingVariants: o.n });
+  badgeForCase({
+    entry: entry(e),
+    jobs: new Map(jobs.map((j) => [j.id, j])),
+    workerOnline: o.online ?? true,
+    now: o.now ?? Date.parse("2026-10-03T10:03:12.000Z"),
+    pendingVariants: o.n,
+  });
 
 describe("badgeForCase (D.11)", () => {
   it("queued shows its place; with the worker offline it says it is waiting", () => {
-    expect(badge({}, [job({ queue_position: 2 })])).toMatchObject({ kind: "queued", label: "Queued · #2", detail: undefined });
-    expect(badge({}, [job({ queue_position: 1 })], { online: false })).toMatchObject({ label: "Queued · #1", detail: "waiting for worker" });
+    expect(badge({}, [job({ queue_position: 2 })])).toMatchObject({
+      kind: "queued",
+      label: "Queued · #2",
+      detail: undefined,
+    });
+    expect(badge({}, [job({ queue_position: 1 })], { online: false })).toMatchObject({
+      label: "Queued · #1",
+      detail: "waiting for worker",
+    });
   });
 
   it("running shows the clock and the current tool", () => {
-    const b = badge({ stage: "visuals_running" }, [job({ status: "running", started_at: "2026-10-03T10:00:00.000Z", last_tool: "Write", progress_note: "writing variants" })]);
+    const b = badge({ stage: "visuals_running" }, [
+      job({
+        status: "running",
+        started_at: "2026-10-03T10:00:00.000Z",
+        last_tool: "Write",
+        progress_note: "writing variants",
+      }),
+    ]);
     expect(b).toMatchObject({ kind: "running", label: "Running · 03:12 · Write", detail: "writing variants" });
     expect(b?.actions).toEqual(["cancel", "log"]);
   });
@@ -35,28 +97,54 @@ describe("badgeForCase (D.11)", () => {
   });
 
   it("a running job with the worker offline says so instead of showing live progress", () => {
-    const running = job({ status: "running", started_at: "2026-10-03T10:00:00.000Z", progress_note: "writing variants" });
-    expect(badge({ stage: "visuals_running" }, [running], { online: false })).toMatchObject({ kind: "running", detail: WORKER_OFFLINE_RUNNING, actions: ["cancel", "log"] });
+    const running = job({
+      status: "running",
+      started_at: "2026-10-03T10:00:00.000Z",
+      progress_note: "writing variants",
+    });
+    expect(badge({ stage: "visuals_running" }, [running], { online: false })).toMatchObject({
+      kind: "running",
+      detail: WORKER_OFFLINE_RUNNING,
+      actions: ["cancel", "log"],
+    });
   });
 
   it("visuals ready counts the pending variants; an accepted design offers Generate video", () => {
     // an unknown pending count (board not loaded, or a stale cache saying 0) is not a number to invent
-    expect(badge({ stage: "visuals_ready" }, [job({ status: "done" })])).toMatchObject({ kind: "ready", label: "Visuals ready", actions: ["variants"] });
+    expect(badge({ stage: "visuals_ready" }, [job({ status: "done" })])).toMatchObject({
+      kind: "ready",
+      label: "Visuals ready",
+      actions: ["variants"],
+    });
     expect(badge({ stage: "visuals_ready" }, [job({ status: "done" })])?.label).not.toMatch(/\d/);
     expect(badge({ stage: "visuals_ready" }, [], { n: 3 })?.label).toBe("3 visuals ready");
     expect(badge({ stage: "visuals_ready" }, [], { n: 1 })?.label).toBe("1 visual ready");
-    expect(badge({ stage: "visuals_ready", accepted_item_id: "bd-00000001" }, [])).toMatchObject({ label: "Design accepted", actions: ["generate", "variants"] });
+    expect(badge({ stage: "visuals_ready", accepted_item_id: "bd-00000001" }, [])).toMatchObject({
+      label: "Design accepted",
+      actions: ["generate", "variants"],
+    });
   });
 
   it("failed names the kind in plain words and offers retry and the log", () => {
-    const b = badge({ stage: "visuals_failed" }, [job({ status: "failed", error_kind: "timeout", error: "no result within 30 min" })]);
-    expect(b).toMatchObject({ kind: "failed", label: "Failed · timeout", actions: ["retry", "log"], jobId: "gj-00000001" });
+    const b = badge({ stage: "visuals_failed" }, [
+      job({ status: "failed", error_kind: "timeout", error: "no result within 30 min" }),
+    ]);
+    expect(b).toMatchObject({
+      kind: "failed",
+      label: "Failed · timeout",
+      actions: ["retry", "log"],
+      jobId: "gj-00000001",
+    });
     expect(errorWords("validation")).toBe("output did not validate");
     expect(errorWords(null)).toBe("error");
   });
 
   it("cancelled offers retry", () => {
-    expect(badge({ stage: "visuals_failed" }, [job({ status: "cancelled" })])).toMatchObject({ kind: "cancelled", label: "Cancelled", actions: ["retry"] });
+    expect(badge({ stage: "visuals_failed" }, [job({ status: "cancelled" })])).toMatchObject({
+      kind: "cancelled",
+      label: "Cancelled",
+      actions: ["retry"],
+    });
   });
 
   it("data blocked carries the gate's reason and a link to Sources", () => {
@@ -66,9 +154,18 @@ describe("badgeForCase (D.11)", () => {
   });
 
   it("the video states use the video job; video ready links to the video", () => {
-    const video = job({ id: "gj-00000002", type: "generate_video", status: "running", started_at: "2026-10-03T10:00:00.000Z" });
+    const video = job({
+      id: "gj-00000002",
+      type: "generate_video",
+      status: "running",
+      started_at: "2026-10-03T10:00:00.000Z",
+    });
     expect(badge({ stage: "video_running", video_job_id: "gj-00000002" }, [video])?.label).toBe("Running · 03:12");
-    expect(badge({ stage: "video_ready" }, [])).toMatchObject({ kind: "done", label: "Video ready", actions: ["video"] });
+    expect(badge({ stage: "video_ready" }, [])).toMatchObject({
+      kind: "done",
+      label: "Video ready",
+      actions: ["video"],
+    });
   });
 
   it("proposed and rejected cases show no badge", () => {
@@ -88,19 +185,40 @@ describe("elapsed", () => {
 });
 
 describe("queue strip and polling", () => {
-  const o = (p: Partial<GenerationOverview>): GenerationOverview => ({ worker: { online: true, pid: 1, heartbeat_at: null, queued: 0, running: 0 }, jobs: [], cases: {}, running: null, ...p });
+  const o = (p: Partial<GenerationOverview>): GenerationOverview => ({
+    worker: { online: true, pid: 1, heartbeat_at: null, queued: 0, running: 0 },
+    jobs: [],
+    cases: {},
+    running: null,
+    ...p,
+  });
   it("names the running case and the queue", () => {
-    expect(stripState(o({ running: { job: job({ status: "running" }), title: "Search box wars" }, worker: { online: true, pid: 1, heartbeat_at: null, queued: 2, running: 1 } }))).toEqual({
-      text: "Generating: Search box wars · 2 queued", offline: false, active: true,
+    expect(
+      stripState(
+        o({
+          running: { job: job({ status: "running" }), title: "Search box wars" },
+          worker: { online: true, pid: 1, heartbeat_at: null, queued: 2, running: 1 },
+        }),
+      ),
+    ).toEqual({
+      text: "Generating: Search box wars · 2 queued",
+      offline: false,
+      active: true,
     });
   });
   it("says so when the worker is offline", () => {
-    expect(stripState(o({ worker: { online: false, pid: null, heartbeat_at: null, queued: 0, running: 0 } }))).toMatchObject({ text: "Generation worker offline", offline: true });
-    expect(stripState(o({ worker: { online: false, pid: null, heartbeat_at: null, queued: 1, running: 0 } })).text).toBe("1 queued · waiting for the worker");
+    expect(
+      stripState(o({ worker: { online: false, pid: null, heartbeat_at: null, queued: 0, running: 0 } })),
+    ).toMatchObject({ text: "Generation worker offline", offline: true });
+    expect(
+      stripState(o({ worker: { online: false, pid: null, heartbeat_at: null, queued: 1, running: 0 } })).text,
+    ).toBe("1 queued · waiting for the worker");
   });
   it("a running job with the worker offline reads as stalled, not Generating", () => {
     const running = { job: job({ status: "running" }), title: "Search box wars" };
-    const s = stripState(o({ running, worker: { online: false, pid: null, heartbeat_at: null, queued: 1, running: 1 } }));
+    const s = stripState(
+      o({ running, worker: { online: false, pid: null, heartbeat_at: null, queued: 1, running: 1 } }),
+    );
     expect(s).toEqual({ text: `Search box wars: ${WORKER_OFFLINE_RUNNING} · 1 queued`, offline: true, active: true });
     expect(s.text).not.toMatch(/Generating/);
   });
@@ -122,10 +240,21 @@ describe("job cost (generation cost ledger)", () => {
   });
 
   it("finished badges carry the cost; an unknown cost leaves it off", () => {
-    expect(badge({ stage: "visuals_failed" }, [job({ status: "failed", error_kind: "budget", cost_usd: 0.42, turns: 17 })])?.cost).toBe("$0.42 · 17 turns");
-    expect(badge({ stage: "visuals_failed" }, [job({ status: "failed", error_kind: "cli_exit" })])?.cost).toBeUndefined();
-    expect(badge({ stage: "visuals_ready" }, [job({ status: "done", cost_usd: 0.1, turns: 3 })])?.cost).toBe("$0.10 · 3 turns");
-    expect(badge({ stage: "video_ready", video_job_id: "gj-00000002" }, [job({ id: "gj-00000002", type: "generate_video", status: "done", cost_usd: 2.5 })])?.cost).toBe("$2.50");
+    expect(
+      badge({ stage: "visuals_failed" }, [job({ status: "failed", error_kind: "budget", cost_usd: 0.42, turns: 17 })])
+        ?.cost,
+    ).toBe("$0.42 · 17 turns");
+    expect(
+      badge({ stage: "visuals_failed" }, [job({ status: "failed", error_kind: "cli_exit" })])?.cost,
+    ).toBeUndefined();
+    expect(badge({ stage: "visuals_ready" }, [job({ status: "done", cost_usd: 0.1, turns: 3 })])?.cost).toBe(
+      "$0.10 · 3 turns",
+    );
+    expect(
+      badge({ stage: "video_ready", video_job_id: "gj-00000002" }, [
+        job({ id: "gj-00000002", type: "generate_video", status: "done", cost_usd: 2.5 }),
+      ])?.cost,
+    ).toBe("$2.50");
     expect(badge({ stage: "visuals_queued" }, [job({ cost_usd: 0.3 })])?.cost).toBeUndefined();
   });
 });

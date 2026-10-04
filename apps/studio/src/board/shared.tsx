@@ -55,7 +55,11 @@ export function useDecide() {
       // an accept says what it queued (or why data blocked it) and carries its job: the owner has left the view by now
       if (v.decision === "accept") {
         const o = acceptOutcome(r, r.item.title);
-        showUndo(o.message, () => api.undoBoardDecision(r.item.id), { jobId: o.jobId, blocked: o.blocked, key: `board:${r.item.id}` });
+        showUndo(o.message, () => api.undoBoardDecision(r.item.id), {
+          jobId: o.jobId,
+          blocked: o.blocked,
+          key: `board:${r.item.id}`,
+        });
       }
       return r.item;
     },
@@ -66,7 +70,9 @@ export function useDecide() {
       void qc.invalidateQueries({ queryKey: qk.board });
       // a rejected proposal leaves the grid: offer to take it back (D.1)
       if (v.decision !== "accept")
-        showUndo(`${DECISION_META[v.decision].done} · ${item.title}`, () => api.undoBoardDecision(item.id), { key: `board:${item.id}` });
+        showUndo(`${DECISION_META[v.decision].done} · ${item.title}`, () => api.undoBoardDecision(item.id), {
+          key: `board:${item.id}`,
+        });
     },
   });
 }
@@ -215,7 +221,8 @@ export function Shot({
   );
 }
 
-const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const reducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** Clip seek-stability as measured at harvest (source.clip.seek_stable); undefined for stills/older items. */
 export const clipStable = (i: BoardItem): boolean | undefined =>
@@ -225,7 +232,17 @@ export const clipStable = (i: BoardItem): boolean | undefined =>
  * A board clip: poster first; plays muted on loop only while on screen (many clips on a wall), never
  * under reduced motion unless the owner presses play. `controls` in the detail view.
  */
-function ClipVideo({ item, controls, alt, onError }: { item: BoardItem; controls: boolean; alt: string; onError: () => void }) {
+function ClipVideo({
+  item,
+  controls,
+  alt,
+  onError,
+}: {
+  item: BoardItem;
+  controls: boolean;
+  alt: string;
+  onError: () => void;
+}) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
     const v = ref.current;
@@ -234,7 +251,9 @@ function ClipVideo({ item, controls, alt, onError }: { item: BoardItem; controls
       void v.play().catch(() => {});
       return;
     }
-    const io = new IntersectionObserver(([e]) => (e?.isIntersecting ? void v.play().catch(() => {}) : v.pause()), { threshold: 0.35 });
+    const io = new IntersectionObserver(([e]) => (e?.isIntersecting ? void v.play().catch(() => {}) : v.pause()), {
+      threshold: 0.35,
+    });
     io.observe(v);
     return () => io.disconnect();
   }, [controls]);
@@ -273,14 +292,21 @@ export const clipInfo = (i: BoardItem): ClipInfo | undefined => i.source?.clip a
 function ClipBadge({ item }: { item: BoardItem }) {
   const c = clipInfo(item);
   const stable = clipStable(item);
-  const cut = c?.excerpt && c.full_duration_s
-    ? `CUT ${c.excerpt.start_s.toFixed(0)}-${(c.excerpt.start_s + c.excerpt.duration_s).toFixed(0)} s OF ${c.full_duration_s.toFixed(0)} s`
-    : `CLIP ${item.duration_s?.toFixed(1) ?? "?"} s`;
+  const cut =
+    c?.excerpt && c.full_duration_s
+      ? `CUT ${c.excerpt.start_s.toFixed(0)}-${(c.excerpt.start_s + c.excerpt.duration_s).toFixed(0)} s OF ${c.full_duration_s.toFixed(0)} s`
+      : `CLIP ${item.duration_s?.toFixed(1) ?? "?"} s`;
   return (
     <span className="bd-clip">
       <span className="bd-clip__len mono">{cut}</span>
-      {c?.timeline ? <span className="bd-clip__len mono">{c.timeline.from}→{c.timeline.to} · {c.timeline.unit}</span> : null}
-      {c?.longevity && !c.longevity.ok ? <span className="bd-clip__warn mono">LONGEVITY: {c.longevity.problems.join(" · ")}</span> : null}
+      {c?.timeline ? (
+        <span className="bd-clip__len mono">
+          {c.timeline.from}→{c.timeline.to} · {c.timeline.unit}
+        </span>
+      ) : null}
+      {c?.longevity && !c.longevity.ok ? (
+        <span className="bd-clip__warn mono">LONGEVITY: {c.longevity.problems.join(" · ")}</span>
+      ) : null}
       {stable === false ? <span className="bd-clip__warn mono">NOT SEEK-STABLE · won't port to video</span> : null}
     </span>
   );
@@ -417,7 +443,6 @@ export function ItemFacts({
 }
 
 // ------------------------------------------------------------------ the gate
-
 
 /**
  * A flag that is true for a moment after `flash()`: the "busy" feedback for a keystroke that was

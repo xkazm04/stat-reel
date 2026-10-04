@@ -17,7 +17,11 @@ export function QueueStrip() {
   const titles = new Map(Object.entries(ov.data.cases).map(([id, c]) => [id, c.title]));
   const recent = ov.data.jobs.slice(0, 8);
   return (
-    <section className={`jq ${s.offline ? "jq--offline" : ""} ${s.active ? "jq--active" : ""}`} aria-label="Generation queue" data-testid="queue-strip">
+    <section
+      className={`jq ${s.offline ? "jq--offline" : ""} ${s.active ? "jq--active" : ""}`}
+      aria-label="Generation queue"
+      data-testid="queue-strip"
+    >
       <span className="jq__dot" aria-hidden="true">
         {s.offline ? "⊘" : s.active ? "◐" : "○"}
       </span>
@@ -25,7 +29,9 @@ export function QueueStrip() {
       <b className="jq__text" role="status" aria-live="polite">
         {s.text}
       </b>
-      {s.offline && (ov.data.worker.queued || ov.data.running) ? <span className="jq__hint">run `pnpm worker`</span> : null}
+      {s.offline && (ov.data.worker.queued || ov.data.running) ? (
+        <span className="jq__hint">run `pnpm worker`</span>
+      ) : null}
       {ov.data.running && canCancel(ov.data.running.job) ? (
         <CancelJobButton jobId={ov.data.running.job.id} title={ov.data.running.title} testId="queue-cancel-running" />
       ) : null}
@@ -43,7 +49,13 @@ export function QueueStrip() {
                   {j.status === "failed" ? ` · ${errorWords(j.error_kind)}` : ""}
                   {j.status === "queued" && j.queue_position ? ` · #${j.queue_position}` : ""}
                 </span>
-                {canCancel(j) ? <CancelJobButton jobId={j.id} title={titles.get(j.case_id) ?? j.case_id} testId={`queue-cancel-${j.id}`} /> : null}
+                {canCancel(j) ? (
+                  <CancelJobButton
+                    jobId={j.id}
+                    title={titles.get(j.case_id) ?? j.case_id}
+                    testId={`queue-cancel-${j.id}`}
+                  />
+                ) : null}
                 <button type="button" className="bd-linkbtn" onClick={() => setLog(j.id)}>
                   Log
                 </button>

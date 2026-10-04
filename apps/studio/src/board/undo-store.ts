@@ -36,8 +36,7 @@ export const pop = (stack: readonly UndoEntry[]): [UndoEntry | null, UndoEntry[]
   latest(stack),
   stack.slice(0, -1),
 ];
-export const removeEntry = (stack: readonly UndoEntry[], id: number): UndoEntry[] =>
-  stack.filter((e) => e.id !== id);
+export const removeEntry = (stack: readonly UndoEntry[], id: number): UndoEntry[] => stack.filter((e) => e.id !== id);
 /** Entries still within `ttl` of their push. */
 export const expire = (stack: readonly UndoEntry[], now: number, ttl = UNDO_MS): UndoEntry[] =>
   stack.filter((e) => now - e.at < ttl);
@@ -149,7 +148,12 @@ export function createUndoStore(
       set({ busy: true, cancelJobId: null });
       try {
         await entry.run();
-        set({ stack: removeEntry(state.stack, entry.id), notice: null, cancelJobId: null, said: say(`Undone: ${entry.message}`) });
+        set({
+          stack: removeEntry(state.stack, entry.id),
+          notice: null,
+          cancelJobId: null,
+          said: say(`Undone: ${entry.message}`),
+        });
         arm();
         return true;
       } catch (e) {

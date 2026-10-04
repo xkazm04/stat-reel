@@ -8,7 +8,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type BoardItem, type CaseIdea, qk, serverError } from "../api";
 import { Empty, Failure, Loading } from "../components/ui";
-import { type ArchiveReason, archiveReason, decisionWords, isSuperseded, reArchiveReason, restoreLabel } from "./archived";
+import {
+  type ArchiveReason,
+  archiveReason,
+  decisionWords,
+  isSuperseded,
+  reArchiveReason,
+  restoreLabel,
+} from "./archived";
 import { caseOf, ratioOf, styleOf } from "./board";
 import { DOMAIN_LABEL } from "./library";
 import { CaseChip, Shot, shotAlt, useFlash } from "./shared";

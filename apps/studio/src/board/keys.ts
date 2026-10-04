@@ -2,7 +2,9 @@
 
 /** Is the event aimed at something the owner types into? Then a letter is text, not a shortcut. */
 export const typing = (t: EventTarget | null): boolean =>
-  typeof HTMLElement !== "undefined" && t instanceof HTMLElement && !!t.closest("input, textarea, select, [contenteditable='true']");
+  typeof HTMLElement !== "undefined" &&
+  t instanceof HTMLElement &&
+  !!t.closest("input, textarea, select, [contenteditable='true']");
 
 /**
  * Overlays that own the keyboard: the generation log drawer (`data-keys-block`, a non-modal dialog the

@@ -57,7 +57,8 @@ export function reArchiveReason(reason: ArchiveReason): string {
 export function decisionWords(kind: "item" | "idea", decision: string): string {
   if (decision === "accept") return "Accepted";
   if (kind === "item" && isDecision(decision)) return DECISION_META[decision].done;
-  const meta = kind === "idea" ? (CASE_DECISION_META as Record<string, { label: string } | undefined>)[decision] : undefined;
+  const meta =
+    kind === "idea" ? (CASE_DECISION_META as Record<string, { label: string } | undefined>)[decision] : undefined;
   if (meta) return `Rejected · ${meta.label.toLowerCase()}`;
   return decision.replace(/_/g, " ");
 }

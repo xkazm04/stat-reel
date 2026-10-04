@@ -85,7 +85,12 @@ function useTab(): [Tab, (t: Tab) => void] {
   const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const navigate = useNavigate();
   const set = (next: Tab) =>
-    void navigate({ to: "/board", search: { ...search, tab: next === "designs" ? undefined : next } as never, replace: true, resetScroll: false });
+    void navigate({
+      to: "/board",
+      search: { ...search, tab: next === "designs" ? undefined : next } as never,
+      replace: true,
+      resetScroll: false,
+    });
   return [parseTab(search.tab), set];
 }
 
@@ -93,10 +98,7 @@ function useTab(): [Tab, (t: Tab) => void] {
 function useFilter(): [BoardFilter, (next: BoardFilter | ((f: BoardFilter) => BoardFilter)) => void] {
   const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const navigate = useNavigate();
-  const filter = useMemo(
-    () => filterFromSearch(search as Parameters<typeof filterFromSearch>[0]),
-    [search],
-  );
+  const filter = useMemo(() => filterFromSearch(search as Parameters<typeof filterFromSearch>[0]), [search]);
   const set = (next: BoardFilter | ((f: BoardFilter) => BoardFilter)) => {
     const f = typeof next === "function" ? next(filter) : next;
     void navigate({
@@ -143,29 +145,30 @@ export function BoardPage() {
           <h1 className="page__title display">What should StatReel look like</h1>
           <p className="page__sub">
             Cut-outs from 30-90 s data videos, each judged on two axes: the <b>style</b> (form of presentation) and the{" "}
-            <b>case</b> (the story over time). Styles and Use cases keep what you accepted, so the next loops build on it.
+            <b>case</b> (the story over time). Styles and Use cases keep what you accepted, so the next loops build on
+            it.
           </p>
         </div>
         {tab === "designs" ? (
-        <nav className="bd-switch" aria-label="Board prototype variant">
-          <span className="label">Prototype · pick a page</span>
-          <div className="bd-switch__opts">
-            {VARIANTS.map((o) => (
-              <button
-                key={o.v}
-                type="button"
-                aria-pressed={variant === o.v}
-                data-testid={`board-variant-${o.v}`}
-                onClick={() => setVariant(o.v)}
-              >
-                <b>
-                  <span className="num">{o.v}</span> {o.name}
-                </b>
-                <span>{o.sub}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
+          <nav className="bd-switch" aria-label="Board prototype variant">
+            <span className="label">Prototype · pick a page</span>
+            <div className="bd-switch__opts">
+              {VARIANTS.map((o) => (
+                <button
+                  key={o.v}
+                  type="button"
+                  aria-pressed={variant === o.v}
+                  data-testid={`board-variant-${o.v}`}
+                  onClick={() => setVariant(o.v)}
+                >
+                  <b>
+                    <span className="num">{o.v}</span> {o.name}
+                  </b>
+                  <span>{o.sub}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
         ) : null}
       </header>
 
@@ -175,24 +178,24 @@ export function BoardPage() {
         {TABS.map((o) => {
           const c = tabCount(o.tab, tabCounts);
           return (
-          <button
-            key={o.tab}
-            type="button"
-            aria-pressed={tab === o.tab}
-            data-testid={`board-tab-${o.tab}`}
-            onClick={() => setTab(o.tab)}
-          >
-            <b>
-              {o.name}
-              {c ? (
-                <span className="bd-tabs__n" data-testid={`board-tab-count-${o.tab}`}>
-                  {" "}
-                  <span className="num">{c.n}</span> {c.word}
-                </span>
-              ) : null}
-            </b>
-            <span>{o.sub}</span>
-          </button>
+            <button
+              key={o.tab}
+              type="button"
+              aria-pressed={tab === o.tab}
+              data-testid={`board-tab-${o.tab}`}
+              onClick={() => setTab(o.tab)}
+            >
+              <b>
+                {o.name}
+                {c ? (
+                  <span className="bd-tabs__n" data-testid={`board-tab-count-${o.tab}`}>
+                    {" "}
+                    <span className="num">{c.n}</span> {c.word}
+                  </span>
+                ) : null}
+              </b>
+              <span>{o.sub}</span>
+            </button>
           );
         })}
       </nav>
@@ -268,7 +271,8 @@ export function BoardPage() {
                     data-testid={`board-filter-${s}`}
                     onClick={() => setFilter((f) => ({ ...f, status: asStatusFilter(s) }))}
                   >
-                    {STATUS_WORD[s]} <span className="num">{s === "all" ? counts.total - counts.rejected : counts[s]}</span>
+                    {STATUS_WORD[s]}{" "}
+                    <span className="num">{s === "all" ? counts.total - counts.rejected : counts[s]}</span>
                   </button>
                 ))}
               </fieldset>
@@ -301,7 +305,8 @@ export function BoardPage() {
                 </button>
               ) : null}
               <span className="bd-filters__n num" aria-live="polite">
-                {items.length} of {filter.status === "rejected" ? counts.rejected : counts.total - counts.rejected} shown
+                {items.length} of {filter.status === "rejected" ? counts.rejected : counts.total - counts.rejected}{" "}
+                shown
               </span>
             </div>
           ) : null}
@@ -332,7 +337,8 @@ export function BoardPage() {
                     <RejectedLane items={items} names={names} />
                   </Suspense>
                 ) : null
-              ) : /* the Wall stays mounted while its lightbox is open on a shot that just left the grid (a rejection) */ items.length || variant === 1 ? (
+              ) : /* the Wall stays mounted while its lightbox is open on a shot that just left the grid (a rejection) */ items.length ||
+                variant === 1 ? (
                 <Defer tier={2} id="board:shots" minHeight={items.length ? 480 : 0}>
                   <Suspense fallback={tabFallback}>
                     <V items={items} scoped={scoped} all={all} names={names} />
