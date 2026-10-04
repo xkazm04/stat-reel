@@ -19,7 +19,7 @@ import { DnsList, FinishPicture, ModeSwitch, testWord } from "../components/fini
 import { Arrow, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { takeLayerOrigin, visibleRect, type Rect } from "../components/layerTransition";
-import { artStyle, Loading, useReducedMotion } from "../components/ui";
+import { artStyle, Failure, Loading, useReducedMotion } from "../components/ui";
 import { useHeatmap, useProjects, useSources } from "../data";
 import { cellFixes, focusKey, neighbours, snapshotAge } from "../heatmap";
 import { type Capability, cellOf, MODE_LABEL, SPORTS, STAGE_LABEL } from "../logic";
@@ -211,13 +211,19 @@ export function HeatmapCellLayer() {
         <div className="hl-state">
           <Loading what="the cell" />
         </div>
+      ) : hm.isError && !hm.data ? (
+        // a failed load is not "no such cell": say the heatmap did not load and retry that request
+        <div className="hl-state">
+          <Failure error={hm.error} what="The heatmap" onRetry={() => void hm.refetch()} retrying={hm.isFetching} />
+          <button type="button" className="hl-link" onClick={close}>
+            Back to the grid
+          </button>
+        </div>
       ) : !uc || !validSport || !cell ? (
         <div className="hl-state">
           <div className="empty">
             <b>No such cell</b>
-            {hm.isError
-              ? `The heatmap did not load: ${errorText(hm.error)}`
-              : `There is no heatmap cell for "${usecase}" × "${sport}" in ${MODE_LABEL[mode].toLowerCase()} mode.`}{" "}
+            {`There is no heatmap cell for "${usecase}" × "${sport}" in ${MODE_LABEL[mode].toLowerCase()} mode.`}{" "}
             <button type="button" className="hl-link" onClick={close}>
               Back to the grid
             </button>
