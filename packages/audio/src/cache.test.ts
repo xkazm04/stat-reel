@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioCache, canonicalJson, requestKey } from "./cache";
 import { buildTtsRequest } from "./client";
-import { FixtureMissing } from "./errors";
+import { CacheCorrupt, FixtureMissing } from "./errors";
 
 const alignment = {
   characters: ["a"],
@@ -130,6 +130,21 @@ describe("AudioCache replay", () => {
     expect((err as Error).message).toContain(requestKey(req));
     expect((err as FixtureMissing).hint).toMatch(/AUDIO_RECORD=1/);
     expect(produce).not.toHaveBeenCalled();
+  });
+
+  it("a truncated or empty fixture record is CacheCorrupt naming the file, not a bare JSON error", async () => {
+    vi.stubEnv("AUDIO_RECORD", "1");
+    const live = new AudioCache({ dir, mode: "live", fixturesDir });
+    const r = await live.getOrCreate("tts", req, async () => produced());
+    const replay = new AudioCache({ dir, mode: "replay", fixturesDir });
+    const metaPath = join(fixturesDir, `${r.key}.json`);
+    for (const broken of ['{"key":"', "null", ""]) {
+      writeFileSync(metaPath, broken);
+      const err = await replay.getOrCreate("tts", req, async () => produced()).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(CacheCorrupt);
+      expect((err as Error).message).toContain(metaPath);
+      expect((err as Error).message).toMatch(/delete both and regenerate/);
+    }
   });
 
   it("rejects a fixture whose audio does not match its recorded sha256", async () => {

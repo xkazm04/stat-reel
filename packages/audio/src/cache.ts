@@ -152,7 +152,14 @@ export class AudioCache {
   private read(dir: string, key: string, source: "cache" | "fixture"): CacheEntry | undefined {
     const { audioPath, metaPath } = AudioCache.paths(dir, key);
     if (!existsSync(metaPath) || !existsSync(audioPath)) return undefined;
-    const meta = JSON.parse(readFileSync(metaPath, "utf8")) as CacheMeta;
+    let meta: CacheMeta;
+    try {
+      meta = JSON.parse(readFileSync(metaPath, "utf8")) as CacheMeta;
+    } catch (e) {
+      throw new CacheCorrupt(`${metaPath}: unreadable record (${(e as Error).message}); delete both and regenerate`);
+    }
+    if (!meta || typeof meta !== "object" || typeof meta.sha256 !== "string")
+      throw new CacheCorrupt(`${metaPath}: record has no sha256; delete both and regenerate`);
     const audio = readFileSync(audioPath);
     if (sha256(audio) !== meta.sha256)
       throw new CacheCorrupt(`${audioPath}: audio sha256 does not match ${metaPath}; delete both and regenerate`);
