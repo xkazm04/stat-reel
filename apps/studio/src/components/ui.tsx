@@ -1,4 +1,4 @@
-/** Small shared pieces: empty states, errors, sparkline, section heads, reduced-motion, wipe. */
+/** Small shared pieces: empty states, errors, sparkline, reduced-motion, wipe. */
 import {
   type CSSProperties,
   createContext,
@@ -65,15 +65,6 @@ export const Loading = ({ what }: { what: string }) => (
     Loading {what}
   </p>
 );
-
-export function SecH({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  return (
-    <h3 className="sec-h">
-      <span>{children}</span>
-      {right ? <span>{right}</span> : null}
-    </h3>
-  );
-}
 
 /** Line sparkline; renders a labelled dash when there is no number at all. */
 export function Sparkline({

@@ -1,8 +1,6 @@
-import type { HeatmapCell, Source } from "@statreel/schemas";
+import type { HeatmapCell } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import {
-  busState,
-  type Capability,
   checkRows,
   countStatuses,
   decisionAid,
@@ -92,65 +90,6 @@ describe("decisionAid", () => {
 
   it("counts statuses per mode", () => {
     expect(countStatuses(cells, "monetized")).toEqual({ go: 1, "data-ready": 0, ask: 2, blocked: 2 });
-  });
-});
-
-describe("busState", () => {
-  const src = (id: string, sport: string, verdict: Source["verdict"], kinds: string[]): Source =>
-    ({
-      id,
-      sport,
-      url: "",
-      access: "api",
-      hosts: [],
-      verdict,
-      license: "x",
-      attribution: null,
-      kinds,
-      partial_kinds: [],
-    }) as unknown as Source;
-  const cap = (source_id: string, license_class: string, status: string, sport = "F1", k = "hist"): Capability => ({
-    sport,
-    kind: k,
-    source_id,
-    license_class,
-    status,
-    coverage_from: null,
-    coverage_to: null,
-    rows: 1,
-    detail: "",
-  });
-  const sources = [
-    src("f1db", "F1", "legal", ["hist"]),
-    src("openf1", "F1", "non_commercial", ["live"]),
-    src("bad", "F1", "avoid", ["hist"]),
-  ];
-
-  it("is ok only from a passing, allowed, tested capability", () => {
-    expect(busState([cap("f1db", "legal", "pass")], sources, "hist", "F1", "monetized")).toMatchObject({
-      state: "ok",
-      source: "f1db",
-    });
-    expect(busState([], sources, "hist", "F1", "monetized")).toEqual({
-      state: "untested",
-      declared: ["f1db"],
-      best: "legal",
-    });
-  });
-  it("caps a non-commercial source in monetized mode", () => {
-    const caps = [cap("openf1", "non_commercial", "pass", "F1", "live")];
-    expect(busState(caps, sources, "live", "F1", "monetized")).toMatchObject({
-      state: "capped",
-      best: "non_commercial",
-    });
-    expect(busState(caps, sources, "live", "F1", "non_commercial")).toMatchObject({ state: "ok" });
-  });
-  it("reports failing tests and missing sources", () => {
-    expect(busState([cap("f1db", "legal", "fail")], sources, "hist", "F1", "monetized")).toEqual({
-      state: "failing",
-      failing: ["f1db"],
-    });
-    expect(busState([], sources, "money", "F1", "monetized")).toEqual({ state: "none" });
   });
 });
 

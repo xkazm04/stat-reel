@@ -1,23 +1,12 @@
 /**
- * Pure studio helpers: status vocabulary, stage logic, the heatmap decision aid, bus state,
- * file URLs and log summaries. No React, no DOM: unit-tested in logic.test.ts.
+ * Pure studio helpers: mode vocabulary, stage logic, the heatmap decision aid, file URLs and log
+ * summaries. No React, no DOM: unit-tested in logic.test.ts.
  */
-import type { CellStatus, HeatmapCell, LicenseClass, Mode, ProjectStatus, Source, Sport } from "@statreel/schemas";
+import type { CellStatus, HeatmapCell, LicenseClass, Mode, ProjectStatus, Sport } from "@statreel/schemas";
 
 // ------------------------------------------------------------------ vocabulary
 
 export const SPORTS: Sport[] = ["F1", "NBA", "NHL", "Soccer"];
-export const KINDS = ["hist", "bio", "events", "track", "live", "money"] as const;
-export type Kind = (typeof KINDS)[number];
-export const KIND_NAMES: Record<Kind, string> = {
-  hist: "History",
-  bio: "Biography",
-  events: "Events",
-  track: "Tracking",
-  live: "Live",
-  money: "Money",
-};
-export const MODES: Mode[] = ["monetized", "non_commercial"];
 export const MODE_LABEL: Record<Mode, string> = { monetized: "Monetized", non_commercial: "Non-commercial" };
 export const ALLOWED: Record<Mode, LicenseClass[]> = {
   monetized: ["legal"],
@@ -25,42 +14,6 @@ export const ALLOWED: Record<Mode, LicenseClass[]> = {
 };
 export const allowedIn = (mode: Mode, cls: string | null | undefined): boolean =>
   !!cls && (ALLOWED[mode] as string[]).includes(cls);
-
-/** LED vocabulary: shape + label, colour is only the third channel. */
-export type LedStatus = CellStatus | "pass" | "fail" | "refuse" | "declared" | "needs_review" | "running" | "idle";
-export const STATUS_META: Record<
-  LedStatus,
-  { label: string; word: string; shape: "go" | "data-ready" | "ask" | "blocked" | "idle" }
-> = {
-  go: { label: "GO", word: "Go", shape: "go" },
-  "data-ready": { label: "READY", word: "Data ready", shape: "data-ready" },
-  ask: { label: "ASK", word: "Ask", shape: "ask" },
-  blocked: { label: "BLOCKED", word: "Blocked", shape: "blocked" },
-  pass: { label: "PASS", word: "Passes", shape: "go" },
-  fail: { label: "FAIL", word: "Fails", shape: "blocked" },
-  refuse: { label: "REFUSED", word: "Refused", shape: "blocked" },
-  declared: { label: "DECLARED", word: "Declared, not tested", shape: "data-ready" },
-  needs_review: { label: "NEEDS REVIEW", word: "Needs review", shape: "ask" },
-  running: { label: "RUNNING", word: "Running", shape: "data-ready" },
-  idle: { label: "IDLE", word: "Idle", shape: "idle" },
-};
-export const CELL_STATUSES: CellStatus[] = ["go", "data-ready", "ask", "blocked"];
-
-export const LICENCE_META: Record<LicenseClass, { label: string; word: string }> = {
-  legal: { label: "LEGAL", word: "Legal · monetized OK" },
-  non_commercial: { label: "NC", word: "Non-commercial only" },
-  paid: { label: "PAID", word: "Paid · needs a contract" },
-  avoid: { label: "NEVER FETCHED", word: "Avoid · never fetched" },
-};
-export const LICENCE_RANK: Record<string, number> = { legal: 0, non_commercial: 1, paid: 2, avoid: 9 };
-
-/** Capability-test status of a source on a heatmap kind -> LED status. */
-export function sourceLed(status: string): LedStatus {
-  if (status === "pass") return "pass";
-  if (status === "declared") return "declared";
-  if (status === "needs_review") return "needs_review";
-  return "fail";
-}
 
 // ------------------------------------------------------------------ heatmap
 
@@ -143,11 +96,6 @@ export function decisionAid(cells: HeatmapCell[], mode: Mode): AidEntry[] {
     );
 }
 
-/** Unlock count per bus (kind|sport), from the decision aid. */
-export function unlockCounts(aid: AidEntry[]): Map<string, number> {
-  return new Map(aid.map((a) => [`${a.kind}|${a.sport}`, a.flips.length]));
-}
-
 export type Capability = {
   sport: string;
   kind: string;
@@ -159,40 +107,6 @@ export type Capability = {
   rows: number;
   detail: string;
 };
-
-export type BusState =
-  | { state: "ok"; best: LicenseClass; source: string; allowedCount: number }
-  | { state: "capped"; best: LicenseClass; source: string }
-  | { state: "untested"; declared: string[]; best: LicenseClass }
-  | { state: "failing"; failing: string[] }
-  | { state: "none" };
-
-/**
- * Supply for one kind x sport bus in a mode, from TESTED capabilities first; registry declarations
- * alone only ever say "untested" (never ready).
- */
-export function busState(caps: Capability[], sources: Source[], kind: string, sport: string, mode: Mode): BusState {
-  const tested = caps.filter((c) => c.sport === sport && c.kind === kind && c.license_class !== "avoid");
-  const passing = tested
-    .filter((c) => c.status === "pass")
-    .sort((a, b) => (LICENCE_RANK[a.license_class] ?? 9) - (LICENCE_RANK[b.license_class] ?? 9));
-  const allowedPass = passing.filter((c) => allowedIn(mode, c.license_class));
-  if (allowedPass[0])
-    return {
-      state: "ok",
-      best: allowedPass[0].license_class as LicenseClass,
-      source: allowedPass[0].source_id,
-      allowedCount: allowedPass.length,
-    };
-  if (passing[0])
-    return { state: "capped", best: passing[0].license_class as LicenseClass, source: passing[0].source_id };
-  const declared = sources
-    .filter((s) => (s.sport === sport || s.sport === "all") && s.verdict !== "avoid" && s.kinds.includes(kind as never))
-    .sort((a, b) => (LICENCE_RANK[a.verdict] ?? 9) - (LICENCE_RANK[b.verdict] ?? 9));
-  if (tested.length) return { state: "failing", failing: tested.map((c) => c.source_id) };
-  if (declared[0]) return { state: "untested", declared: declared.map((s) => s.id), best: declared[0].verdict };
-  return { state: "none" };
-}
 
 /** Per use case x mode: GO count across snapshots (oldest -> newest). */
 export function trendSeries(
@@ -214,15 +128,6 @@ export const STAGE_LABEL: Record<ProjectStatus, string> = {
   gated: "Gated",
   published: "Published",
 };
-export const STAGE_SHORT: Record<ProjectStatus, string> = {
-  idea: "Idea",
-  "data-ready": "Data",
-  scripted: "Script",
-  rendered: "Render",
-  gated: "Gate",
-  published: "Pub",
-};
-
 export const stageIndex = (status: string): number => Math.max(0, STAGES.indexOf(status as ProjectStatus));
 
 export type JobLike = { kind: string; status: string; progress?: number | null; error?: string | null };

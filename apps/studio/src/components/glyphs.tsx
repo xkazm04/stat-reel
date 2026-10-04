@@ -1,6 +1,6 @@
 /**
  * The status vocabulary, drawn (the font subsets carry no arrows): status glyphs (shape before
- * hue), status chips (glyph + label as text), licence chips, arrows, sport fields.
+ * hue), status chips (glyph + label as text), licence chips, arrows.
  * The glyphs are Photo Finish positions relative to the finish line (bar across with a flag, bar
  * at the line with a hollow end, hatched bar short with a query dot, barred gate at the start).
  */
@@ -121,56 +121,6 @@ export function FormatIcon({ format, h = 12 }: { format: string; h?: number }) {
   );
 }
 
-/** Sport fields: plain geometry, no marks. */
-export function Field({ sport }: { sport: string }) {
-  let p: ReactNode = null;
-  if (sport === "F1")
-    p = (
-      <path d="M8 30C4 18 12 8 24 9l26 3c8 1 9 9 2 11l-14 4c-5 2-4 7 1 7l32-2c9 0 12-12 3-16L70 12c-4-2-2-8 3-7l14 3c8 2 10 12 6 20-5 10-15 12-26 12H24C16 40 10 37 8 30Z" />
-    );
-  else if (sport === "NBA")
-    p = (
-      <>
-        <rect x="4" y="5" width="92" height="38" />
-        <path d="M4 14h18v20H4M22 18a6 6 0 0 1 0 12M96 14H78v20h18M78 18a6 6 0 0 0 0 12M50 5v38" />
-        <circle cx="50" cy="24" r="7" />
-      </>
-    );
-  else if (sport === "NHL")
-    p = (
-      <>
-        <rect x="4" y="5" width="92" height="38" rx="14" />
-        <path d="M50 5v38M34 5v38M66 5v38M14 8v32M86 8v32" />
-        <circle cx="50" cy="24" r="6" />
-        <circle cx="24" cy="15" r="3" />
-        <circle cx="24" cy="33" r="3" />
-        <circle cx="76" cy="15" r="3" />
-        <circle cx="76" cy="33" r="3" />
-      </>
-    );
-  else if (sport === "Soccer")
-    p = (
-      <>
-        <rect x="4" y="5" width="92" height="38" />
-        <path d="M50 5v38M4 13h13v22H4M96 13H83v22h13M4 19h5v10H4M96 19h-5v10h5" />
-        <circle cx="50" cy="24" r="8" />
-      </>
-    );
-  return (
-    <svg
-      className="field"
-      viewBox="0 0 100 48"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinejoin="round"
-    >
-      {p}
-    </svg>
-  );
-}
-
 /** "≠" drawn (the subsets carry no maths symbols). */
 export function NotEqual() {
   return (
@@ -181,5 +131,3 @@ export function NotEqual() {
   );
 }
 
-/** Kbd hint. */
-export const Kbd = ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>;

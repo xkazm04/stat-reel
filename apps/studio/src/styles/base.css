@@ -731,10 +731,6 @@ kbd {
   }
 }
 
-.field {
-  width: 100%;
-  height: auto;
-}
 .neq {
   display: inline-block;
   width: 0.72em;
