@@ -180,8 +180,8 @@ export function useProduce(detail: ProjectDetail | undefined, usecaseComposition
   });
   const running = produceJob(detail);
   const llm = detail?.jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running"));
-  const blockReason = produceBlockReason(compositionState(usecaseComposition, "ready"));
-  const canProduce = !!detail?.props?.props && !!detail.script && !running && !llm && !blockReason;
+  const blockReason = produceBlockReason(compositionState(usecaseComposition, "ready"), !!llm);
+  const canProduce = !!detail?.props?.props && !!detail.script && !running && !blockReason;
   return { mutation, running, blockReason, canProduce };
 }
 

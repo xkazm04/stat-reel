@@ -92,6 +92,12 @@ describe("compositionState", () => {
     expect(produceBlockReason("not-built")).toMatch(/No player/);
     for (const s of ["built", "loading", "unavailable"] as const) expect(produceBlockReason(s)).toBeNull();
   });
+  it("says why Produce is disabled while the co-pilot drafts (no silent disabled button)", () => {
+    expect(produceBlockReason("built", true)).toMatch(/co-pilot is drafting/);
+    expect(produceBlockReason("built", false)).toBeNull();
+    // the composition reason wins: it does not go away when the draft ends
+    expect(produceBlockReason("not-built", true)).toMatch(/No player/);
+  });
 });
 
 describe("scheduleOffered", () => {

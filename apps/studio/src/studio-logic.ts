@@ -113,9 +113,16 @@ export function compositionState(
   return load === "ready" ? "built" : load === "missing" ? "unavailable" : "loading";
 }
 
-/** Why Produce is disabled by the composition, or null when it is not. */
-export const produceBlockReason = (state: CompositionState): string | null =>
-  state === "not-built" ? "No player for this use case yet; Produce needs a built composition." : null;
+/**
+ * Why Produce is disabled, or null when nothing blocks it: an unbuilt composition, or a co-pilot draft in
+ * flight (a draft may store new props under the chain). A disabled Produce always carries its reason.
+ */
+export const produceBlockReason = (state: CompositionState, drafting = false): string | null =>
+  state === "not-built"
+    ? "No player for this use case yet; Produce needs a built composition."
+    : drafting
+      ? "The co-pilot is drafting; Produce once the draft ends."
+      : null;
 
 /** The control room and the gate page both offer "Schedule in Calendar": gate allows, nothing running, not on the calendar yet. */
 export const scheduleOffered = (
