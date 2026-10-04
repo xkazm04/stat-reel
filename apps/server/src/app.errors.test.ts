@@ -64,6 +64,13 @@ describe("app.onError / notFound", () => {
     expect(mapError(new Error("bad input"), 400)).toEqual({ status: 400, body: { error: "bad input" } });
   });
 
+  it("a SyntaxError on a GET is the server's stored JSON, not the caller's: a logged 500, never '400 malformed JSON'", async () => {
+    const r = await appThrowing(() => new SyntaxError("Unexpected token } in JSON at position 9")).app.request("/api/projects");
+    expect(r.status).toBe(500);
+    expect((await body(r)).error).toMatch(/stored data/);
+    expect(String(spy.mock.calls[0]?.[0])).toContain("SyntaxError");
+  });
+
   it("an unknown /api path is a JSON 404", async () => {
     const { app } = appThrowing(() => new Error("x"));
     const r = await app.request("/api/nope");

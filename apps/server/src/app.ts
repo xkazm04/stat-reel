@@ -88,7 +88,9 @@ export function buildApp(d: AppDeps) {
 
   // JSON for every failure: the studio's request() parses `{error}`, Hono's default is a plain-text 500/404.
   app.onError((err, c) => {
-    const { status, body } = mapError(err, 500);
+    // a bodyless read has no request JSON to blame: its SyntaxError is a stored row that will not parse (a server fault)
+    const bodyless = c.req.method === "GET" || c.req.method === "HEAD";
+    const { status, body } = err instanceof SyntaxError && bodyless ? { status: 500, body: { error: `stored data could not be read: ${err.message}` } } : mapError(err, 500);
     if (status >= 500) console.error(`[api] ${c.req.method} ${c.req.path} -> ${status}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     return c.json(body, status as 500);
   });
