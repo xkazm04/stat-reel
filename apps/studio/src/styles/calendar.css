@@ -610,7 +610,7 @@
   font-size: 13px;
   line-height: 1.4;
   color: var(--color-text-muted);
-  border-left: 3px solid var(--color-floodlight-warm);
+  border-left: 3px solid var(--status-ask);
   padding-left: 8px;
   overflow-wrap: anywhere;
 }
