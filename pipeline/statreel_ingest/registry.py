@@ -25,6 +25,13 @@ class HostNotRegistered(PermissionError):
     """The URL's host is not registered for the source."""
 
 
+class UnknownSource(KeyError):
+    """The source id is not in the registry (a KeyError, so existing `except KeyError` callers still match)."""
+
+    def __str__(self) -> str:  # KeyError would repr() the message, quotes and all
+        return str(self.args[0]) if self.args else ""
+
+
 class RateLimit(BaseModel):
     model_config = ConfigDict(extra="allow")
     # every figure must be positive: a zero or negative one yields a zero/negative spacing (no throttle)
@@ -92,7 +99,7 @@ class Registry:
         try:
             return self._by_id[source_id]
         except KeyError:
-            raise KeyError(f"source {source_id!r} is not in the registry") from None
+            raise UnknownSource(f"source {source_id!r} is not in the registry") from None
 
     def require_fetchable(self, source_id: str) -> Source:
         src = self.get(source_id)

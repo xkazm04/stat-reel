@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .client import EthicalClient
+from .client import EthicalClient, MissingContact
 from .config import Paths, owner_contact
-from .registry import Registry
+from .registry import Registry, UnknownSource
 from .snapshot import SchemaDrift
 from .throttle import BackedOff
 
@@ -70,7 +70,8 @@ def main(argv: list[str] | None = None) -> int:
     paths = Paths()
     try:
         return {"ingest": cmd_ingest, "transform": cmd_transform, "capabilities": cmd_capabilities}[args.cmd](args, paths)
-    except PermissionError as refused:  # ethics layer: avoid verdict, unregistered host, robots
+    # ethics layer: avoid verdict, unregistered host, robots, a source not in the registry, no UA contact
+    except (PermissionError, UnknownSource, MissingContact) as refused:
         print(f"refused: {refused}", file=sys.stderr)
         return 3
     except BackedOff as stop:  # 429/503: the retry time is persisted; do not hammer
