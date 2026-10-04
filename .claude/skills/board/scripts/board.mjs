@@ -413,6 +413,7 @@ async function caseContext(count) {
   return {
     accepted, rejected, existing, registry, count,
     registry_ids: sources.map((s) => s.id), avoid_ids: sources.filter((s) => s.verdict === "avoid").map((s) => s.id),
+    avoid_hosts: sources.filter((s) => s.verdict === "avoid" && s.url).map((s) => URL.canParse(s.url) ? new URL(s.url).hostname.toLowerCase().replace(/^www\./, "") : null).filter(Boolean),
   };
 }
 
@@ -424,7 +425,7 @@ async function casesLoop() {
   const stageDir = path.join(REPO, ".contest", "staging", contestId);
   const data = await stage(stageDir);
   const ctx = await caseContext(count);
-  writeFileSync(path.join(data, "case-context.json"), JSON.stringify({ existing: ctx.existing, registry_ids: ctx.registry_ids, avoid_ids: ctx.avoid_ids, count }));
+  writeFileSync(path.join(data, "case-context.json"), JSON.stringify({ existing: ctx.existing, registry_ids: ctx.registry_ids, avoid_ids: ctx.avoid_ids, avoid_hosts: ctx.avoid_hosts, count }));
   writeFileSync(path.join(data, "check-cases.mjs"), [
     "// The board harness for case ideas: node data/check-cases.mjs (run from your workspace).",
     'import path from "node:path";', 'import { fileURLToPath } from "node:url";',
@@ -483,7 +484,7 @@ async function harvestCases() {
       console.log(`skip ${seat}: cases.json missing or invalid`);
       continue;
     }
-    const r = checkCases(cases, { tables, existing, registryIds: ctx.registry_ids, avoidIds: ctx.avoid_ids });
+    const r = checkCases(cases, { tables, existing, registryIds: ctx.registry_ids, avoidIds: ctx.avoid_ids, avoidHosts: ctx.avoid_hosts ?? [] });
     for (const c of r.cases) {
       if (c.errors.length) {
         report.push({ seat, title: c.title, ok: false, errors: c.errors });

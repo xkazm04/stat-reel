@@ -5,8 +5,20 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { resolveFacts, titleKey, validateCaseIdea } from "./lib.mjs";
 
-/** Errors per case for one cases.json; `existing` titles and `registryIds` come from the staged data/. */
-export function checkCases(cases, { tables = {}, existing = [], registryIds = [], avoidIds = [], count = null } = {}) {
+const hostOf = (url) => {
+  try {
+    return new URL(String(url)).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Errors per case for one cases.json; `existing` titles, `registryIds` and the avoid list come from
+ * the staged data/. An avoid source is matched by registry_id AND by its url's host, because a seat
+ * that cites basketball-reference.com by url alone names no registry_id at all.
+ */
+export function checkCases(cases, { tables = {}, existing = [], registryIds = [], avoidIds = [], avoidHosts = [], count = null } = {}) {
   const out = [];
   if (!Array.isArray(cases)) return { ok: false, global: ["cases.json must be a JSON array"], cases: out };
   const global = [];
@@ -22,6 +34,8 @@ export function checkCases(cases, { tables = {}, existing = [], registryIds = []
     for (const s of c?.sources ?? []) {
       if (s?.registry_id && !registryIds.includes(s.registry_id)) errors.push(`registry_id ${s.registry_id} is not in the registry`);
       if (s?.registry_id && avoidIds.includes(s.registry_id)) errors.push(`${s.registry_id} is marked avoid in the registry - never propose it`);
+      const host = s?.url ? hostOf(s.url) : null;
+      if (host && avoidHosts.some((h) => host === h || host.endsWith(`.${h}`))) errors.push(`source ${s.name ?? "?"} (${host}) is a registry avoid source - never propose it`);
     }
     if (c?.data_status === "registry" && !(c.sources ?? []).some((s) => s?.registry_id && registryIds.includes(s.registry_id))) {
       errors.push("data_status registry needs a source with a registry_id from the registry");
@@ -38,7 +52,7 @@ export function loadContext(dataDir) {
   const tables = {};
   for (const f of readdirSync(dataDir).filter((f) => f.startsWith("f1_") && f.endsWith(".json"))) tables[f.slice(0, -5)] = JSON.parse(readFileSync(path.join(dataDir, f), "utf8"));
   const ctx = JSON.parse(readFileSync(path.join(dataDir, "case-context.json"), "utf8"));
-  return { tables, existing: ctx.existing, registryIds: ctx.registry_ids, avoidIds: ctx.avoid_ids, count: ctx.count };
+  return { tables, existing: ctx.existing, registryIds: ctx.registry_ids, avoidIds: ctx.avoid_ids, avoidHosts: ctx.avoid_hosts ?? [], count: ctx.count };
 }
 
 export async function main(workspace, dataDir) {
