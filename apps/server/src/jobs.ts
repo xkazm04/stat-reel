@@ -37,7 +37,6 @@ export function jobRetentionDays(env: Record<string, string | undefined> = proce
 export class JobRunner {
   private handlers = new Map<string, Handler>();
   private active = new Map<string, { id: string; controller: AbortController; done: Promise<void> }>();
-  private waiters: (() => void)[] = [];
   /** kinds that share a single slot (e.g. `gen_render` runs on the `render` lane); default lane = the kind */
   private lanes = new Map<string, string>();
   /** startup sweeps (partial run dirs, orphan job files): run by resume() before anything is re-queued */
