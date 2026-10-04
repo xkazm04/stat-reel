@@ -188,6 +188,10 @@ export class ClaudeEngine implements LlmEngine {
   run(opts: RunOptions): Promise<RunResult> {
     return new Promise((resolve, reject) => {
       const child = spawn(this.bin, [...this.binArgs, ...claudeArgs(opts)], { cwd: opts.cwd, signal: opts.signal, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      // A CLI that exits before reading its prompt (bad flag, auth failure) fails the stdin write with EPIPE/EOF.
+      // Unhandled, that error is an uncaughtException that takes the whole server down; the exit code and
+      // stderr already explain the failure, so the write error itself is dropped.
+      child.stdin.on("error", () => {});
       child.stdin.end(opts.prompt, "utf8");
       const raw: string[] = [];
       const events: LlmEvent[] = [];

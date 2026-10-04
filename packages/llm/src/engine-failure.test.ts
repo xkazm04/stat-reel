@@ -36,6 +36,22 @@ process.exit(3);`);
     expect(seen).toContainEqual({ type: "stderr", text: "segfault in mcp client" });
   });
 
+  it("a CLI that exits before reading a large prompt fails the run instead of throwing an uncaught EOF/EPIPE", async () => {
+    const engine = fakeClaude(`console.error("unknown option"); process.exit(2);`);
+    const uncaught: unknown[] = [];
+    const catcher = (e: unknown) => uncaught.push(e);
+    process.on("uncaughtException", catcher);
+    try {
+      // larger than a pipe buffer: the write is still pending when the child exits
+      const err = await engine.run({ prompt: "x".repeat(512 * 1024), mcpConfigPath: "m", onEvent: () => {} }).catch((e) => e);
+      await new Promise((r) => setTimeout(r, 200));
+      expect(String(err)).toMatch(/claude exited 2: unknown option/);
+      expect(uncaught.map(String)).toEqual([]);
+    } finally {
+      process.off("uncaughtException", catcher);
+    }
+  });
+
   it("stays quiet on stderr when the run succeeded", async () => {
     const engine = fakeClaude(`console.error("deprecation warning");
 console.log(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "done", session_id: "s" }));
