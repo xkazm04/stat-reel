@@ -32,6 +32,21 @@ describe("EraAdjustedProps", () => {
   it("rejects 'did you know' as a hook shape", () => {
     expect(EraAdjustedPropsSchema.safeParse({ ...sampleEraProps, hook_shape: "did-you-know" }).success).toBe(false);
   });
+
+  describe("references resolve (a focus id that matches no row dims every line in that scene)", () => {
+    const at = (props: unknown, path: string) =>
+      EraAdjustedPropsSchema.safeParse(props).error?.issues.filter((i) => i.path.join(".") === path).map((i) => i.message).join("|") ?? "";
+    it("a scene focus id must be one of rows", () => {
+      const bad = { ...sampleEraProps, scenes: sampleEraProps.scenes.map((s, i) => (i === 2 ? { ...s, focus: ["juan-manuel-fangio", "fangio"] } : s)) };
+      expect(at(bad, "scenes.2.focus.1")).toMatch(/scene 'reveal' focuses unknown row 'fangio' \(rows: juan-manuel-fangio, alberto-ascari/);
+    });
+    it("player ids and scene ids are unique", () => {
+      const dupRow = { ...sampleEraProps, rows: sampleEraProps.rows.map((r, i) => (i === 3 ? { ...r, player_id: "alberto-ascari" } : r)) };
+      expect(at(dupRow, "rows.3.player_id")).toMatch(/duplicate player_id 'alberto-ascari' \(also rows\[1\]\.player_id\)/);
+      const dupScene = { ...sampleEraProps, scenes: sampleEraProps.scenes.map((s, i) => (i === 3 ? { ...s, id: "context" } : s)) };
+      expect(at(dupScene, "scenes.3.id")).toMatch(/duplicate scene id 'context' \(also scenes\[1\]\.id\)/);
+    });
+  });
 });
 
 describe("EraAdjusted text caps (derived from the frame geometry)", () => {

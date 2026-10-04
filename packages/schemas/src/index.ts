@@ -155,6 +155,26 @@ export const EraAdjustedPropsSchema = z.object({
     ctx.addIssue({ code: "custom", message: eraTooLong("attribution (one line beside the AI-disclosure chip in a vertical short)", ERA_TEXT_LIMITS.attributionVerticalMaxChars), path: ["attribution"] });
   if (!p.rows.some((r) => r.player_id === p.highlight_player_id))
     ctx.addIssue({ code: "custom", message: "highlight_player_id must be one of rows", path: ["highlight_player_id"] });
+  // references (the DataRace refinement's rule): ids are unique and every focus id names a row, because the
+  // slopegraph dims every line that is not in a non-empty focus set, so one typo dims the whole chart
+  const firstOf = <T>(items: T[], key: (t: T) => string, what: string, at: (i: number) => (string | number)[]) => {
+    const seen = new Map<string, number>();
+    items.forEach((t, i) => {
+      const k = key(t);
+      const first = seen.get(k);
+      if (first === undefined) seen.set(k, i);
+      else ctx.addIssue({ code: "custom", path: at(i), message: `duplicate ${what} '${k}' (also ${at(first).join(".").replace(/\.(\d+)\./, "[$1].")}): every ${what} must be unique` });
+    });
+    return seen;
+  };
+  const rowIds = firstOf(p.rows, (r) => r.player_id, "player_id", (i) => ["rows", i, "player_id"]);
+  firstOf(p.scenes, (s) => s.id, "scene id", (i) => ["scenes", i, "id"]);
+  p.scenes.forEach((s, i) => {
+    s.focus.forEach((f, j) => {
+      if (!rowIds.has(f))
+        ctx.addIssue({ code: "custom", path: ["scenes", i, "focus", j], message: `scene '${s.id}' focuses unknown row '${f}' (rows: ${[...rowIds.keys()].join(", ")})` });
+    });
+  });
 });
 export type EraAdjustedProps = z.infer<typeof EraAdjustedPropsSchema>;
 
