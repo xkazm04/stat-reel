@@ -4,12 +4,15 @@
  * (data-testid publication-status holds only the status, so "private" appears only once published).
  */
 import type { UseCase } from "@statreel/schemas";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import type { Job, ProjectDetail } from "../api";
+import { api, type Job, type ProjectDetail, qk, type RenderRow } from "../api";
 import { StatusChip } from "../components/glyphs";
 import { latestRender, renderPolicy, useHeatmap, useProject } from "../data";
-import { useJobProgress } from "../events";
 import { activeJob, pct } from "../display";
+import { useJobProgress } from "../events";
+import { compositionState, produceBlockReason, verdictView } from "../studio-logic";
+import { denyHint } from "./deny-hints";
 
 export function useStudio() {
   const { projectId } = useParams({ from: "/studio/$projectId" });
@@ -72,19 +75,60 @@ export function JobError({ job }: { job: Job | null }) {
   );
 }
 
-/** The gate verdict word. PENDING while a produce chain runs; NO VERDICT before any render. */
-export function Verdict({ detail, size = "md" }: { detail: ProjectDetail; size?: "md" | "lg" }) {
-  const render = latestRender(detail);
-  const policy = renderPolicy(render);
-  const running = produceJob(detail);
-  const word = running ? "PENDING" : policy ? (policy.allow ? "ALLOW" : "DENY") : "NO VERDICT";
-  const status = running || !policy ? null : policy.allow ? "go" : "blocked";
+/**
+ * The gate verdict word. Without `render` it is the project's gate: PENDING while a produce chain
+ * runs, NO VERDICT before any render. With `render` (the gate page's shown render) it is that
+ * render's own verdict and a running produce does not override it (see verdictView).
+ */
+export function Verdict({
+  detail,
+  render: shown,
+  size = "md",
+}: {
+  detail: ProjectDetail;
+  render?: RenderRow | null;
+  size?: "md" | "lg";
+}) {
+  const named = shown !== undefined;
+  const policy = renderPolicy(named ? shown : latestRender(detail));
+  const { word, status } = verdictView(policy, !!produceJob(detail), named);
   return (
     <span className={`verdict-word verdict-word--${size} ${status ? `st--${status}` : "is-none"}`}>
       {status ? <StatusChip status={status} size={size === "lg" ? 26 : 16} label="" /> : null}
       <b data-testid="policy-verdict">{word}</b>
     </span>
   );
+}
+
+/** One OPA deny reason, verbatim, and under it a one-line fix hint when the reason is a known rule. */
+export function DenyReason({ reason }: { reason: string }) {
+  const hint = denyHint(reason);
+  return (
+    <>
+      <span className="mono">{reason}</span>
+      {hint ? <span className="reason-hint">{hint}</span> : null}
+    </>
+  );
+}
+
+/**
+ * The Produce action both the control room and the gate page offer: one mutation, one set of guards
+ * (props and a script exist, nothing running, no co-pilot session, the use case has a built composition).
+ * The composition block depends only on the use case's name, so the gate page need not load the chunk.
+ */
+export function useProduce(detail: ProjectDetail | undefined, usecaseComposition: string | null | undefined) {
+  const qc = useQueryClient();
+  const pid = detail?.project.id ?? "";
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.produce(pid, { platform: "youtube", monetized: detail?.project.mode === "monetized", ai_disclosure: true }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.project(pid) }),
+  });
+  const running = produceJob(detail);
+  const llm = detail?.jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running"));
+  const blockReason = produceBlockReason(compositionState(usecaseComposition, "ready"));
+  const canProduce = !!detail?.props?.props && !!detail.script && !running && !llm && !blockReason;
+  return { mutation, running, blockReason, canProduce };
 }
 
 /**

@@ -6,29 +6,28 @@
  * width at the bottom. The script opens as a modal. Publishing lives in the Calendar.
  */
 import type { PlayerRef } from "@remotion/player";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
-import { api, errorText, qk } from "../api";
+import { api, errorText } from "../api";
 import { Defer } from "../components/arrive";
 import { Arrow } from "../components/glyphs";
 import type { PlayerMeta } from "../components/Programme";
+import { useComposition } from "../composition";
 import { latestRender, renderPolicy } from "../data";
 import { nextAction } from "../logic";
-import { useComposition } from "../composition";
-import { canCancelJob, canSchedule, compositionState, produceBlockReason, sceneSpans } from "../studio-logic";
+import { canCancelJob, compositionState, sceneSpans, scheduleOffered } from "../studio-logic";
 import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
-import { usePlayerClock } from "./playerClock";
 import { PropsPanel } from "./PropsPanel";
-import { JobError, JobLine, lastJobOf, PublicationStatus, produceJob, useStudio, Verdict } from "./shared";
+import { usePlayerClock } from "./playerClock";
+import { DenyReason, JobError, JobLine, lastJobOf, PublicationStatus, useProduce, useStudio, Verdict } from "./shared";
 import { Tracks } from "./Tracks";
 
 const ScriptModal = lazy(() => import("./ScriptModal").then((m) => ({ default: m.ScriptModal })));
 
 export function ControlRoom() {
   const { detail, usecase, heatmap } = useStudio();
-  const qc = useQueryClient();
   const playerRef = useRef<PlayerRef>(null);
   const [meta, setMeta] = useState<PlayerMeta | null>(null);
   const onMeta = useCallback((m: PlayerMeta | null) => setMeta(m), []);
@@ -36,18 +35,13 @@ export function ControlRoom() {
   const [script, setScript] = useState<{ open: boolean; at: string | null }>({ open: false, at: null });
   const pid = detail?.project.id ?? "";
 
-  const produce = useMutation({
-    mutationFn: () =>
-      api.produce(pid, { platform: "youtube", monetized: detail?.project.mode === "monetized", ai_disclosure: true }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.project(pid) }),
-  });
+  const { mutation: produce, running, blockReason, canProduce } = useProduce(detail, usecase?.composition);
 
   // stop the running audio/render job; job.* SSE events (events.ts) refresh the project, so no manual invalidate
   const cancel = useMutation({ mutationFn: (jobId: string) => api.cancelJob(jobId) });
 
   const comp = useComposition();
   const cstate = compositionState(usecase?.composition, comp.status);
-  const blockReason = produceBlockReason(cstate);
 
   const props = detail?.props?.props ?? null;
   const duration = props?.timing?.duration_s ?? (meta ? meta.durationInFrames / meta.fps : 0);
@@ -71,13 +65,10 @@ export function ControlRoom() {
   }, []);
 
   if (!detail) return null;
-  const running = produceJob(detail);
-  const llm = detail.jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running"));
   const render = latestRender(detail);
   const policy = renderPolicy(render);
-  const canProduce = !!props && !!detail.script && !running && !llm && !blockReason;
   const next = nextAction(detail.project.status, detail.jobs[0]);
-  const schedulable = canSchedule(policy, !!running) && !detail.publications.length;
+  const schedulable = scheduleOffered(policy, !!running, detail.publications);
 
   return (
     <div className="room-wrap">
@@ -159,8 +150,8 @@ export function ControlRoom() {
       {policy && !policy.allow && !running ? (
         <ul className="deny-inline" role="alert">
           {policy.deny.map((d) => (
-            <li key={d} className="mono">
-              {d}
+            <li key={d}>
+              <DenyReason reason={d} />
             </li>
           ))}
         </ul>

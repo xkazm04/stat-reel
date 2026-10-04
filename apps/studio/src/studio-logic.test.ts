@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCancelJob, canSchedule, compositionState, hasPlayer, produceBlockReason, cps, draftSpans, peakCueCps, rulerTicks, sceneSpans, spanAt, spanLabel } from "./studio-logic";
+import { canCancelJob, canSchedule, compositionState, cps, draftSpans, hasPlayer, peakCueCps, produceBlockReason, rulerTicks, sceneSpans, scheduleOffered, spanAt, spanLabel, verdictView } from "./studio-logic";
 
 const scenes = [
   { id: "hook", kind: "hook" },
@@ -91,5 +91,31 @@ describe("compositionState", () => {
   it("gives Produce a reason only when not built", () => {
     expect(produceBlockReason("not-built")).toMatch(/No player/);
     for (const s of ["built", "loading", "unavailable"] as const) expect(produceBlockReason(s)).toBeNull();
+  });
+});
+
+describe("scheduleOffered", () => {
+  it("needs an allowing gate, an idle project and no publication", () => {
+    expect(scheduleOffered({ allow: true }, false, [])).toBe(true);
+    expect(scheduleOffered({ allow: true }, true, [])).toBe(false);
+    expect(scheduleOffered({ allow: true }, false, [{}])).toBe(false);
+    expect(scheduleOffered({ allow: false }, false, [])).toBe(false);
+    expect(scheduleOffered(null, false, [])).toBe(false);
+  });
+});
+
+describe("verdictView", () => {
+  it("is PENDING for the project gate while a produce runs", () => {
+    expect(verdictView({ allow: true }, true)).toEqual({ word: "PENDING", status: null });
+    expect(verdictView(null, true).word).toBe("PENDING");
+  });
+  it("keeps the verdict of a named render while a produce runs (the produce writes a new render)", () => {
+    expect(verdictView({ allow: false }, true, true)).toEqual({ word: "DENY", status: "blocked" });
+    expect(verdictView({ allow: true }, true, true)).toEqual({ word: "ALLOW", status: "go" });
+  });
+  it("says NO VERDICT without a policy and the plain verdict otherwise", () => {
+    expect(verdictView(null, false).word).toBe("NO VERDICT");
+    expect(verdictView({ allow: true }, false)).toEqual({ word: "ALLOW", status: "go" });
+    expect(verdictView({ allow: false }, false, true)).toEqual({ word: "DENY", status: "blocked" });
   });
 });

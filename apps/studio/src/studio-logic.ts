@@ -115,3 +115,28 @@ export function compositionState(
 /** Why Produce is disabled by the composition, or null when it is not. */
 export const produceBlockReason = (state: CompositionState): string | null =>
   state === "not-built" ? "No player for this use case yet; Produce needs a built composition." : null;
+
+/** The control room and the gate page both offer "Schedule in Calendar": gate allows, nothing running, not on the calendar yet. */
+export const scheduleOffered = (
+  policy: { allow?: boolean } | null | undefined,
+  busy: boolean,
+  publications: readonly unknown[],
+): boolean => canSchedule(policy, busy) && publications.length === 0;
+
+export type VerdictWord = "PENDING" | "ALLOW" | "DENY" | "NO VERDICT";
+
+/**
+ * The gate verdict word. `ofRender` says the verdict is about one named render (the gate page shows
+ * a render, maybe an older pinned one): a produce that is running will write a NEW render and never
+ * touches that one, so its verdict stays true and is not overridden. Without it (the control room's
+ * project-level gate) a running produce means a verdict is on its way, so PENDING.
+ */
+export function verdictView(
+  policy: { allow: boolean } | null | undefined,
+  producing: boolean,
+  ofRender = false,
+): { word: VerdictWord; status: "go" | "blocked" | null } {
+  if (producing && !ofRender) return { word: "PENDING", status: null };
+  if (!policy) return { word: "NO VERDICT", status: null };
+  return policy.allow ? { word: "ALLOW", status: "go" } : { word: "DENY", status: "blocked" };
+}

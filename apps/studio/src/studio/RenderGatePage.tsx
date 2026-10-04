@@ -1,17 +1,21 @@
 /**
  * 05 Render & gate: live job progress (SSE), the post-render checks against their targets
  * (render checks_json), the video itself (/files), captions and manifest links, the provenance
- * manifest viewer, and the policy verdict with every deny reason verbatim and the checks run.
+ * manifest viewer, and the policy verdict with every deny reason verbatim (plus a fix hint for known
+ * rules) and the checks run. It is not a dead end: ALLOW offers "Schedule in Calendar", DENY offers
+ * the control room and Produce again (the control room's own mutation and guards, useProduce).
  */
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { serverError } from "../api";
 import { Defer } from "../components/arrive";
-import { StatusChip } from "../components/glyphs";
+import { Arrow, StatusChip } from "../components/glyphs";
 import { Empty, Failure, Loading } from "../components/ui";
 import { latestRender, renderChecks, renderFile, renderPolicy, useManifest } from "../data";
 import { checkRows, fileUrl, relTime } from "../logic";
+import { scheduleOffered } from "../studio-logic";
 import { hasCaptionSidecar, hasChecks, isNewerRender } from "./render-gate";
-import { JobError, JobLine, lastJobOf, produceJob, useStudio, Verdict } from "./shared";
+import { DenyReason, JobError, JobLine, lastJobOf, useProduce, useStudio, Verdict } from "./shared";
 
 export function RenderGatePage() {
   const { detail, usecase } = useStudio();
@@ -19,9 +23,9 @@ export function RenderGatePage() {
   const renders = detail?.renders ?? [];
   const render = renders.find((r) => r.id === pick) ?? latestRender(detail);
   const manifest = useManifest(render);
+  const { mutation: produce, running, blockReason, canProduce } = useProduce(detail, usecase?.composition);
   if (!detail) return null;
   const pid = detail.project.id;
-  const running = produceJob(detail);
   const policy = renderPolicy(render);
   const checks = renderChecks(render);
   const rows = checks ? checkRows(checks, render?.format ?? detail.project.format, usecase?.duration_s) : [];
@@ -29,6 +33,9 @@ export function RenderGatePage() {
   const m = manifest.data;
   const newer = isNewerRender(renders, pick);
   const captionsVtt = hasCaptionSidecar(m, "captions.vtt");
+  // scheduling concerns the project's latest render; the picker may show an older one
+  const isLatest = !!render && render.id === latestRender(detail)?.id;
+  const schedulable = isLatest && scheduleOffered(policy, !!running, detail.publications);
 
   return (
     <div className="rg">
@@ -129,11 +136,39 @@ export function RenderGatePage() {
                 </span>
               </h2>
               <div className="rg__verdict">
-                <Verdict
-                  detail={{ ...detail, renders: [render, ...renders.filter((r) => r.id !== render.id)] }}
-                  size="lg"
-                />
+                <Verdict detail={detail} render={render} size="lg" />
               </div>
+              {running ? (
+                <p className="sum-p" role="note">
+                  A produce is running; its new render gets its own verdict. This one is about the render shown.
+                </p>
+              ) : null}
+              {policy?.allow && schedulable ? (
+                <p className="rg__next">
+                  <Link to="/calendar" search={{ project: pid }} className="btn btn--sm btn--primary">
+                    Schedule in Calendar <Arrow />
+                  </Link>
+                </p>
+              ) : null}
+              {policy && !policy.allow ? (
+                <p className="rg__next">
+                  <button
+                    type="button"
+                    className="btn btn--sm btn--primary"
+                    data-testid="produce-again"
+                    onClick={() => produce.mutate()}
+                    disabled={!canProduce || produce.isPending}
+                    aria-busy={!!running || produce.isPending}
+                    title={blockReason ?? undefined}
+                  >
+                    {running ? "Producing" : "Produce again"}
+                  </button>
+                  <Link to="/studio/$projectId" params={{ projectId: pid }} className="btn btn--sm">
+                    Back to the control room
+                  </Link>
+                  {produce.isError ? <span className="joberr">{serverError(produce.error)}</span> : null}
+                </p>
+              ) : null}
               {policy ? (
                 <>
                   {policy.deny.length ? (
@@ -143,8 +178,8 @@ export function RenderGatePage() {
                       </h3>
                       <ul className="reasons reasons--deny">
                         {policy.deny.map((d) => (
-                          <li key={d} className="mono">
-                            {d}
+                          <li key={d}>
+                            <DenyReason reason={d} />
                           </li>
                         ))}
                       </ul>
