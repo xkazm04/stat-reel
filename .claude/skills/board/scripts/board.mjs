@@ -50,19 +50,42 @@ const die = (m) => {
   process.exit(1);
 };
 
-async function api(pathname, body) {
-  const res = await fetch(API + pathname, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {});
-  const json = await res.json();
-  if (!res.ok) throw new Error(`${pathname}: ${json.error ?? res.status}`);
+/** fetch, with a refused connection named as what it is and how to fix it (not a bare "fetch failed"). */
+async function reach(url, init) {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    return die(`the StatReel server is not reachable at ${API} (${e.cause?.code ?? e.cause?.message ?? e.message}); start it with \`pnpm dev\` or point STATREEL_API at it`);
+  }
+}
+
+/** The response body as JSON; an error answered as text (a proxy page, a 404 route) keeps its status and words. */
+async function readJson(pathname, res) {
+  const text = await res.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`${pathname}: HTTP ${res.status}, not JSON: ${text.slice(0, 120)}`);
+  }
+  if (!res.ok) throw new Error(`${pathname}: HTTP ${res.status} ${json?.error ?? ""}`.trim());
   return json;
 }
 
+async function api(pathname, body) {
+  const res = await reach(API + pathname, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {});
+  return readJson(pathname, res);
+}
+
 async function mcpQuery(sql) {
-  const res = await fetch(`${API}/mcp`, {
+  const res = await reach(`${API}/mcp`, {
     method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "query", arguments: { sql } } }),
   });
-  const out = JSON.parse((await res.json()).result.content[0].text);
+  const rpc = await readJson("/mcp", res);
+  const text = rpc.result?.content?.[0]?.text;
+  if (typeof text !== "string") throw new Error(`/mcp query: ${rpc.error?.message ?? "no result content"}`);
+  const out = JSON.parse(text);
   if (out.error) throw new Error(`query refused: ${out.error}`);
   return out;
 }
