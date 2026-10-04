@@ -2,7 +2,7 @@ import { safeZoneLandscape, safeZoneVertical } from "@statreel/design-tokens";
 import type { Cue, Format } from "@statreel/schemas";
 import { measureText } from "@statreel/viz";
 
-/** Burn-in type spec per format (DESIGN.md §6.5): Inter bold, white on the theme-driven sheet plate (ADR 009; colours come from the theme, not from this table). */
+/** Burn-in type spec per format (DESIGN.md §6.5): Inter bold, graphite ink on the translucent sheet plate (ADR 009; colours come from the theme, not from this table). */
 export const CAPTION_STYLE = {
   vertical: { fontSize: 76, lineHeight: 1.2, padX: 24, padY: 14, radius: 12, bottom: 1250 },
   landscape: {

@@ -2,8 +2,8 @@ import type { Cue } from "@statreel/schemas";
 
 /**
  * Cues from on-screen annotations (DESIGN.md §6.2, §6.5; ADR 007). The format has no narration, so
- * `buildCues` (which needs TTS word timings) never runs; the timed text a viewer reads is the
- * DataRace event cards. This maps those cards to cues so a music-only video still gets an SRT/VTT
+ * a time-evolution video has no TTS word timings for `buildCues` (which today runs only on the
+ * narrated M1 skeleton's produce path); the timed text a viewer reads is the DataRace event cards. This maps those cards to cues so a music-only video still gets an SRT/VTT
  * sidecar (WCAG 1.2.2). Pure, frame-aligned, seek-stable: no clocks, no randomness.
  */
 

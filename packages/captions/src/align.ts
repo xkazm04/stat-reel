@@ -13,12 +13,6 @@ const WS = /\s/;
 type TimedChar = { ch: string; start: number; end: number };
 
 /**
- * Group an ElevenLabs character-level alignment of `sceneSpokenText(scene)` into one WordTiming per
- * script token. A token is a unit even when its spoken form has spaces or hyphens
- * ("one hundred and five" -> display "105"). Times are shifted by `offset_s` (scene start in the
- * final timeline).
- */
-/**
  * A token may carry a whole phrase ("Lewis Hamilton leads."). When its display and spoken forms have
  * the same number of words, map them pairwise so captions can break between words. When the counts
  * differ ("105" / "one hundred and five") the token stays atomic: its words can't be paired.
@@ -32,6 +26,12 @@ function expandTokens<T extends { display: string; spoken: string }>(tokens: T[]
   });
 }
 
+/**
+ * Group an ElevenLabs character-level alignment of `sceneSpokenText(scene)` into one WordTiming per
+ * script token. A token is a unit even when its spoken form has spaces or hyphens
+ * ("one hundred and five" -> display "105"). Times are shifted by `offset_s` (scene start in the
+ * final timeline).
+ */
 export function wordsFromAlignment(scene: ScriptScene, alignment: CharAlignment, offset_s: number): WordTiming[] {
   const { characters, character_start_times_seconds: starts, character_end_times_seconds: ends } = alignment;
   if (starts.length !== characters.length || ends.length !== characters.length) {
