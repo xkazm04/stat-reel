@@ -30,12 +30,12 @@ def _snapshot_env(paths: Paths) -> dict[str, str]:
     return env
 
 
-def run_dbt(paths: Paths, args: list[str]) -> bool:
+def run_dbt(paths: Paths, args: list[str], env: dict[str, str] | None = None) -> bool:
     """dbt in a child process: dbt-duckdb keeps its in-process connection open after a run, which
     would block every later connection to the warehouse from this process."""
     dbt = shutil.which("dbt", path=str(Path(sys.executable).parent)) or "dbt"
     cmd = [dbt, *args, "--project-dir", str(paths.dbt_project), "--profiles-dir", str(paths.dbt_project)]
-    proc = subprocess.run(cmd, env=os.environ.copy(), capture_output=True, text=True)
+    proc = subprocess.run(cmd, env=env if env is not None else os.environ.copy(), capture_output=True, text=True)
     if proc.returncode != 0:
         print(proc.stdout[-6000:], proc.stderr[-2000:], sep="\n", file=sys.stderr)
     return proc.returncode == 0
@@ -43,9 +43,10 @@ def run_dbt(paths: Paths, args: list[str]) -> bool:
 
 def run_transform(paths: Paths, select: str | None = None) -> int:
     paths.warehouse.parent.mkdir(parents=True, exist_ok=True)
-    os.environ.update(_snapshot_env(paths))
-    os.environ["STATREEL_WAREHOUSE"] = paths.warehouse.as_posix()
-    if not run_dbt(paths, ["build", *(["--select", select] if select else [])]):
+    # the child's env only: writing os.environ would make every later Paths() in this process
+    # resolve this run's warehouse (STATREEL_WAREHOUSE is Paths.warehouse's default)
+    env = {**os.environ, **_snapshot_env(paths), "STATREEL_WAREHOUSE": paths.warehouse.as_posix()}
+    if not run_dbt(paths, ["build", *(["--select", select] if select else [])], env=env):
         print("dbt build failed", file=sys.stderr)
         return 1
     registry = Registry.load(paths.registry)
