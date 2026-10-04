@@ -102,7 +102,7 @@ test("topics: the finished render is on the ledger under Formula 1 (API) and sho
   await expect(page.getByTestId("topic-row-formula-1")).toBeVisible();
   const cell = page.getByTestId("topic-cell-formula-1-1");
   await expect(cell).toContainText("today");
-  await expect(cell).toHaveAttribute("aria-label", /Formula 1, video 1 of 1, created .*today/);
+  await expect(cell).toHaveAttribute("aria-label", /Formula 1, video 1 of 1, Era-adjusted rankings · F1, created .*today/);
   await expect(cell).toHaveAttribute("href", /^\/files\/renders\//);
   // the Feasibility view is one click away and still holds the rights grid
   await page.getByTestId("heatmap-view-feasibility").click();
