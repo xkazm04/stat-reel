@@ -36,3 +36,12 @@ findings. A sweep finding that needs one of the CLAUDE.md "ask the owner before"
 Contexts under 10 files are swept with a same-group sibling as one round:
 Calendar, Metrics & Sources UI + Heatmap UI; Projects & Produce Pipeline + Board, Library & Calendar
 Services + Heatmap, Topics & Metrics Services.
+
+## Skill improvement log
+
+- 2026-10-04 (v4.3.0, first adoption, 20 rounds / 23 contexts): the pipeline gate `uv run --project pipeline pytest`
+  run from the repo root loaded no pytest config and ran the `live` marker - a real f1db ingest. Fixed in the tree
+  (031273b); any new sub-package runner config must be enforced from the test tree, not only its ini.
+- 2026-10-04: four round-agents in parallel in the shared checkout worked (pathspec commits, whole-tree gates read
+  as "not mine" and re-run). The director owning the ledger, the Biome baseline and the register avoided every
+  shared-file race; 2 of 20 agents stalled on the stream and resumed cleanly from their transcripts.
