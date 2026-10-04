@@ -69,7 +69,7 @@ class EthicalClient:
         monotonic: Callable[[], float] | None = None,
     ) -> None:
         if not contact or not contact.strip():
-            raise MissingContact("set an owner contact (STATREEL_CONTACT or data/registry/ingest.yaml)")
+            raise MissingContact('set an owner contact: STATREEL_CONTACT, or {"contact": "..."} in .statreel/config.json')
         self.registry = registry
         self.source: Source = registry.require_fetchable(source_id)
         self.user_agent = f"StatReel/{__version__} (+{contact.strip()})"

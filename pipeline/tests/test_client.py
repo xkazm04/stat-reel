@@ -246,3 +246,10 @@ def test_an_unreachable_robots_txt_is_logged_before_the_run_is_refused(registry,
     with pytest.raises(RobotsDisallowed):
         make_client(registry, tmp_path, clock, srv).get(f"{API}/a")
     assert [(r["url"], r["status"], r["error"]) for r in _log_rows(tmp_path)] == [(f"{API}/robots.txt", None, "ConnectError")]
+
+
+def test_missing_contact_names_the_places_the_contact_is_actually_read_from(registry, tmp_path, clock):
+    with pytest.raises(MissingContact) as err:
+        make_client(registry, tmp_path, clock, Server({}), contact=" ")
+    assert "STATREEL_CONTACT" in str(err.value) and ".statreel/config.json" in str(err.value)
+    assert "ingest.yaml" not in str(err.value)  # never existed; config.owner_contact reads the two above
