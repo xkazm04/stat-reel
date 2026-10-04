@@ -22,7 +22,8 @@ select
     r.grid_position,
     r.position_display_order,
     r.started,
-    r.shared_car,
+    -- the whole car: also true for the driver who started it (f1db leaves that row unflagged)
+    r.shared_car or s.n is not null as shared_car,
     coalesce(r.points_awarded, 0) as points_awarded,
     case when not r.started or r.position_number is null then 0.0
          else (case r.position_number

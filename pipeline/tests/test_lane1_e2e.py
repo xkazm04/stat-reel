@@ -141,12 +141,17 @@ def test_a_shared_car_scores_its_position_once_split_between_all_its_drivers(rep
     still finished in ONE position: its current-system points summed over every driver classified with it equal
     that position's points (f1db's own as-awarded points split the same way - 1951 French GP: Fagioli 4 + Fangio 5)."""
     con = replay_run["con"]
+    raw = con.execute("""
+        select count(*) from (select race_id, position_number from staging_f1db.stg_f1db__race_results
+                              where started and position_number is not null
+                              group by all having bool_or(shared_car) and not bool_and(shared_car))""").fetchone()[0]
+    assert raw > 0, "fixture has a shared car whose starter is unflagged"
     groups = con.execute("""
-        select match_id, position_number, count(*), sum(points_current_system), bool_and(shared_car)
+        select match_id, position_number, sum(points_current_system), bool_and(shared_car)
         from core.player_match_results where started and position_number between 1 and 10
         group by all having bool_or(shared_car)""").fetchall()
-    assert any(n > 1 and not all_flagged for _, _, n, _, all_flagged in groups), "fixture has a shared car whose starter is unflagged"
-    assert [(m, p, pts) for m, p, _, pts, _ in groups if abs(pts - CURRENT_POINTS[p]) > 1e-9] == []
+    assert [(m, p, pts) for m, p, pts, _ in groups if abs(pts - CURRENT_POINTS[p]) > 1e-9] == []
+    assert all(every for *_, every in groups), "shared_car marks every driver of a shared car"
 
 
 def test_indianapolis_only_drivers_are_not_in_the_mart(replay_run):
@@ -409,12 +414,14 @@ def winners_oracle(results_csv: Path, races_csv: Path, drivers_csv: Path) -> dic
         f"select id, date from read_csv('{races_csv.as_posix()}') where grandPrixId <> 'indianapolis'").fetchall()}
     born = dict(con.execute(f"select id, dateOfBirth from read_csv('{drivers_csv.as_posix()}')").fetchall())
     rows = con.execute(f"select raceId, driverId, positionNumber, positionText, sharedCar, gridPositionNumber from read_csv('{results_csv.as_posix()}')").fetchall()
+    # a winning car is shared when ANY of its drivers is flagged (f1db leaves the driver who started it unflagged)
+    shared_win = {race for race, _, pos, text, shared, _ in rows if pos == 1 and text not in NON_STARTS and shared}
     out = {}
-    for race, driver, pos, text, shared, grid in rows:
+    for race, driver, pos, text, _, grid in rows:
         if race in races and pos == 1 and text not in NON_STARTS:
             d, b = races[race], born[driver]
             d = d if isinstance(d, date) else date.fromisoformat(str(d))
-            out[(race, driver)] = {"age": (d - b).days / 365.2425, "grid": grid, "shared": bool(shared)}
+            out[(race, driver)] = {"age": (d - b).days / 365.2425, "grid": grid, "shared": race in shared_win}
     return out
 
 
@@ -436,7 +443,8 @@ def test_race_winners_one_winner_per_race_except_shared_drives(replay_run):
     con = replay_run["con"]
     unique, total = con.execute("select count(distinct (race_id, player_id)), count(*) from llm.f1_race_winners").fetchone()
     assert unique == total
-    assert con.execute("select count(*) from (select race_id, count(*) n, bool_or(shared_drive) s from llm.f1_race_winners group by 1) where n > 1 and not s").fetchone()[0] == 0
+    # every row of a shared winning car says so - including the driver who started it, whom f1db leaves unflagged
+    assert con.execute("select count(*) from (select race_id, count(*) n, bool_and(shared_drive) s from llm.f1_race_winners group by 1) where n > 1 and not s").fetchone()[0] == 0
     # every Grand Prix with results has a winner; the Indianapolis 500 is not one
     assert con.execute("""select count(*) from core.matches m where m.has_results and not m.is_indianapolis
                           and m.match_id not in (select race_id from llm.f1_race_winners)""").fetchone()[0] == 0
