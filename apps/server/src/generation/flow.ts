@@ -26,8 +26,12 @@ export class GenerationFlow {
     return this.d.db.$client.transaction(fn)();
   }
 
+  /**
+   * Filter by status in SQL, like queueGuard: the newest 500 rows of ALL statuses miss an active job once 500 rows
+   * are newer than it - and `retry` re-queues an old row with its original created_at (job rows are never pruned).
+   */
   private cancelActive(filter: (j: GenerationJob) => boolean): void {
-    for (const j of this.d.queue.list({ limit: 500 })) if (ACTIVE.includes(j.status) && filter(j)) this.d.queue.cancel(j.id);
+    for (const status of ACTIVE) for (const j of this.d.queue.list({ status, limit: 500 })) if (filter(j)) this.d.queue.cancel(j.id);
   }
 
   /** Enqueue, or hand back the job that already exists (active, or done: no second set without `force`). */
