@@ -1,7 +1,7 @@
 {
   "rules": {
     "assist/source/organizeImports": 77,
-    "format": 231,
+    "format": 230,
     "lint/a11y/noAriaHiddenOnFocusable": 1,
     "lint/a11y/noStaticElementInteractions": 1,
     "lint/a11y/noSvgWithoutTitle": 4,
