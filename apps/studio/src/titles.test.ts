@@ -1,5 +1,31 @@
 import { describe, expect, it } from "vitest";
+import { NAV_LINKS } from "./components/Nav";
+import { router } from "./router";
 import { studioProjectId, titleFor } from "./titles";
+
+/**
+ * Three hand-kept lists name the screens: the route tree (router.tsx), the nav (Nav.tsx NAV_LINKS) and
+ * the title table (titles.ts). The route tree is the ground truth (app-shell/navigation-model: adding a
+ * section must not update one list but not the other); this derives the population from it.
+ */
+describe("screens: routes, nav and titles agree", () => {
+  const sample: Record<string, string> = { $usecase: "bar-race", $sport: "F1", $projectId: "p-1" };
+  const paths = Object.keys(router.routesByPath).map((p) => p.replace(/\$[A-Za-z]+/g, (k) => sample[k] ?? "x"));
+
+  it("every route has a title of its own", () => {
+    expect(paths.length).toBeGreaterThanOrEqual(10);
+    expect(paths.filter((p) => titleFor(p) === "Off air · StatReel")).toEqual([]);
+  });
+  it("every route lights exactly one nav entry", () => {
+    expect(paths.filter((p) => NAV_LINKS.filter((l) => l.match(p)).length !== 1)).toEqual([]);
+  });
+  it("every nav entry is a route, and its title starts with the nav's word", () => {
+    for (const l of NAV_LINKS) {
+      expect(paths).toContain(l.to);
+      expect(titleFor(l.to).startsWith(l.label)).toBe(true);
+    }
+  });
+});
 
 describe("titleFor", () => {
   it("names each screen", () => {
