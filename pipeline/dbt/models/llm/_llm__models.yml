@@ -10,7 +10,7 @@ models:
       split. An ESTIMATE of dominance, not an official statistic - say "era-adjusted" when quoting it.
       Source F1DB (CC BY 4.0), attribution required.
     columns:
-      - {name: fact_key, description: "Stable id of this fact; cite it in props and narration."}
+      - {name: fact_key, description: "Stable id of this fact; cite it in props and narration.", data_tests: [unique, not_null]}
       - {name: player_id, description: "f1db driver id (slug)."}
       - {name: display_name, description: "Name as commonly used (use this on screen and in narration)."}
       - {name: full_name, description: "Full legal name of the driver."}
@@ -37,7 +37,7 @@ models:
       F1 driver seasons with raw and current-system points and share of the season maximum.
       Source F1DB (CC BY 4.0), attribution required.
     columns:
-      - {name: fact_key, description: "Stable id of this fact; cite it in props and narration."}
+      - {name: fact_key, description: "Stable id of this fact; cite it in props and narration.", data_tests: [unique, not_null]}
       - {name: player_id, description: "f1db driver id (slug)."}
       - {name: display_name, description: "Name as commonly used (use this on screen and in narration)."}
       - {name: full_name, description: "Full legal name of the driver."}
@@ -56,7 +56,7 @@ models:
       Every Grand Prix entry, race by race (1950 onwards): the time series for time-evolution videos
       (wins races, points fights, record handovers). Source F1DB (CC BY 4.0), attribution required.
     columns:
-      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: race_id, description: "f1db race id."}
       - {name: season, description: "Championship year."}
       - {name: round, description: "Round number within the season."}
@@ -82,7 +82,7 @@ models:
       Constructor (team) per season: starts, wins, podium finishes, points. For team-dynasty timelines.
       Source F1DB (CC BY 4.0), attribution required.
     columns:
-      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: team_id, description: "f1db constructor id."}
       - {name: team_name, description: "Constructor name."}
       - {name: season, description: "Championship year."}
@@ -94,7 +94,7 @@ models:
   - name: f1_driver_bios
     description: Driver biographical facts (date of birth, nationality) for age-based timelines. Source F1DB (CC BY 4.0).
     columns:
-      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: player_id, description: "f1db driver id (slug)."}
       - {name: display_name, description: "Driver name as commonly used."}
       - {name: full_name, description: "Full legal name."}
@@ -104,7 +104,7 @@ models:
   - name: f1_seasons
     description: Seasons with the number of races held. Source F1DB (CC BY 4.0).
     columns:
-      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>."}
+      - {name: fact_key, description: "Stable id of this fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: season, description: "Championship year."}
       - {name: races_held, description: "Races held with results."}
       - {name: races_held_excl_indianapolis, description: "Races held, Indianapolis 500 excluded."}
@@ -120,7 +120,7 @@ models:
       (25-18-15-12-10-8-6-4-2-1, no fastest-lap point, no sprints, shared cars split), not as historically
       awarded. Source F1DB (CC BY 4.0), attribution required.
     columns:
-      - {name: fact_key, description: "Stable id of this driver-at-race fact; cite it as <fact_key>#<column>."}
+      - {name: fact_key, description: "Stable id of this driver-at-race fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: player_id, description: "f1db driver id (slug)."}
       - {name: display_name, description: "Name as commonly used (use this on screen)."}
       - {name: full_name, description: "Full legal name of the driver."}
@@ -151,7 +151,7 @@ models:
       1991 on, points_cum after the final round equals the official championship points. Source F1DB (CC BY 4.0),
       attribution required.
     columns:
-      - {name: fact_key, description: "Stable id of this driver-standing-at-round fact; cite it as <fact_key>#<column>."}
+      - {name: fact_key, description: "Stable id of this driver-standing-at-round fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: season, description: "Championship year."}
       - {name: round, description: "Round number within the season (the data clock for a season video)."}
       - {name: race_id, description: "f1db race id of the round."}
@@ -181,7 +181,7 @@ models:
       - dbt_utils_free_unique_combination:
           columns: [race_id, player_id]
     columns:
-      - {name: fact_key, description: "Stable id of this race-win fact; cite it as <fact_key>#<column>."}
+      - {name: fact_key, description: "Stable id of this race-win fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: race_id, description: "f1db race id."}
       - {name: season, description: "Championship year."}
       - {name: round, description: "Round number within the season."}
