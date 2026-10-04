@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { compare, countByRule, formatReport } from "./biome-ratchet-core.mjs";
+import { compare, countByRule, formatReport, instrumentProblem } from "./biome-ratchet-core.mjs";
 
 test("countByRule groups diagnostics by rule category, sorted", () => {
   const report = { diagnostics: [{ category: "format" }, { category: "lint/style/useConst" }, { category: "format" }, {}] };
@@ -35,4 +35,10 @@ test("a failing report names the offending rule and counts", () => {
   assert.match(out, /INCREASED/);
   assert.match(out, /a: 1 -> 2/);
   assert.match(out, /ratchet FAILED/);
+});
+
+test("a report that walked zero files is an instrument failure, never a clean count", () => {
+  assert.match(instrumentProblem({ summary: { changed: 0, unchanged: 0 }, diagnostics: [] }), /walked 0 files/);
+  assert.match(instrumentProblem({ diagnostics: [] }), /walked 0 files/);
+  assert.equal(instrumentProblem({ summary: { changed: 0, unchanged: 418 }, diagnostics: [] }), null);
 });

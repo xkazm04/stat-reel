@@ -12,6 +12,16 @@ export function countByRule(report) {
   return sortKeys(counts);
 }
 
+/**
+ * Biome reports `{ diagnostics: [] }` both for a clean tree and for a walk that matched no file (an includes or
+ * ignore-file mistake), and against the baseline the second reads as every rule "decreased" - a PASS that also
+ * invites `--update` to bake in zero. So the walk is asserted before any count is believed.
+ */
+export function instrumentProblem(report) {
+  const walked = (report.summary?.changed ?? 0) + (report.summary?.unchanged ?? 0);
+  return walked > 0 ? null : "biome ratchet: biome walked 0 files under apps/, packages/, e2e/ - check biome.json files.includes and the ignore file before trusting any count";
+}
+
 export function sortKeys(obj) {
   return Object.fromEntries(Object.entries(obj).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
