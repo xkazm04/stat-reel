@@ -7,7 +7,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { type LineItem, lineIsQuiet, lineItems, videosLine } from "../frontpf";
+import { type LineItem, lineIsQuiet, lineItems, loadCause, videosLine } from "../frontpf";
 import { boardQuery, lineTopicsQuery, type OnTheLineState, useOnTheLine } from "../workQuery";
 import { Arrow } from "./glyphs";
 import { RetryButton } from "./RetryButton";
@@ -53,7 +53,7 @@ function Body({ state }: { state: OnTheLineState }) {
   if (state.status === "error")
     return (
       <span role="alert">
-        {state.what} did not answer (API offline), so there is nothing to count.{" "}
+        {state.what} did not load ({loadCause(state.error)}), so there is nothing to count.{" "}
         <RetryButton onRetry={retry} busy={busy} />
       </span>
     );

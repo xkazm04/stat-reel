@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ApiError } from "./api";
 import {
   acrossCount,
   clock,
@@ -6,6 +7,7 @@ import {
   laneRotation,
   lanesLabel,
   lineIsQuiet,
+  loadCause,
   lineItems,
   numberWord,
   onTheLine,
@@ -143,5 +145,22 @@ describe("front copy and lane rotation (derived, never hardcoded)", () => {
   it("laneRotation never rotates under reduced motion or with fewer than two lanes, and then offers no control", () => {
     expect(laneRotation({ ...base, reduced: true })).toEqual({ auto: false, control: false, live: "polite" });
     expect(laneRotation({ ...base, count: 1 })).toEqual({ auto: false, control: false, live: "polite" });
+  });
+});
+
+describe("front failure copy names the cause it has (async-ui-states/failure-states)", () => {
+  it("says the API is offline only when nothing answered", () => {
+    expect(loadCause(new TypeError("Failed to fetch"))).toBe("API offline");
+    // the dev proxy's own 500 page while the API is down, and a gateway text body
+    expect(loadCause(new ApiError(500, null, "GET /api/sources: 500 Internal Server Error"))).toBe("API offline");
+    expect(loadCause(new ApiError(502, "Bad Gateway", "GET /api/sources: Bad Gateway"))).toBe("API offline");
+  });
+  it("an answer from the API is quoted, not called offline", () => {
+    expect(loadCause(new ApiError(500, { error: "SQLITE_BUSY: database is locked" }, "GET /api/heatmap: SQLITE_BUSY"))).toBe(
+      "the API answered: SQLITE_BUSY: database is locked",
+    );
+    expect(loadCause(new ApiError(404, { error: "no such project" }, "GET /api/projects/p: no such project"))).toBe(
+      "the API answered: no such project",
+    );
   });
 });

@@ -41,6 +41,7 @@ import {
   durationRange,
   laneRotation,
   lanesLabel,
+  loadCause,
   numberWord,
   REG_CLASSES,
   registryGrid,
@@ -124,7 +125,7 @@ export function FrontPhotoFinish() {
           setMode={setMode}
           reduced={reduced}
           loading={hm.isLoading}
-          error={hm.isError}
+          error={hm.isError ? loadCause(hm.error) : null}
           onRetry={() => void hm.refetch()}
           retrying={hm.isFetching}
           sceneOpen={!!openUc}
@@ -137,7 +138,7 @@ export function FrontPhotoFinish() {
           mode={mode}
           setMode={setMode}
           loading={src.isLoading}
-          error={src.isError}
+          error={src.isError ? loadCause(src.error) : null}
           onRetry={() => void src.refetch()}
           retrying={src.isFetching}
         />
@@ -146,7 +147,7 @@ export function FrontPhotoFinish() {
         <FirstShort
           detail={programme.detail}
           loading={programme.loading || pr.isLoading}
-          error={pr.isError}
+          error={pr.isError ? loadCause(pr.error) : null}
           onRetry={() => void pr.refetch()}
           retrying={pr.isFetching}
           usecases={usecases}
@@ -188,7 +189,7 @@ export function FrontPhotoFinish() {
 
 // ------------------------------------------------------------------ 1 · the frame
 
-type Q<T> = { data?: T; isLoading: boolean; isError: boolean; isFetching: boolean; refetch: () => unknown };
+type Q<T> = { data?: T; error?: unknown; isLoading: boolean; isError: boolean; isFetching: boolean; refetch: () => unknown };
 
 function Frame({
   mode,
@@ -359,7 +360,7 @@ function Frame({
             <p>
               {srcState.isError ? (
                 <>
-                  The registry did not answer (API offline), so there is nothing to count.{" "}
+                  The registry did not load ({loadCause(srcState.error)}), so there is nothing to count.{" "}
                   <RetryButton onRetry={() => void srcState.refetch()} busy={srcState.isFetching} />
                 </>
               ) : srcState.isLoading ? (
@@ -411,7 +412,7 @@ function Frame({
               <span>
                 {projects.isError ? (
                   <>
-                    The rundown did not answer.{" "}
+                    The rundown did not load ({loadCause(projects.error)}).{" "}
                     <RetryButton onRetry={() => void projects.refetch()} busy={projects.isFetching} />
                   </>
                 ) : list.length ? (
@@ -796,7 +797,8 @@ function Lanes({
   setMode: (m: Mode) => void;
   reduced: boolean;
   loading: boolean;
-  error: boolean;
+  /** why the use cases did not load (loadCause), null when they did */
+  error: string | null;
   onRetry: () => void;
   retrying: boolean;
   sceneOpen: boolean;
@@ -893,7 +895,7 @@ function Lanes({
       </div>
       {error ? (
         <p className="pf-lanes__msg" role="alert">
-          The use-case registry did not load (API offline). <RetryButton onRetry={onRetry} busy={retrying} />
+          The use-case registry did not load ({error}). <RetryButton onRetry={onRetry} busy={retrying} />
         </p>
       ) : loading ? (
         <p className="pf-lanes__msg">Reading the use-case registry.</p>
@@ -1366,7 +1368,8 @@ function TheLine({
   mode: Mode;
   setMode: (m: Mode) => void;
   loading: boolean;
-  error: boolean;
+  /** why the registry did not load (loadCause), null when it did */
+  error: string | null;
   onRetry: () => void;
   retrying: boolean;
 }) {
@@ -1440,7 +1443,7 @@ function TheLine({
       <div className="pf-line__pic">
         {error ? (
           <div className="empty">
-            <b>Registry offline</b>The API did not answer, so the registry picture cannot be drawn.{" "}
+            <b>Registry did not load</b>The registry picture cannot be drawn ({error}).{" "}
             <RetryButton onRetry={onRetry} busy={retrying} />
           </div>
         ) : loading ? (
@@ -1581,7 +1584,8 @@ function FirstShort({
 }: {
   detail: ProjectDetail | null;
   loading: boolean;
-  error: boolean;
+  /** why the rundown did not load (loadCause), null when it did */
+  error: string | null;
   onRetry: () => void;
   retrying: boolean;
   usecases: UseCase[];
@@ -1631,7 +1635,8 @@ function FirstShort({
                   <p>
                     {error ? (
                       <>
-                        The API did not answer, so there is no short to play. <RetryButton onRetry={onRetry} busy={retrying} />
+                        The rundown did not load ({error}), so there is no short to play.{" "}
+                        <RetryButton onRetry={onRetry} busy={retrying} />
                       </>
                     ) : (
                       "No project has props yet: create one from a Go cell and draft it with the co-pilot."

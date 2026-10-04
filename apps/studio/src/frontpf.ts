@@ -4,6 +4,7 @@
  * no DOM (unit-tested in frontpf.test.ts).
  */
 import type { LicenseClass, Mode } from "@statreel/schemas";
+import { serverAnswered, serverError } from "./api";
 import { SPORTS } from "./logic";
 import { bucketCounts, type ProjectBucketCounts } from "./projectState";
 
@@ -175,6 +176,14 @@ export function clock(seconds: number): string {
 }
 
 // ------------------------------------------------------------------ copy from data, lane rotation
+
+/**
+ * Why a Front load failed, in the words the cause allows (async-ui-states/failure-states; the same
+ * split as ui.tsx Failure): "API offline" only when nothing answered (a thrown fetch, the dev
+ * proxy's own page), else the API's own error verbatim - an answered 500 is not a down API.
+ */
+export const loadCause = (e: unknown): string =>
+  serverAnswered(e) ? `the API answered: ${serverError(e)}` : "API offline";
 
 /** "Ten lanes", or just "Lanes" while the use cases are not loaded (never a hardcoded count). */
 export const lanesLabel = (n: number): string => (n > 0 ? `${numberWord(n)} lanes` : "Lanes");
