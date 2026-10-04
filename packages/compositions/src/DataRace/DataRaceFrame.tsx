@@ -34,7 +34,7 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
   const hook = hookLayout(props.hook);
 
   return (
-    <div data-data-race="" data-phase={st.phase} style={{ position: "relative", width: L.width, height: L.height, background: T.background, overflow: "hidden", color: T.ink }}>
+    <div data-data-race="" data-phase={st.phase} style={{ position: "relative", width: L.width, height: L.height, background: st.farPlane, overflow: "hidden", color: T.ink }}>
       {inTimeline ? (
         <>
           <div data-title="" style={{ position: "absolute", left: L.marginX, top: L.titleY, width: L.width - 2 * L.marginX, height: 76, display: "flex", alignItems: "center", fontFamily: T.fonts.display, fontWeight: 800, fontSize: titleLayout(props.title).fontSize, color: T.ink, whiteSpace: "nowrap", overflow: "hidden" }}>
@@ -44,8 +44,19 @@ export function DataRaceFrame({ props, frame }: { props: DataRaceRenderProps; fr
             <div data-unit="" style={{ position: "absolute", left: L.marginX, top: L.unitRowY, width: unit.width, height: 64, display: "flex", flexDirection: "column", justifyContent: "center", fontFamily: T.fonts.ui, fontWeight: 600, fontSize: unit.fontSize, lineHeight: 1.1, color: T.inkDim }}>
               <Lines lines={unit.lines} />
             </div>
-            <div data-clock="" style={{ position: "absolute", right: 120, top: L.unitRowY, height: 64, display: "flex", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 700, fontSize: clock.fontSize, color: T.ink, whiteSpace: "nowrap", ...TNUM }}>
-              {props.periods[st.period]}
+            <div data-clock="" data-clock-rolling={st.clock.rolling ? "1" : "0"} style={{ position: "absolute", right: 120, top: L.unitRowY, width: clock.width, height: 64, overflow: "hidden", fontFamily: T.fonts.data, fontWeight: 700, fontSize: clock.fontSize, color: T.ink, whiteSpace: "nowrap", ...TNUM }}>
+              {st.clock.rolling ? (
+                <>
+                  <div data-clock-out="" style={{ position: "absolute", right: 0, top: 0, height: 64, display: "flex", alignItems: "center", opacity: (1 - st.clock.u).toFixed(3), transform: `translateY(${(-st.clock.u * 40).toFixed(2)}px)` }}>
+                    {st.clock.from}
+                  </div>
+                  <div data-clock-in="" style={{ position: "absolute", right: 0, top: 0, height: 64, display: "flex", alignItems: "center", opacity: st.clock.u.toFixed(3), transform: `translateY(${((1 - st.clock.u) * 40).toFixed(2)}px)` }}>
+                    {st.clock.to}
+                  </div>
+                </>
+              ) : (
+                <div style={{ position: "absolute", right: 0, top: 0, height: 64, display: "flex", alignItems: "center" }}>{st.clock.to}</div>
+              )}
             </div>
             {plan.strategy.order_label ? (
               <div style={{ position: "absolute", left: L.marginX, top: L.orderLabelY, height: 36, display: "flex", alignItems: "center", fontFamily: T.fonts.data, fontWeight: 500, fontSize: 28, letterSpacing: 2, color: T.inkFaint }}>

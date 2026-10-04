@@ -10,6 +10,8 @@
 import { DATA_RACE_LIMITS, ENDING_FRAMES, type DataRaceProps, type TimingPlan, eventSide } from "@statreel/schemas";
 import { type TimeMap, makeTimeMap, periodAtFrame } from "../timing/index";
 import { type RowChip, chipAt } from "./chips";
+import { type ClockFrame, clockAt, motionCuesAt } from "./clock";
+import { farPlaneAt } from "./leader";
 
 export type DataRaceRenderProps = DataRaceProps & { timing_plan: TimingPlan };
 
@@ -56,6 +58,12 @@ export type DataRaceState = {
   period: number;
   /** fractional period (monotone cubic of the frame) */
   periodFloat: number;
+  /** the clock: the label rolling from one period to the next (clock.ts) */
+  clock: ClockFrame;
+  /** the far plane colour: the sheet tinted toward the current leader (leader.ts) */
+  farPlane: string;
+  /** motion cues running this frame (chip pops + lead fade + clock roll), never more than CUE_BUDGET in the timeline */
+  cues: number;
   axisMax: number;
   rows: RaceRow[];
   cards: CardState[];
@@ -245,6 +253,9 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
     phaseFrame,
     period,
     periodFloat,
+    clock: clockAt(props, frame),
+    farPlane: farPlaneAt(props, frame, chartOpacity),
+    cues: phase === "timeline" ? motionCuesAt(props, frame) : 0,
     axisMax,
     rows,
     cards,

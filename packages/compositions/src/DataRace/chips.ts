@@ -4,12 +4,15 @@
  *
  * Art direction ("rank chips >= 1.5 s, independent of the warp"; "motion cues per frame <= 2"):
  *  - a chip lives CHIP.frames FRAMES (not data time), so the time warp cannot shorten it;
- *  - the chip's ENTRANCE (a scale pop) is the only motion cue it contributes. At most two entrances
- *    run at once: a chip whose start finds two earlier cue entrances still running appears without
- *    the pop (`cue: false`). The decision is made once per chip at its own start frame, so it never
- *    flips mid-entrance. The hold and the exit fade are not counted as cues.
+ *  - the chip's ENTRANCE (a scale pop) is the only motion cue it contributes. The frame budget is
+ *    CUE_BUDGET = 2 cues at once, shared with the lead-change cross-fade of the far plane (leader.ts)
+ *    and the clock roll (clock.ts). A chip pops only if, over its whole entrance window, the cues
+ *    already running (the lead fade, chips that popped earlier) leave room; otherwise it appears
+ *    without the pop (`cue: false`). The decision is made once per chip from the props alone, so it
+ *    never flips mid-entrance. The hold and the exit fade are not counted as cues.
  *  - ranks come from the plan's `orders` (the order the viewer sees, after smoothing + hysteresis).
  */
+import { leadFadeActive } from "./leader";
 import type { DataRaceRenderProps } from "./state";
 
 export const CHIP = {
@@ -21,9 +24,10 @@ export const CHIP = {
   exit: 8,
   /** the eased rank swap is centred on the period's knot; the chip leads it by this many frames */
   lead: 6,
-  /** most entrance cues allowed at the same frame */
-  maxCues: 2,
 } as const;
+
+/** Motion cues allowed in one frame (registry: motion-cue-budget): chip pops, the lead fade and the clock roll together. */
+export const CUE_BUDGET = 2;
 
 export type Chip = {
   id: string;
@@ -68,8 +72,12 @@ export function raceChips(props: DataRaceRenderProps): Chip[] {
   const out: Chip[] = [];
   for (const c of raw) {
     if (c.start + CHIP.frames > plan.sections.timeline_end) continue;
-    const running = out.filter((o) => o.cue && o.start + CHIP.enter > c.start).length;
-    out.push({ ...c, cue: running < CHIP.maxCues });
+    // cues running at frame g, before this chip: the lead fade and the earlier chips' entrances
+    const running = (g: number): number =>
+      (leadFadeActive(props, g) ? 1 : 0) + out.filter((o) => o.cue && o.start <= g && g < o.start + CHIP.enter).length;
+    let room = true;
+    for (let g = c.start; g < c.start + CHIP.enter && room; g++) room = running(g) < CUE_BUDGET;
+    out.push({ ...c, cue: room });
   }
   return out;
 }
@@ -90,4 +98,9 @@ export function chipAt(props: DataRaceRenderProps, id: string, frame: number): R
     if (c.id === id && c.start <= frame && frame < c.start + CHIP.frames) found = c;
   }
   return found ? { kind: found.kind, text: found.text, age: frame - found.start, cue: found.cue } : null;
+}
+
+/** Chip entrance pops running at `frame` (each is one motion cue of the frame budget). */
+export function chipCueCount(props: DataRaceRenderProps, frame: number): number {
+  return chipsFor(props).filter((c) => c.cue && c.start <= frame && frame < c.start + CHIP.enter).length;
 }

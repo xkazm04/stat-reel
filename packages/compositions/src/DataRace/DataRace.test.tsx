@@ -20,7 +20,7 @@ import { calculateDataRaceMetadata } from "../Root";
 import { renderTimingMd } from "../timing/index";
 import { DataRaceFrame } from "./DataRaceFrame";
 import { buildSampleDataRace } from "./fixture";
-import { CHIP, raceChips } from "./chips";
+import { CHIP, CUE_BUDGET, raceChips } from "./chips";
 import { contrastRatio } from "./contrast";
 import { SPOTLIGHT_DIM, SPOTLIGHT_SCALE } from "./ending";
 import { LABEL_RIGHT, L, formatValue, valueLabelLayout } from "./parts";
@@ -308,13 +308,13 @@ describe("rank chips: up N / NEW, in frames, independent of the warp", () => {
       const n = dataRaceState(props, f).rows.filter((r) => r.chip?.cue && r.chip.age < CHIP.enter).length;
       max = Math.max(max, n);
     }
-    expect(max).toBeLessThanOrEqual(CHIP.maxCues);
+    expect(max).toBeLessThanOrEqual(CUE_BUDGET);
     expect(max).toBeGreaterThanOrEqual(1);
     // the budget holds when every entity gains a rank at once: three chips start together, the third has no pop
     const crowded = { ...props, timing_plan: { ...plan, orders: plan.orders.map((_, i) => (i % 2 ? [...props.entities].map((e) => e.id) : [...props.entities].map((e) => e.id).reverse())) } };
     const cs = raceChips(crowded);
     for (let f = 0; f < plan.sections.timeline_end; f++)
-      expect(cs.filter((c) => c.cue && f >= c.start && f < c.start + CHIP.enter).length).toBeLessThanOrEqual(CHIP.maxCues);
+      expect(cs.filter((c) => c.cue && f >= c.start && f < c.start + CHIP.enter).length).toBeLessThanOrEqual(CUE_BUDGET);
     expect(cs.some((c) => !c.cue)).toBe(true);
   });
 
@@ -462,13 +462,13 @@ describe("golden frame hashes (update deliberately when the design changes)", ()
       poweredEnd: sha(markup(plan.sections.total - 1)),
     }).toMatchInlineSnapshot(`
       {
-        "chipNew": "813fd82f84a1ff47",
-        "chipUp": "3824370e2fd5ef74",
-        "hook0": "2078fc8d440ab189",
+        "chipNew": "76f480e0127dd55f",
+        "chipUp": "62898c92142558e0",
+        "hook0": "d0d6fbc66f230be6",
         "like": "7e8e23affe7e97a7",
-        "mid45": "3f39295bbb31514a",
+        "mid45": "83f6257080183890",
         "poweredEnd": "8688d428ce072a85",
-        "spotlight": "9ef7c25d7235d541",
+        "spotlight": "e2fb2b728f76ba13",
       }
     `);
   });
