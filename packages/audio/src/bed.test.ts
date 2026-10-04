@@ -75,6 +75,16 @@ describe("planBedFromTimingPlan", () => {
     expect(bedLevelDbAt(b.envelope, p.sections.like_end / FPS + 1)).toBe(-3);
   });
 
+  it("holds the base level through the spotlight and like cards; the duck starts just before the Powered card", () => {
+    const p = plan(45, []);
+    const b = planBedFromTimingPlan(p, { fps: FPS, budgetS: 75 });
+    const powered = p.sections.like_end / FPS; // 42 s
+    const spotlightLiftEnd = p.sections.timeline_end / FPS + 0.8 + 0.6; // 39.4 s
+    for (let t = spotlightLiftEnd; t <= powered - 0.15 + 1e-9; t += 0.05) expect(bedLevelDbAt(b.envelope, t)).toBe(0);
+    expect(bedLevelDbAt(b.envelope, powered - 0.075)).toBeCloseTo(-1.5, 5); // sound leads the card
+    expect(bedLevelDbAt(b.envelope, powered)).toBe(-3);
+  });
+
   it("coverage adds up to the video length", () => {
     for (const s of [30, 45, 90]) {
       const b = planBedFromTimingPlan(plan(s, []), { fps: FPS, budgetS: 75 });

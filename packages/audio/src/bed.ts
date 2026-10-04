@@ -172,7 +172,9 @@ export function planBedFromTimingPlan(plan: BedTimingPlan, opts: BedOptions): Be
   addLift(s.timeline_end, liftDb, "winner spotlight");
   lifts.sort((a, b) => a.peak - b.peak);
 
-  const breaks = new Set<number>([0, musicEnd, poweredStart]);
+  // the duck has its own attack point: without it, bedLevelDbAt would ramp from the previous
+  // breakpoint (the spotlight lift's end) and sag under the spotlight and like cards
+  const breaks = new Set<number>([0, musicEnd, poweredStart, r6(Math.max(0, poweredStart - lead))]);
   for (const l of lifts) for (const t of [l.from, l.peak, l.hold, l.to]) breaks.add(r6(Math.min(t, musicEnd)));
   const level = (t: number) => {
     if (t >= poweredStart) return { db: duckDb, why: "powered card duck" };
