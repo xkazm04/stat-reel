@@ -224,7 +224,14 @@ export class ClaudeEngine implements LlmEngine {
           res.stderr = tail;
         }
         if (this.fixturesDir && process.env.LLM_RECORD === "1") {
-          recordFixture(this.fixturesDir, this.name, opts, raw);
+          // Only a clean run becomes a fixture: a failed, crashed or aborted (cap/cancel) run has the same key as the
+          // committed recording and would overwrite a paid recording with a broken or partial stream.
+          if (res.ok && code === 0 && !opts.signal?.aborted) recordFixture(this.fixturesDir, this.name, opts, raw);
+          else {
+            const e: LlmEvent = { type: "stderr", text: `LLM_RECORD: run not recorded (it did not succeed: exit ${code}${opts.signal?.aborted ? ", aborted" : ""}); the existing fixture is untouched` };
+            events.push(e);
+            opts.onEvent(e);
+          }
         }
         if (code !== 0 && !res.result) reject(new Error(`claude exited ${code}: ${tail}`));
         else resolve(res);
