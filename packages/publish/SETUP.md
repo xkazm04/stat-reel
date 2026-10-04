@@ -38,7 +38,7 @@ When the connect step is wired into the Studio or CLI, it runs `LoopbackOAuth.au
 - your browser opens Google's consent page. Sign in as the test-channel account and accept the "unverified app" warning, which is expected in Testing.
 - StatReel receives the code on `http://127.0.0.1:<port>`, exchanges it using PKCE, and stores the token in the OS keychain through the SecretStore.
 
-After that, `pnpm e2e:live` uploads **private** videos to the test channel. It then checks the upload through the API and deletes it.
+Not wired yet: nothing in the app hands this token to the uploader (the publish and metrics jobs build `YouTubeClient` without a `TokenProvider`, and live mode refuses to start without one), so `pnpm e2e:live` still publishes dry. The planned live run - a **private** upload to the test channel, checked through the API, then deleted (DESIGN.md §8) - arrives with that wiring.
 
 ## 6. Submit the API audit (removes the forced-private restriction)
 Uploads from an unaudited project created after 2020-07-28 are **forced to private**. That's fine for v1, because StatReel uploads private anyway. Public publishing (after the owner approves it) needs the audit, so start it early, because it can take weeks.

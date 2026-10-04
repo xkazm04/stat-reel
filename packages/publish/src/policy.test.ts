@@ -28,7 +28,8 @@ const manifest = ProvenanceManifestSchema.parse(realFontManifest);
 const opaBin = defaultOpaBin();
 const opaAvailable = opaBin === "opa" || existsSync(opaBin);
 
-// A silent skip is how a gate rots: with OPA_REQUIRED=1 (CI / `just check`) a missing opa FAILS this suite.
+// A silent skip is how a gate rots: OPA_REQUIRED=1 makes a missing opa FAIL this suite. Nothing sets it today;
+// `just check` still fails on a missing binary through its own opa step (scripts/check.mjs), `pnpm test` alone skips.
 describe("opa availability", () => {
   it("is present when OPA_REQUIRED=1", () => {
     if (process.env.OPA_REQUIRED === "1") expect(opaAvailable, "opa binary not found but OPA_REQUIRED=1").toBe(true);
