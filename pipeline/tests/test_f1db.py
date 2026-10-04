@@ -189,3 +189,16 @@ def test_missing_asset_names_the_release_and_what_exists(registry, tmp_path, clo
 
     with pytest.raises(f1db.MissingAsset, match=r"release v9 has no asset named f1db-csv\.zip \(assets: f1db-json-single\.zip\)"):
         f1db.ingest(client_for(registry, tmp_path, clock, NoCsv("v9")), tmp_path / "raw", now=NOW)
+
+
+def test_each_snapshot_carries_only_its_own_fetches(registry, tmp_path, clock):
+    """The client's log is cumulative (data/raw/<source>/fetch_log.jsonl); a snapshot's copy is its run only."""
+    first = f1db.ingest(client_for(registry, tmp_path, clock, ReleaseServer("v1")), tmp_path / "raw", now=NOW)
+    second = f1db.ingest(client_for(registry, tmp_path, clock, ReleaseServer("v2")), tmp_path / "raw",
+                         now=NOW.replace(hour=19))
+    rows = lambda p: p.read_text(encoding="utf-8").splitlines()  # noqa: E731
+    everything, mine_1, mine_2 = rows(tmp_path / "log.jsonl"), rows(first.snapshot_dir / "fetch_log.jsonl"), \
+        rows(second.snapshot_dir / "fetch_log.jsonl")
+    assert mine_1 and mine_2
+    assert mine_1 + mine_2 == everything
+    assert not set(mine_1) & set(mine_2)

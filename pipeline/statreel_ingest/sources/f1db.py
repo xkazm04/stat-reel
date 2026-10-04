@@ -53,6 +53,8 @@ def _table_name(member: str) -> str:
 def ingest(client: EthicalClient, raw_root: Path, *, now: datetime | None = None,
            accept_drift: bool = False) -> IngestResult:
     now = now or datetime.now(timezone.utc)
+    # the client's log is cumulative across runs; the snapshot keeps only the rows this run appends
+    log_start = client.log_path.stat().st_size if client.log_path.exists() else 0
     release = client.get(LATEST, headers=API_HEADERS).json()
     tag = release["tag_name"]
 
@@ -101,7 +103,9 @@ def ingest(client: EthicalClient, raw_root: Path, *, now: datetime | None = None
                 drift_accepted = report.errors
                 warnings += [f"ACCEPTED drift: {e}" for e in report.errors]
         if client.log_path.exists():
-            shutil.copyfile(client.log_path, snap.dir / "fetch_log.jsonl")
+            with client.log_path.open("rb") as log:
+                log.seek(log_start)
+                (snap.dir / "fetch_log.jsonl").write_bytes(log.read())
         snap.finalize(extra={"release_tag": tag, "release_published_at": release.get("published_at"),
                              "asset": ASSET_NAME, "asset_sha256": digest,
                              "skipped_members": skipped, "accepted_drift": drift_accepted})
