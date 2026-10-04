@@ -76,3 +76,12 @@ def test_avoid_source_can_never_pass(con, tmp_path, registry):
     spec = "- {sport: Soccer, kind: hist, source_id: fbref, relation: core.matches, checks: {min_rows: 1}}\n"
     r = rows(con, tmp_path, registry, spec=spec)[("Soccer", "hist")]
     assert r["status"] == "fail" and "avoid" in r["detail"]
+
+
+def test_a_source_missing_from_the_registry_fails_its_row_and_the_others_still_land(con, tmp_path, registry):
+    spec = SPEC + "- {sport: F1, kind: bio, source_id: f1db-typo, relation: core.matches, checks: {min_rows: 1}}\n"
+    out = rows(con, tmp_path, registry, spec=spec)
+    r = out[("F1", "bio")]
+    assert r["status"] == "fail" and "f1db-typo" in r["detail"] and r["license_class"] == "unknown"
+    assert out[("F1", "hist")]["status"] == "pass"
+    assert con.execute("select count(*) from meta.capabilities").fetchone()[0] == 3

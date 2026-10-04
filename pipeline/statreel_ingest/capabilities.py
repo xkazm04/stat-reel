@@ -12,14 +12,18 @@ from pathlib import Path
 
 import yaml
 
-from .registry import Registry
+from .registry import Registry, UnknownSource
 
 COLUMNS = ("sport", "kind", "source_id", "license_class", "coverage_from", "coverage_to", "rows", "status",
            "detail", "evaluated_at")
 
 
 def _check(con, spec: dict, registry: Registry, today: date) -> dict:
-    src = registry.get(spec["source_id"])
+    try:
+        src = registry.get(spec["source_id"])
+    except UnknownSource as missing:  # one bad row must not keep every other capability from landing
+        return {"sport": spec["sport"], "kind": spec["kind"], "source_id": spec["source_id"], "license_class": "unknown",
+                "coverage_from": None, "coverage_to": None, "rows": 0, "status": "fail", "detail": str(missing)}
     row = {"sport": spec["sport"], "kind": spec["kind"], "source_id": src.id, "license_class": src.license_class,
            "coverage_from": None, "coverage_to": None, "rows": 0}
     failures: list[str] = []
