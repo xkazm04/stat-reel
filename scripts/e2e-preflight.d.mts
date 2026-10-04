@@ -2,6 +2,10 @@ export function portCollisionMessage(port: string | number, label?: string): str
 export function portInUse(port: string | number, host?: string, timeoutMs?: number): boolean;
 export function ffprobeMessage(): string;
 export function chromeMessage(candidates: string[]): string;
+export function warehousePath(env?: Record<string, string | undefined>, root?: string): string;
+export function warehouseMessage(file: string): string;
+export function audioFixturesDir(root?: string): string;
+export function audioFixturesMessage(dir: string): string;
 export function chromeCandidates(platform?: string, env?: Record<string, string | undefined>): string[];
 export function preflightProblems(
   ports: { apiPort: string | number; studioPort: string | number },
@@ -10,6 +14,10 @@ export function preflightProblems(
     ffprobeOk?: () => boolean;
     exists?: (p: string) => boolean;
     candidates?: string[];
+    warehouse?: string;
+    audioDir?: string;
+    audioMode?: string;
+    audioFiles?: (dir: string) => string[];
   },
 ): string[];
 export function pruneCandidates(files: string[], currentDb: string, keep?: number): string[];

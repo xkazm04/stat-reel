@@ -1,10 +1,13 @@
-// Pre-flight for `pnpm e2e`: turn the three raw failures people hit (port already used, ffprobe missing, Chrome
-// missing) into one named line, and keep data/e2e from accumulating a SQLite DB per run forever.
+// Pre-flight for `pnpm e2e`: turn the raw failures people hit (port already used, ffprobe missing, Chrome missing,
+// local-only warehouse or audio fixtures absent) into one named line, and keep data/e2e from accumulating a SQLite DB per run forever.
 // Plain .mjs (typed by e2e-preflight.d.mts) so node:test covers the pure parts and playwright.config.ts can call it
 // at load time - Playwright starts webServer before globalSetup, so a collision has to be caught in the config.
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The message people see when a port is taken; the default ports belong to `pnpm dev`. */
 export function portCollisionMessage(port, label = "API") {
@@ -27,6 +30,24 @@ export function chromeMessage(candidates) {
   return `e2e preflight: Google Chrome not found (playwright.config.ts uses channel "chrome"); looked in: ${candidates.join(", ")} - install Chrome or run 'pnpm exec playwright install chrome'`;
 }
 
+/** Same resolution as apps/server/src/config.ts `paths.warehouse`: the server throws at boot without this file. */
+export function warehousePath(env = process.env, root = repoRoot) {
+  return path.resolve(root, env.STATREEL_WAREHOUSE ?? path.join("data", "warehouse.duckdb"));
+}
+
+export function warehouseMessage(file) {
+  return `e2e preflight: warehouse not found at ${file} (apps/server/src/main.ts refuses to boot without it; it is local-only, never committed) - build it with: just ingest f1db && just transform`;
+}
+
+/** Replay AUDIO_MODE reads e2e/fixtures/audio (paths.fixtures in config.ts); the e2e default mode is replay. */
+export function audioFixturesDir(root = repoRoot) {
+  return path.join(root, "e2e", "fixtures", "audio");
+}
+
+export function audioFixturesMessage(dir) {
+  return `e2e preflight: audio replay fixtures missing or empty at ${dir} - they are local-only by policy (the owner's "never commit audio" rule keeps them out of git) and are produced only by a recorded live run (AUDIO_RECORD, owner-gated ElevenLabs spend); restore them from the owner's machine, do not record one without approval`;
+}
+
 /** Where Playwright's "chrome" channel would find an installed Chrome. */
 export function chromeCandidates(platform = process.platform, env = process.env) {
   if (platform === "win32") {
@@ -44,6 +65,16 @@ export function preflightProblems({ apiPort, studioPort }, deps = {}) {
     ffprobeOk: () => spawnSync("ffprobe", ["-version"], { stdio: "ignore" }).status === 0,
     exists: existsSync,
     candidates: chromeCandidates(),
+    warehouse: warehousePath(),
+    audioDir: audioFixturesDir(),
+    audioMode: process.env.AUDIO_MODE ?? "replay",
+    audioFiles: (dir) => {
+      try {
+        return readdirSync(dir);
+      } catch {
+        return [];
+      }
+    },
     ...deps,
   };
   const problems = [];
@@ -51,6 +82,8 @@ export function preflightProblems({ apiPort, studioPort }, deps = {}) {
   if (d.portInUse(studioPort)) problems.push(portCollisionMessage(studioPort, "studio"));
   if (!d.ffprobeOk()) problems.push(ffprobeMessage());
   if (!d.candidates.some((c) => d.exists(c))) problems.push(chromeMessage(d.candidates));
+  if (!d.exists(d.warehouse)) problems.push(warehouseMessage(d.warehouse));
+  if (d.audioMode !== "live" && !d.audioFiles(d.audioDir).some((f) => f.endsWith(".mp3"))) problems.push(audioFixturesMessage(d.audioDir));
   return problems;
 }
 
