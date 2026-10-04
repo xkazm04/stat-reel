@@ -16,3 +16,9 @@ sources:
       - name: seasons_driver_standings
       - name: constructors
       - name: races_sprint_race_results
+      # The snapshot's own manifest.json (written by ingest): which release it is. Declared here, not read
+      # ad hoc in a model, so lineage sees an f1db parent - a model with no source parent has no licence trail.
+      # Explicit columns: a key missing from an older manifest reads as null instead of failing the build.
+      - name: snapshot_manifest
+        meta:
+          external_location: "read_json('{{ env_var('F1DB_SNAPSHOT') }}/manifest.json', format = 'auto', columns = struct_pack(snapshot := 'VARCHAR', release_tag := 'VARCHAR', release_published_at := 'VARCHAR'))"

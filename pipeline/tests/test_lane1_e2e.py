@@ -178,11 +178,12 @@ def test_driver_season_points_plus_sprint_points_reconcile_with_official_champio
 
 
 def test_lineage_marks_every_model_legal_from_f1db(replay_run):
+    """EVERY model, not a sample: a model that reads a file outside a declared dbt source has no parent in the
+    manifest, and lineage then reports it legal with no sources at all (core.data_snapshot did)."""
     con = replay_run["con"]
-    rows = dict(con.execute("select model, license_class from meta.model_lineage").fetchall())
-    assert rows["mart_era_adjusted"] == "legal" and rows["f1_driver_era_adjusted"] == "legal"
-    srcs = con.execute("select sources from meta.model_lineage where model = 'mart_era_adjusted'").fetchone()[0]
-    assert srcs == ["f1db"]
+    rows = {m: (c, list(s)) for m, c, s in con.execute("select model, license_class, sources from meta.model_lineage").fetchall()}
+    assert {"mart_era_adjusted", "f1_driver_era_adjusted", "data_snapshot", "f1_data_as_of"} <= set(rows)
+    assert {m: v for m, v in rows.items() if v != ("legal", ["f1db"])} == {}
 
 
 def test_llm_views_are_documented_for_the_model(replay_run):
