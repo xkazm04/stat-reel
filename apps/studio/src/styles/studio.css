@@ -2052,7 +2052,7 @@ button.tl-b {
   background: var(--status-ask-wash);
   color: var(--color-text);
 }
-.bd-style__risk b {
+.bd-style__risk-t {
   color: var(--status-ask);
 }
 .bd-tabs button b .bd-tabs__n {

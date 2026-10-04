@@ -38,9 +38,9 @@ import {
   visibleItems,
 } from "./board";
 import { atRiskCount, inbox, parseTab, TABS, type Tab, tabCount } from "./library";
+import { QueueStrip } from "./QueueStrip";
 import { filterFromSearch, searchFromFilter } from "./search";
 import { useBoard, useCaseNames } from "./shared";
-import { QueueStrip } from "./QueueStrip";
 import { UndoToastHost } from "./undo";
 import "./board.css";
 

@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { api, type BoardItem, qk, serverError, type StyleEntry, type StylePatch } from "../api";
+import { api, type BoardItem, qk, type StyleEntry, type StylePatch, serverError } from "../api";
 import { Empty, Failure, Loading } from "../components/ui";
 import { atRiskCount, atRiskWords, DEFAULT_STYLE_FILTER, filterStyles, groupStyles, rejectSplitWords, type StyleFilter, styleItems } from "./library";
 import { Shot, shotAlt, useBoard } from "./shared";
@@ -144,7 +144,7 @@ function StyleCard({
         </p>
         {risk ? (
           <p className="bd-style__risk" data-testid={`style-atrisk-${style.id}`}>
-            <b>
+            <b className="bd-style__risk-t">
               <span aria-hidden="true">▲ </span>At risk
             </b>{" "}
             {risk}

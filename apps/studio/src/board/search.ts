@@ -3,17 +3,18 @@
  * so a reload (or a shared link) lands on the same queue; the default queue is the pending one
  * (`st` absent), so a clean URL is the daily review view. No React, no DOM (tested in search.test.ts).
  */
+
+import type { BoardItem } from "../api";
 import {
   type BoardFilter,
   caseOf,
   DEFAULT_FILTER,
   parseVariant,
-  slug,
   STATUS_FILTERS,
   type StatusFilter,
+  slug,
   type Variant,
 } from "./board";
-import type { BoardItem } from "../api";
 import { parseTab, type Tab } from "./library";
 
 
