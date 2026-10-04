@@ -40,3 +40,6 @@
 - The 46 existing `sports`/`geoeconomy` ideas need a topic picked by hand; until then they count as `unassigned`, and accepting a case asks for one.
 - The owner's heatmap starts empty (0 renders today), so the empty states are first-class.
 - Retitling a case or renaming a topic label doesn't move history.
+
+## Owner decision, 2026-10-04
+- **Topics as they are accepted, for now:** the seed list stays as shipped (`TOPIC_SEED`); the heatmap lists the topics that have videos or accepted cases, and "Show all topics" reveals the rest. No taxonomy changes until the owner asks.

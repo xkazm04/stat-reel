@@ -79,3 +79,9 @@
   - **Variants differ only in what the props schema carries** (entity colours, labels, axis): `DataRaceProps` has no palette, background or chart-form field, so "three distinct looks" is enforced as three distinct colour sets.
   - **Logos fetched and verified by the Commons API** are promoted to `data/assets/logos/` + `LEDGER.json` at finalize; `model-declared` assets are not (they wait for owner review).
   - **Generated videos** go to `data/renders/gen/<case>/<job>/` with `manifest.json` (ffprobe checks: 1080x1920, 30 fps, h264, 30-90 s and equal to the timing plan) and a `videos` row under the case topic. The manifest is a generation manifest, not the publish-gate provenance manifest: publishing stays a separate owner action.
+
+## Owner decisions, 2026-10-04
+- **Model:** the default is the floating `sonnet` alias (pin an id through config when a run must be reproducible).
+- **Assets:** assets fetched by `fetch_asset` are always gitignored (`data/assets/`); their provenance lives in `out/assets.json` and `data/assets/logos/LEDGER.json`. Logos are ledgered, not added to `sources.yaml`.
+- **Legacy accepted designs** (no case idea behind them) are out of scope: the app shows no job UI for them and the owner promotes them outside the app.
+- **Live runs:** not run by the builders; the first real `visual_options`/`generate_video` run is the owner's.

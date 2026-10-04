@@ -108,13 +108,11 @@ export function GenMark({ item, className = "" }: { item: BoardItem; className?:
   );
 }
 
-/** The badge of the case behind a design, plus the Generate video button on an accepted legacy design. */
+/**
+ * The badge of the case behind an accepted design. A legacy accepted design (no case idea behind it)
+ * shows nothing: the owner promotes those outside the app (owner decision 2026-10-04, ADR 010).
+ */
 export function ItemJob({ item, compact = false }: { item: BoardItem; compact?: boolean }) {
-  if (item.case_idea_id) return item.status === "accepted" ? <JobBadge caseId={item.case_idea_id} compact={compact} /> : null;
-  if (item.status !== "accepted" || compact) return null;
-  return (
-    <button type="button" className="btn btn--sm" disabled title="Videos are generated per case: this design has no case idea behind it" data-testid={`generate-video-${item.id}`}>
-      Generate video (needs a case)
-    </button>
-  );
+  if (!item.case_idea_id || item.status !== "accepted") return null;
+  return <JobBadge caseId={item.case_idea_id} compact={compact} />;
 }
