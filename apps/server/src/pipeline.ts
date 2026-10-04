@@ -25,7 +25,7 @@ import {
   sceneSpokenText, type Timeline, type WordTiming,
 } from "@statreel/schemas";
 import { modes, paths, renderNode, repoRoot, server } from "./config";
-import { assets, type Db, metricsDaily, now, publications, renders } from "./db";
+import { assets, type Db, metricsDaily, now, publications, renders, schedule } from "./db";
 import { TopicService } from "./topics";
 import type { EventBus } from "./events";
 import { type JobContext, type JobRunner, Refusal } from "./jobs";
@@ -64,6 +64,11 @@ const secret = (key: string): string => {
 const fileUrl = (abs: string) => `http://${server.host}:${server.port}/files/${path.relative(paths.data, abs).split(path.sep).join("/")}`;
 const sha256File = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
 
+/** Publish job params; `scheduleId` is set by the calendar tick and pins the render the slot was scheduled with (ADR 006). */
+type PublishJobParams = { projectId: string; title?: string; description?: string; tags?: string[]; scheduleId?: string };
+/** Per-render upload session record, beside the render so a crashed upload resumes instead of starting a second video. */
+const UPLOAD_SESSION_FILE = "upload-session.json";
+
 export class Pipeline implements PipelineApi {
   private readonly db: Db;
   private readonly bus: EventBus;
@@ -85,7 +90,7 @@ export class Pipeline implements PipelineApi {
       }
     });
     this.runner.register("render", (p, ctx) => this.renderJob(p as { projectId: string; target: PublishTarget }, ctx));
-    this.runner.register("publish", (p, ctx) => this.publishJob(p as { projectId: string; title?: string; description?: string; tags?: string[] }, ctx));
+    this.runner.register("publish", (p, ctx) => this.publishJob(p as PublishJobParams, ctx));
     this.runner.register("metrics", (_p, ctx) => this.metricsJob(ctx));
     // a crash or kill leaves partial run dirs and worker job files; other server processes share these dirs,
     // so only leftovers older than the render timeout (+ margin) are removed
@@ -391,9 +396,17 @@ export class Pipeline implements PipelineApi {
 
   // ------------------------------------------------------------------ publish
 
-  private async publishJob(p: { projectId: string; title?: string; description?: string; tags?: string[] }, ctx: JobContext) {
+  private async publishJob(p: PublishJobParams, ctx: JobContext) {
     const project = this.projects.get(p.projectId)!;
-    const render = this.renders(p.projectId)[0];
+    const all = this.renders(p.projectId);
+    let render = all[0];
+    if (p.scheduleId) {
+      // the slot pinned a render: publish exactly that one, never whatever is latest now
+      const slot = this.db.select().from(schedule).where(eq(schedule.id, p.scheduleId)).get();
+      if (!slot) throw new Error(`schedule slot ${p.scheduleId} no longer exists`);
+      render = all.find((r) => r.id === slot.render_id) as (typeof all)[number];
+      if (!render) throw new Error(`pinned render ${slot.render_id} (slot ${slot.id}) no longer exists`);
+    }
     if (!render) throw new Error("no render to publish");
     const policy = render.policy_json ? JSON.parse(render.policy_json) : null;
     if (!policy?.allow) throw new Refusal("publish gate", (policy?.deny ?? ["not gated"]).join("; "));
@@ -404,8 +417,13 @@ export class Pipeline implements PipelineApi {
     const dir = path.dirname(render.path);
     const yt = new YouTubeClient({ mode: modes.publish, planFile: path.join(dir, "publish-plan.json") });
     ctx.progress(0.1, "uploading");
+    // idempotent upload (API-NOTES "Idempotent uploads"): persist the session per render, resume it after a crash
+    const sessionFile = path.join(dir, UPLOAD_SESSION_FILE);
+    const resumeSessionUri = readUploadSession(sessionFile, manifest.subject.sha256);
     const up = await yt.uploadVideo({ file: render.path, title: (p.title ?? project.title).slice(0, 100), description, tags: p.tags ?? ["F1", "data"],
-      privacyStatus: "private", containsSyntheticMedia: manifest.disclosure.ai_voice || manifest.disclosure.ai_music, categoryId: "17" });
+      privacyStatus: "private", containsSyntheticMedia: manifest.disclosure.ai_voice || manifest.disclosure.ai_music, categoryId: "17" },
+    { resumeSessionUri, expectedSha256: manifest.subject.sha256,
+      onSession: (sessionUri) => writeFileSync(sessionFile, JSON.stringify({ sessionUri, sha256: manifest.subject.sha256 })) });
     ctx.progress(0.7, "captions");
     await yt.insertCaptions(up.id, path.join(dir, "captions.srt"), "en", "English");
     const pubId = randomUUID();
@@ -414,6 +432,7 @@ export class Pipeline implements PipelineApi {
     const today = now().slice(0, 10);
     const row = modes.publish === "live" ? null : emptyMetricsRow(pubId, today);
     if (row) this.db.insert(metricsDaily).values({ ...row, retention_json: null }).onConflictDoNothing().run();
+    rmSync(sessionFile, { force: true }); // the video exists and is recorded: nothing left to resume
     this.projects.advance(p.projectId, "published");
     return { publication_id: pubId, external_id: up.id, visibility: "private", mode: modes.publish };
   }
@@ -486,6 +505,16 @@ export async function runRenderWorker(
     return res;
   } finally {
     rmSync(jobFile, { force: true });
+  }
+}
+
+/** The saved session URI for this render's file, or undefined when absent, unreadable or for a different file. */
+function readUploadSession(file: string, sha256: string): string | undefined {
+  try {
+    const j = JSON.parse(readFileSync(file, "utf8")) as { sessionUri?: unknown; sha256?: unknown };
+    return typeof j.sessionUri === "string" && j.sha256 === sha256 ? j.sessionUri : undefined;
+  } catch {
+    return undefined;
   }
 }
 

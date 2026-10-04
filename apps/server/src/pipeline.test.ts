@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +17,13 @@ vi.mock("@statreel/audio", async (orig) => ({
   ElevenLabsClient: class { async subscription() { return { tier: "starter" }; } },
   generateTts: (...a: unknown[]) => tts(...a),
 }));
-vi.mock("@statreel/publish", async (orig) => ({ ...(await orig<object>()), evaluatePolicy: async () => ({ allow: true, deny: [], warn: [], checks_run: [] }) }));
+// the YouTube client is faked: publish jobs never touch the network, the tests drive uploadVideo directly
+const ytUpload = vi.fn();
+vi.mock("@statreel/publish", async (orig) => ({
+  ...(await orig<object>()),
+  evaluatePolicy: async () => ({ allow: true, deny: [], warn: [], checks_run: [] }),
+  YouTubeClient: class { uploadVideo(...a: unknown[]) { return ytUpload(...a); } async insertCaptions() {} },
+}));
 const runWorker = vi.fn();
 vi.mock("./render-support", async (orig) => ({ ...(await orig<object>()), runWorker: (...a: unknown[]) => runWorker(...a) }));
 
@@ -198,5 +204,83 @@ describe("skip unchanged (pipeline-skip-unchanged)", () => {
     const rows = pipeline.renders("p1");
     expect(rows).toHaveLength(2);
     expect(rows.filter((r) => r.id !== "r1")[0]).toMatchObject({ path: video, job_id: id });
+  });
+});
+
+describe("publish job render pin + resumable upload (publish-job-render-pin-and-resume)", () => {
+  const sha = createHash("sha256").update("video-bytes").digest("hex");
+  beforeEach(() => ytUpload.mockReset());
+
+  /** a gated render row with its own dir, manifest and video; created_at orders "latest" */
+  function addRender(root: string, pipeline: unknown, id: string, createdAt: string, disclosure = { ai_voice: false, ai_music: false }) {
+    const dir = path.join(root, "renders", "p1", id);
+    mkdirSync(dir, { recursive: true });
+    const video = path.join(dir, "video.mp4");
+    writeFileSync(video, "video-bytes");
+    writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ subject: { file: "video.mp4", sha256: sha }, data: { sources: [] }, disclosure: { ...disclosure, on_frame: true } }));
+    const { db } = pipeline as { db: { $client: { prepare: (q: string) => { run: (...a: unknown[]) => void } } } };
+    db.$client.prepare("insert into renders (id, project_id, job_id, format, path, manifest_path, checks_json, policy_json, created_at) values (?, 'p1', 'j0', 'vertical', ?, ?, '{}', ?, ?)")
+      .run(id, video, path.join(dir, "manifest.json"), JSON.stringify({ allow: true, deny: [] }), createdAt);
+    return dir;
+  }
+  function addSlot(pipeline: unknown, renderId: string) {
+    const { db } = pipeline as { db: { $client: { prepare: (q: string) => { run: (...a: unknown[]) => void } } } };
+    db.$client.prepare("insert into schedule (id, project_id, render_id, channel_id, publish_at, status, created_at) values ('sl1', 'p1', ?, 'ch-youtube', '2026-04-01T00:00:00Z', 'publishing', '2026-04-01T00:00:00Z')").run(renderId);
+  }
+  const publish = async (runner: InstanceType<typeof JobRunner>, params: object) => {
+    const id = runner.enqueue("publish", { projectId: "p1", ...params }, "p1");
+    await runner.idle();
+    return runner.get(id)!;
+  };
+
+  it("resumes a crashed upload from the saved session instead of starting a second one", async () => {
+    const { root, runner, pipeline } = setup();
+    const dir = addRender(root, pipeline, "r1", "2026-04-01T00:00:00Z");
+    // first run: the session is reported, then the process dies mid-upload
+    ytUpload.mockImplementationOnce(async (_req: unknown, opts: { onSession: (s: string) => void }) => {
+      opts.onSession("https://upload.example/session-1");
+      throw new Error("crash mid-upload");
+    });
+    expect((await publish(runner, {})).status).toBe("failed");
+    expect(JSON.parse(readFileSync(path.join(dir, "upload-session.json"), "utf8"))).toMatchObject({ sessionUri: "https://upload.example/session-1", sha256: sha });
+    expect(ytUpload.mock.calls[0]![1]).toMatchObject({ resumeSessionUri: undefined, expectedSha256: sha });
+
+    // second run: the saved session is passed back and the file is cleaned up after success
+    ytUpload.mockResolvedValueOnce({ id: "vid1", privacyStatus: "private", mode: "dry" });
+    const ok = await publish(runner, {});
+    expect(ok.status).toBe("succeeded");
+    expect(ytUpload.mock.calls[1]![1]).toMatchObject({ resumeSessionUri: "https://upload.example/session-1", expectedSha256: sha });
+    expect(existsSync(path.join(dir, "upload-session.json"))).toBe(false);
+  });
+
+  it("ignores a saved session recorded for a different file", async () => {
+    const { root, runner, pipeline } = setup();
+    const dir = addRender(root, pipeline, "r1", "2026-04-01T00:00:00Z");
+    writeFileSync(path.join(dir, "upload-session.json"), JSON.stringify({ sessionUri: "https://upload.example/old", sha256: "deadbeef" }));
+    ytUpload.mockResolvedValueOnce({ id: "vid1", privacyStatus: "private", mode: "dry" });
+    expect((await publish(runner, {})).status).toBe("succeeded");
+    expect(ytUpload.mock.calls[0]![1].resumeSessionUri).toBeUndefined();
+  });
+
+  it("publishes the render the slot pinned, not a newer one; without a slot it takes the latest", async () => {
+    const { root, runner, pipeline } = setup();
+    addRender(root, pipeline, "r-old", "2026-04-01T00:00:00Z");
+    addRender(root, pipeline, "r-new", "2026-04-02T00:00:00Z");
+    addSlot(pipeline, "r-old");
+    ytUpload.mockResolvedValue({ id: "vid1", privacyStatus: "private", mode: "dry" });
+    expect((await publish(runner, { scheduleId: "sl1" })).status).toBe("succeeded");
+    expect(ytUpload.mock.calls[0]![0].file).toContain("r-old");
+    expect((await publish(runner, {})).status).toBe("succeeded");
+    expect(ytUpload.mock.calls[1]![0].file).toContain("r-new");
+  });
+
+  it("fails with a named error when the pinned render no longer exists", async () => {
+    const { root, runner, pipeline } = setup();
+    addRender(root, pipeline, "r-new", "2026-04-02T00:00:00Z");
+    addSlot(pipeline, "r-gone");
+    const job = await publish(runner, { scheduleId: "sl1" });
+    expect(job.status).toBe("failed");
+    expect(job.error).toContain("pinned render r-gone");
+    expect(ytUpload).not.toHaveBeenCalled();
   });
 });
