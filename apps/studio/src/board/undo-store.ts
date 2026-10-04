@@ -12,7 +12,16 @@ export const UNDO_MS = 10_000;
 export const NOTICE_MS = 8_000;
 
 /** What an accept left behind (outcome.ts): the job an undo must wait for, and whether the data gate refused. */
-export type UndoMeta = { jobId?: string | null; blocked?: boolean };
+export type UndoMeta = {
+  jobId?: string | null;
+  blocked?: boolean;
+  /**
+   * The row the decision was on ("board:<id>", "case:<id>"). A row has at most one entry: a newer decision
+   * replaces the older one (its undo goes back to pending, never to the earlier verdict), and `forget` drops it
+   * once the decision was undone somewhere else, so the toast never offers an undo that already happened.
+   */
+  key?: string;
+};
 
 export type UndoEntry = { id: number; message: string; at: number; run: () => Promise<unknown> } & UndoMeta;
 
@@ -57,6 +66,8 @@ export type UndoStore = {
   getState: () => UndoState;
   /** Offer an undo for a decision just made. */
   show: (message: string, run: () => Promise<unknown>, meta?: UndoMeta) => void;
+  /** Drop the entry of a row whose decision was undone outside the toast (the Gate, the Rejected lane, a dialog). */
+  forget: (key: string) => void;
   /** Undo the latest entry; false when there is none, one is in flight, or the server refused (entry kept). */
   undoLatest: (onSettled?: () => void) => Promise<boolean>;
   /** Drop everything (leaving the page). */
@@ -122,8 +133,14 @@ export function createUndoStore(
     },
     getState: () => state,
     show: (message, run, meta) => {
-      const stack = push(expire(state.stack, now(), ttl), { id: ++seq, message, at: now(), run, ...meta }, cap);
+      const live = expire(state.stack, now(), ttl).filter((e) => !meta?.key || e.key !== meta.key);
+      const stack = push(live, { id: ++seq, message, at: now(), run, ...meta }, cap);
       set({ stack, notice: null, cancelJobId: null, said: say(`${message}. Press Z to undo.`) });
+      arm();
+    },
+    forget: (key) => {
+      if (!state.stack.some((e) => e.key === key)) return;
+      set({ stack: state.stack.filter((e) => e.key !== key), notice: null, cancelJobId: null });
       arm();
     },
     undoLatest: async (onSettled) => {

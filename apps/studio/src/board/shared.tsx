@@ -33,7 +33,7 @@ import {
 } from "./board";
 import { keysSuppressed, plainPress } from "./keys";
 import { acceptOutcome } from "./outcome";
-import { showUndo } from "./undo";
+import { forgetUndo, showUndo } from "./undo";
 
 // ------------------------------------------------------------------ data
 
@@ -55,7 +55,7 @@ export function useDecide() {
       // an accept says what it queued (or why data blocked it) and carries its job: the owner has left the view by now
       if (v.decision === "accept") {
         const o = acceptOutcome(r, r.item.title);
-        showUndo(o.message, () => api.undoBoardDecision(r.item.id), { jobId: o.jobId, blocked: o.blocked });
+        showUndo(o.message, () => api.undoBoardDecision(r.item.id), { jobId: o.jobId, blocked: o.blocked, key: `board:${r.item.id}` });
       }
       return r.item;
     },
@@ -65,7 +65,8 @@ export function useDecide() {
       );
       void qc.invalidateQueries({ queryKey: qk.board });
       // a rejected proposal leaves the grid: offer to take it back (D.1)
-      if (v.decision !== "accept") showUndo(`${DECISION_META[v.decision].done} · ${item.title}`, () => api.undoBoardDecision(item.id));
+      if (v.decision !== "accept")
+        showUndo(`${DECISION_META[v.decision].done} · ${item.title}`, () => api.undoBoardDecision(item.id), { key: `board:${item.id}` });
     },
   });
 }
@@ -75,7 +76,8 @@ export function useUndoDecision() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.undoBoardDecision(id),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      forgetUndo(`board:${id}`); // undone here: the toast must not offer the same undo again
       void qc.invalidateQueries({ queryKey: qk.board });
       void qc.invalidateQueries({ queryKey: qk.styles });
     },

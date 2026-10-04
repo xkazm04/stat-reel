@@ -29,6 +29,7 @@ const store = createUndoStore({ describeError: serverError, isConflict: isRunnin
 
 export const showUndo = store.show;
 export const dismissUndo = store.reset;
+export const forgetUndo = store.forget;
 
 /** The open modal dialog (innermost last), else the page body: where the host has to live to stay reachable. */
 function topLayerHost(): HTMLElement {

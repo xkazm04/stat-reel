@@ -32,7 +32,7 @@ import { JobBadge } from "./JobBadge";
 import { plainPress } from "./keys";
 import { acceptOutcome } from "./outcome";
 import { useBoard } from "./shared";
-import { showUndo } from "./undo";
+import { forgetUndo, showUndo } from "./undo";
 
 const ORIGIN_WORD: Record<CaseRow["origin"], string> = { registry: "Registry", design: "From designs", idea: "Case loop" };
 
@@ -49,7 +49,7 @@ function useDecideCase() {
       // an accept says what it queued (or why data blocked it) and carries its job: the owner has left the view by now
       if (v.decision === "accept") {
         const o = acceptOutcome(r, r.idea.title);
-        showUndo(o.message, () => api.undoCaseDecision(r.idea.id), { jobId: o.jobId, blocked: o.blocked });
+        showUndo(o.message, () => api.undoCaseDecision(r.idea.id), { jobId: o.jobId, blocked: o.blocked, key: `case:${r.idea.id}` });
       }
       return r.idea;
     },
@@ -59,7 +59,10 @@ function useDecideCase() {
       );
       void qc.invalidateQueries({ queryKey: qk.cases });
       // a rejected idea leaves the lists: offer to take it back (D.1)
-      if (v.decision !== "accept") showUndo(`Rejected · ${CASE_DECISION_META[v.decision].label.toLowerCase()} · ${idea.title}`, () => api.undoCaseDecision(idea.id));
+      if (v.decision !== "accept")
+        showUndo(`Rejected · ${CASE_DECISION_META[v.decision].label.toLowerCase()} · ${idea.title}`, () => api.undoCaseDecision(idea.id), {
+          key: `case:${idea.id}`,
+        });
     },
   });
 }
@@ -85,7 +88,10 @@ function useUndoCase() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.undoCaseDecision(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.cases }),
+    onSuccess: (_, id) => {
+      forgetUndo(`case:${id}`); // undone here: the toast must not offer the same undo again
+      void qc.invalidateQueries({ queryKey: qk.cases });
+    },
   });
 }
 

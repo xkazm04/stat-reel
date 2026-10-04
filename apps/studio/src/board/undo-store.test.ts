@@ -158,3 +158,25 @@ describe("undo of an accept whose job still runs", () => {
     expect(s.getState().stack[0]?.blocked).toBe(true);
   });
 });
+
+describe("one decision per row (undo-history/undo-scope: the stack mirrors the rows' real state)", () => {
+  it("a newer decision on the same row replaces its older entry: undo returns to pending, not to the earlier verdict", async () => {
+    const run = vi.fn(async () => {});
+    const s = createUndoStore({ now: () => 0 });
+    s.show("Rejected · style · X", run, { key: "board:x" });
+    s.show("Rejected · case · Y", run, { key: "board:y" });
+    s.show("Accepted · X", run, { key: "board:x" });
+    expect(s.getState().stack.map((e) => e.message)).toEqual(["Rejected · case · Y", "Accepted · X"]);
+    s.reset();
+  });
+  it("forget(key) drops a row's entry once its decision was undone elsewhere (the Gate, the Rejected lane, the idea dialog)", () => {
+    const s = createUndoStore({ now: () => 0 });
+    s.show("Rejected · style · X", async () => {}, { key: "board:x" });
+    s.show("Rejected · case · Y", async () => {}, { key: "board:y" });
+    s.forget("board:x");
+    expect(s.getState().stack.map((e) => e.message)).toEqual(["Rejected · case · Y"]);
+    s.forget("board:nope");
+    expect(s.getState().stack).toHaveLength(1);
+    s.reset();
+  });
+});
