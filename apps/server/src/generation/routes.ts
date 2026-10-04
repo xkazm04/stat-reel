@@ -203,7 +203,7 @@ export function registerGenerationRoutes(app: Hono<{ Bindings: HttpBindings }>, 
     return c2.json({ status: r.status, error: r.error, result: r.result_json ? JSON.parse(r.result_json) : undefined });
   });
 
-  // T7 stub: records what the worker validated. T10/T11 create the board items / the videos row here.
+  // the finalizer (finalize.ts) re-validates and creates the board items / the videos row; without one (tests) it only records
   app.post("/api/generation/jobs/:id/finalize", async (c2) => {
     const job = running(c2.req.param("id"));
     if (job instanceof Response) return job;

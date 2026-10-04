@@ -1,7 +1,8 @@
 /**
- * Output validation at finalize (SPEC D.7). The real validator (`DataRacePropsSchema` +
- * `checkGenerationRules`, packages/schemas, T9) is not wired yet: finalize talks to this interface and
- * `stubValidator` only checks that the contracted files exist and parse. T9/T10 replace the instance.
+ * Output validation at finalize (SPEC D.7): the interface the worker calls. Production wires
+ * `dataRaceValidator` (validate-data-race.ts: DataRacePropsSchema + checkGenerationRules, the same function
+ * finalize and validate_generation_output run). `stubValidator` only checks that the contracted files exist
+ * and parse; it is the worker's fallback when no validator is passed (unit tests).
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
