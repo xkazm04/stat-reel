@@ -168,11 +168,14 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
       if (typeof api.duration !== "number" || Math.abs(api.duration - meta.duration_s) > 0.5) errors.push(`window.statreel.duration (${api.duration}) must equal shot.json duration_s (${meta.duration_s})`);
       const shot = async () => createHash("sha256").update(await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h }, type: "png" })).digest("hex");
       const samples = [];
+      const frames = []; // every frame whose text was measured: the text gates judge all of them
       for (const t of longevitySamples(meta.duration_s)) {
         // one pass per sample frame: clock, optional frameFacts, and the frame's visible text (MEASURE_TEXT)
         const clock = await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); return Number(window.statreel.dataClock(tt)); }, t);
         const hash = await shot();
-        const texts = (await page.evaluate(MEASURE_TEXT)).map(({ text, px }) => ({ text, px }));
+        const found = await page.evaluate(MEASURE_TEXT);
+        frames.push({ t, found });
+        const texts = found.map(({ text, px }) => ({ text, px }));
         const declared = await page.evaluate((tt) => (typeof window.statreel.frameFacts === "function" ? window.statreel.frameFacts(tt) ?? null : null), t);
         samples.push({ t, clock, hash, texts, declared });
       }
@@ -194,16 +197,15 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
         seen.set(t, hsh);
       }
       if (mismatches) errors.push(`not seek-stable: ${mismatches} frame(s) differ when revisited (the frame must be a pure function of t)`);
-      const small = new Map();
-      const frames = [];
       for (const f of [0.1, 0.3, 0.5, 0.7, 0.9]) {
         const t = Math.round(meta.duration_s * f * 30) / 30;
         await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); }, t);
-        const found = await page.evaluate(MEASURE_TEXT);
-        frames.push({ t, found });
-        for (const x of found) if (x.px < MIN_TEXT_PX - SIZE_SLACK && !small.has(x.text)) small.set(x.text, x.px);
+        frames.push({ t, found: await page.evaluate(MEASURE_TEXT) });
       }
-      // safe box + attribution gates (lib.textOutsideSafeBox / attributionPresent): same frames, same capture
+      frames.sort((a, b) => a.t - b.t);
+      // size, safe box and attribution (lib.textOutsideSafeBox / attributionPresent) over the same 17 frames
+      const small = new Map();
+      for (const { found } of frames) for (const x of found) if (x.px < MIN_TEXT_PX - SIZE_SLACK && !small.has(x.text)) small.set(x.text, x.px);
       const box = textOutsideSafeBox(frames.flatMap(({ t, found }) => found.map((x) => ({ ...x, t }))), meta.format);
       if (box.outside.length) errors.push(`safe box: ${box.outside.length} text item(s) outside it, e.g. ${box.outside.slice(0, 3).map((o) => `"${o.text}" at t=${o.t.toFixed(1)}s (${Math.round(o.x)},${Math.round(o.y)})`).join(", ")} - readable text stays inside the safe box (atmosphere may bleed out)`);
       const noAttr = frames.filter(({ found }) => !attributionPresent(found.map((x) => x.text)).ok).map(({ t }) => t.toFixed(1));
