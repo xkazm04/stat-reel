@@ -1,5 +1,5 @@
 import type { Cue, Format, WordTiming } from "@statreel/schemas";
-import { fitCharsPerLine } from "./geometry";
+import { captionTextWidth, estimateLineWidth, fitCharsPerLine } from "./geometry";
 import { isGlued, joinDisplay } from "./text";
 
 /** Netflix timed-text rules as adopted in DESIGN.md §6.5. */
@@ -20,7 +20,7 @@ export const CUE_RULES = {
 export type BuildCuesOptions = {
   format: Format;
   fps: number;
-  /** override the per-line character limit (default: `maxCharsPerLine(format)`) */
+  /** override the per-line character limit (default: `maxCharsPerLine(format)`); lines must still fit the box by measured width */
   maxCharsPerLine?: number;
   /** latest time the last cue may extend to (e.g. timeline duration); default last word end + 1 s */
   endLimit_s?: number;
@@ -67,18 +67,27 @@ function toAtoms(words: WordTiming[]): Atom[] {
 
 /**
  * Lay out atom texts on one line if they fit, else on two balanced lines (mild preference for a
- * bottom-heavy pyramid and for breaking after punctuation). Null if two lines cannot hold them.
+ * bottom-heavy pyramid and for breaking after punctuation). A line fits when it has at most
+ * `maxChars` characters AND passes `fits` (buildCues passes the measured caption-box width); a
+ * line of one unbreakable atom is exempt from `fits`, so a word wider than the box takes a line
+ * of its own instead of a cue of its own (the safe-zone check still counts it).
+ * Null if two lines cannot hold them.
  */
-export function layoutLines(parts: string[], maxChars: number): string[] | null {
+export function layoutLines(
+  parts: string[],
+  maxChars: number,
+  fits: (line: string) => boolean = () => true,
+): string[] | null {
+  const ok = (line: string, atoms: number): boolean => line.length <= maxChars && (atoms === 1 || fits(line));
   const full = joinDisplay(parts);
-  if (full.length <= maxChars) return [full];
+  if (ok(full, parts.length)) return [full];
   let best: string[] | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
   for (let k = 1; k < parts.length; k++) {
     if (isGlued(parts[k] ?? "")) continue;
     const a = joinDisplay(parts.slice(0, k));
     const b = joinDisplay(parts.slice(k));
-    if (a.length > maxChars || b.length > maxChars) continue;
+    if (!ok(a, k) || !ok(b, parts.length - k)) continue;
     let score = Math.abs(a.length - b.length) + (a.length > b.length ? 1 : 0);
     if (/[,.!?;:…—–]$/.test(a)) score -= 3;
     if (score < bestScore) {
@@ -109,9 +118,9 @@ function cpsPenalty(cps: number): number {
 type Segment = { atoms: Atom[]; lines: string[] };
 
 /**
- * Split timed words into caption cues (DESIGN.md §6.5): ≤ 2 lines, per-line char limit, 15–17 CPS
- * target / 20 CPS hard max, 0.8–7 s, ≥ 2 frames between cues, never inside a word, always at scene
- * boundaries, preferably after punctuation. Segmentation is a shortest-path search over break
+ * Split timed words into caption cues (DESIGN.md §6.5): ≤ 2 lines, per-line char limit and measured
+ * width inside the caption box, 15–17 CPS target / 20 CPS hard max, 0.8–7 s, ≥ 2 frames between
+ * cues, never inside a word, always at scene boundaries, preferably after punctuation. Segmentation is a shortest-path search over break
  * points; cue ends are then extended into available gaps. Cues that still exceed 20 CPS are kept
  * and show up in `maxCps`.
  */
@@ -121,6 +130,8 @@ export function buildCues(words: WordTiming[], opts: BuildCuesOptions): Cue[] {
   const n = atoms.length;
   if (n === 0) return [];
   const maxChars = opts.maxCharsPerLine ?? maxCharsPerLine(opts.format);
+  const boxWidth = captionTextWidth(opts.format);
+  const fitsBox = (line: string): boolean => estimateLineWidth(line, opts.format) <= boxWidth;
   const gap_s = CUE_RULES.minGapFrames / fps;
   const lastWordEnd = Math.max(...atoms.map((a) => a.end));
   const endLimit = opts.endLimit_s ?? lastWordEnd + CUE_RULES.tailLinger_s;
@@ -142,7 +153,7 @@ export function buildCues(words: WordTiming[], opts: BuildCuesOptions): Cue[] {
       const single = j === i + 1;
       if (!single && natEnd - first.start > CUE_RULES.maxDuration_s) break;
       const parts = atoms.slice(i, j).map((a) => a.text);
-      const lines = layoutLines(parts, maxChars) ?? (single ? [parts[0] ?? ""] : null);
+      const lines = layoutLines(parts, maxChars, fitsBox) ?? (single ? [parts[0] ?? ""] : null);
       if (!lines) break;
 
       const next = atoms[j];

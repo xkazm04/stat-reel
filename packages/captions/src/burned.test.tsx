@@ -180,4 +180,18 @@ describe("caption box geometry and safe zone", () => {
       expect(captionSafeZoneViolations(buildCues(ws, { format, fps: 30 }), format)).toBe(0);
     }
   });
+
+  it("segmentation breaks by measured width too: an upper-case script stays inside the box", () => {
+    const ws: WordTiming[] = [];
+    let t = 0;
+    for (const w of "MAXIMUM WORLD TITLES FOR MERCEDES WHO WON EIGHT CONSTRUCTORS CHAMPIONSHIPS IN A ROW".split(" ")) {
+      ws.push(W(w, t, t + 0.4));
+      t += 0.4;
+    }
+    for (const format of ["vertical", "landscape"] as const) {
+      expect(captionSafeZoneViolations(buildCues(ws, { format, fps: 30 }), format)).toBe(0);
+      // an explicit character limit is a cap, never a licence to leave the box
+      expect(captionSafeZoneViolations(buildCues(ws, { format, fps: 30, maxCharsPerLine: 42 }), format)).toBe(0);
+    }
+  });
 });

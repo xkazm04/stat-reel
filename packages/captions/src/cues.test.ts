@@ -1,6 +1,6 @@
 import type { Cue, WordTiming } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
-import { buildCues, CUE_RULES, cueCps, joinDisplay, maxCharsPerLine, maxCps } from "./index";
+import { buildCues, CUE_RULES, cueCps, joinDisplay, layoutLines, maxCharsPerLine, maxCps } from "./index";
 
 const FPS = 30;
 
@@ -58,6 +58,14 @@ describe("line limits", () => {
     const v = buildCues(words, { format: "vertical", fps: FPS, maxCharsPerLine: 32 });
     checkInvariants(v, words, 32);
     expect(v.some((c) => c.lines.some((line) => line.length > 20))).toBe(true);
+  });
+
+  it("layoutLines applies the width predicate on top of the char cap; a lone unbreakable atom is exempt", () => {
+    const narrow = (l: string) => l.length <= 6;
+    expect(layoutLines(["ab", "cd", "ef"], 32)).toEqual(["ab cd ef"]);
+    expect(layoutLines(["ab", "cd", "ef"], 32, narrow)).toEqual(["ab", "cd ef"]);
+    expect(layoutLines(["abcdefghij", "cd"], 32, narrow)).toEqual(["abcdefghij", "cd"]);
+    expect(layoutLines(["ab", "cd", "ef", "gh", "ij"], 32, narrow)).toBeNull();
   });
 
   it("balances two-line cues", () => {
