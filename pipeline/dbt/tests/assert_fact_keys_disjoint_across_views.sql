@@ -5,6 +5,7 @@
 -- when an llm model with a fact_key is missing from it.
 with keys as (
     select fact_key, 'f1_constructor_seasons' as view_name from {{ ref('f1_constructor_seasons') }}
+    union all select fact_key, 'f1_data_as_of' from {{ ref('f1_data_as_of') }}
     union all select fact_key, 'f1_driver_bios' from {{ ref('f1_driver_bios') }}
     union all select fact_key, 'f1_driver_era_adjusted' from {{ ref('f1_driver_era_adjusted') }}
     union all select fact_key, 'f1_driver_race_cumulative' from {{ ref('f1_driver_race_cumulative') }}

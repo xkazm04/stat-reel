@@ -198,3 +198,24 @@ models:
       - {name: grid_position, description: "Winner's starting grid position; NULL when f1db has no grid for that entry (common in early seasons and for pit-lane starts) - never assume pole."}
       - {name: shared_drive, description: "True when the winning car was shared between drivers (1950s); the win is credited to each of them."}
       - {name: attribution, description: "Attribution string that must accompany any use."}
+  - name: f1_data_as_of
+    description: >-
+      One row: how fresh the data behind every other llm view is. Say "data as of round N of <season>" (the latest
+      race WITH results), never imply live data. Also carries the F1DB release the warehouse was built from.
+      Source F1DB (CC BY 4.0), attribution required.
+    data_tests:
+      - dbt_utils_free_unique_combination:
+          columns: [fact_key]
+    columns:
+      - {name: fact_key, description: "Stable id of this fact (always f1db:data-as-of); cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
+      - {name: latest_race_date, description: "Date of the latest race with results: the data is as of this day."}
+      - {name: latest_season, description: "Championship year of that latest race."}
+      - {name: latest_round, description: "Round number of that latest race within its season (the N in 'data as of round N')."}
+      - {name: latest_race_id, description: "f1db race id of the latest race with results."}
+      - {name: latest_race_name, description: "Official name of the latest race with results."}
+      - {name: latest_season_races_held, description: "Races with results so far in that season."}
+      - {name: latest_season_races_scheduled, description: "Races on that season's calendar (future rounds included)."}
+      - {name: release_tag, description: "F1DB release the data was built from (e.g. v2026.15.1)."}
+      - {name: release_published_date, description: "Date F1DB published that release (null if the release did not report one)."}
+      - {name: snapshot_fetched_at, description: "UTC timestamp when this snapshot was fetched from F1DB."}
+      - {name: attribution, description: "Attribution string that must accompany any use."}

@@ -397,3 +397,24 @@ def test_race_winners_one_winner_per_race_except_shared_drives(replay_run):
                           and m.match_id not in (select race_id from llm.f1_race_winners)""").fetchone()[0] == 0
     assert con.execute("select count(*) from llm.f1_race_winners w join core.matches m on m.match_id = w.race_id where m.is_indianapolis").fetchone()[0] == 0
     assert con.execute("select min(age_at_win) from llm.f1_race_winners").fetchone()[0] > 18
+
+
+# --------------------------------------------------------------------------- llm.f1_data_as_of
+
+
+def test_data_as_of_names_the_latest_resulted_race_and_the_release(replay_run):
+    """One row, offline: the latest race WITH results (not the calendar's last) and the release the replay served."""
+    con = replay_run["con"]
+    rows = con.execute("select * from llm.f1_data_as_of").fetchall()
+    assert len(rows) == 1
+    row = dict(zip([d[0] for d in con.description], rows[0]))
+    last = con.execute("select race_date, season, round from core.matches where has_results order by race_date desc, season desc, round desc limit 1").fetchone()
+    assert (row["latest_race_date"], row["latest_season"], row["latest_round"]) == last
+    assert row["latest_race_date"] == con.execute("select max(race_date) from llm.f1_race_results").fetchone()[0]
+    assert row["latest_season_races_held"] <= row["latest_season_races_scheduled"]
+    assert row["release_tag"] == "v-mini"
+    assert str(row["release_published_date"]) == "2026-09-27"
+    assert row["snapshot_fetched_at"].startswith("2026-09-29")
+    assert row["fact_key"] == "f1db:data-as-of"
+    lineage = con.execute("select license_class, sources from meta.model_lineage where model = 'f1_data_as_of'").fetchone()
+    assert lineage == ("legal", ["f1db"])

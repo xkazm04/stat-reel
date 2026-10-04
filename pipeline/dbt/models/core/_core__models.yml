@@ -38,3 +38,7 @@ models:
     columns:
       - name: points_cum
         data_tests: [not_null]
+  - name: data_snapshot
+    columns:
+      - name: release_tag
+        data_tests: [not_null]
