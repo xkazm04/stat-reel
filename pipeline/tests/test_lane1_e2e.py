@@ -337,6 +337,17 @@ def test_driver_race_cumulative_matches_the_far_side_oracle(replay_run):
     assert any(v["wins"] > 1 for v in oracle.values())
 
 
+def test_driver_race_cumulative_points_end_at_the_independent_oracle_career_points(replay_run):
+    """points_cum is the one running total the oracle above does not check: at each driver's last row it must equal
+    the career current-system points from the CSV oracle (shared cars split, Indianapolis excluded).
+    Negative control: zeroing points_cum's window sum in driver_race_cumulative.sql turns this red."""
+    con = replay_run["con"]
+    oracle = expected_from_raw(FIXTURE / "f1db-races-race-results.csv", FIXTURE / "f1db-races.csv")
+    final = dict(con.execute("select player_id, max_by(points_cum, race_seq) from llm.f1_driver_race_cumulative group by 1").fetchall())
+    assert final and any(p > 0 for p in final.values())
+    assert {d: (p, oracle[d]["points"]) for d, p in final.items() if p != pytest.approx(oracle[d]["points"])} == {}
+
+
 def test_driver_race_cumulative_is_dense_after_debut_and_carries_totals_forward(replay_run):
     con = replay_run["con"]
     gaps = con.execute("""
