@@ -112,7 +112,7 @@ export function createLiveEngine(o: LiveEngineOptions): GenerationEngine {
     /** Reference docs + prompt.md + the job's mcp.json (SPEC D.5). A missing rule source fails the job. */
     async stage(job, p, caseData) {
       const manifest = stageRefs({ paths: p, repoRoot, dataRoot: o.dataRoot });
-      const prompt = renderPrompt(job, caseData);
+      const prompt = renderPrompt(job, caseData, o.config.web);
       writePrompt(p, prompt);
       writeJobMcpConfig(p, o.apiBase);
       return { refs: { count: manifest.entries.length, golden_paths: manifest.golden_paths, pending: manifest.pending } };

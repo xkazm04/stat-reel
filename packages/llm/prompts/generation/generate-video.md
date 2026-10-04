@@ -17,7 +17,7 @@ Open `{{REFS_DIR}}/MANIFEST.json`. Read every golden path it lists and then the 
 Data provenance for this case: **{{DATA_PROVENANCE}}**. A video requires `real` data: take every value through `mcp__statreel__query` (read-only SQL over `llm.*` views, see `mcp__statreel__describe_views`) and cite each number with its fact ref. The web is for finding assets (logos) only. NEVER type or estimate data values from web pages.
 
 ## Logos
-For each of the top 10 entities, reuse a logo from `{{REFS_DIR}}/logos/` when `LEDGER.json` there lists it; otherwise look for a transparent logo (SVG or PNG), preferring Wikimedia Commons, with WebSearch and WebFetch, and save it ONLY with `mcp__statreel__fetch_asset` (pass the file URL, `kind: "logo"`, the entity and the file page URL as `source_page`). If no acceptable logo exists, use `logo: {kind: "wordmark"}` and list the entity in `missing_logos[]`. Do not use photos of people.
+For each of the top 10 entities, reuse a logo from `{{REFS_DIR}}/logos/` when `LEDGER.json` there lists it; otherwise look for a transparent logo (SVG or PNG), preferring Wikimedia Commons. {{WEB_FIND}} then save it ONLY with `mcp__statreel__fetch_asset` (pass the file URL, `kind: "logo"`, the entity and the file page URL as `source_page`). If no acceptable logo exists, use `logo: {kind: "wordmark"}` and list the entity in `missing_logos[]`. Do not use photos of people.
 
 ## Task
 1. Call `mcp__statreel__get_generation_context` with `job_id: "{{JOB_ID}}"` for the props schema, the accepted visual and the rules.
