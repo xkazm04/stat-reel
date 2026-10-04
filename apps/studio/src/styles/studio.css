@@ -2062,3 +2062,9 @@ button.tl-b {
   color: var(--color-text-muted);
   letter-spacing: 0;
 }
+
+/* Metrics bars (lot LC): a lower-bound group has an open right end, so its bar never reads as an exact sum. */
+.bars li[data-figure="lower_bound"] .bars__fill {
+  -webkit-mask-image: linear-gradient(90deg, currentColor 70%, transparent);
+  mask-image: linear-gradient(90deg, currentColor 70%, transparent);
+}

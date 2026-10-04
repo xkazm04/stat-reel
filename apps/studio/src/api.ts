@@ -134,7 +134,20 @@ export type MetricsPublication = {
   daily: { date: string; views: number | null; likes: number | null; avg_view_duration_s: number | null }[];
   data: string;
 };
-export type MetricsGroup = { key: string; publications: number; views: number | null };
+/**
+ * One per-use-case / per-sport group (apps/server/src/metrics.ts). `views` sums only the measured members, so with
+ * `unmeasured > 0` (`lower_bound`) it is a lower bound, and null when none was measured: unmeasurable is not zero.
+ */
+export type MetricsGroup = {
+  key: string;
+  publications: number;
+  views: number | null;
+  /** publications with a lifetime snapshot */
+  measured: number;
+  /** dry runs and not-yet-pulled publications */
+  unmeasured: number;
+  lower_bound: boolean;
+};
 export type MetricsResponse = {
   publications: MetricsPublication[];
   by_use_case: MetricsGroup[];

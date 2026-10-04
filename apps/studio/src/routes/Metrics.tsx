@@ -1,7 +1,8 @@
 /**
  * 06 Metrics: cross-channel numbers from GET /api/metrics, per publication, per use case, per
  * sport. Nulls are "—"; dry-run publications are labelled (nothing was uploaded, so there are no
- * platform numbers). Refresh enqueues the metrics job.
+ * platform numbers). A group with an unmeasured member reads "at least N" (a lower bound), never an exact sum.
+ * Refresh enqueues the metrics job.
  */
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -14,6 +15,7 @@ import { useHeatmap, useMetrics } from "../data";
 import { useEvents } from "../events";
 import { relTime } from "../logic";
 import { fmtDuration, fmtNum } from "../display";
+import { groupFigure } from "../metricsGroup";
 
 function Bars({ title, groups, nameOf }: { title: string; groups: MetricsGroup[]; nameOf: (k: string) => string }) {
   const max = Math.max(0, ...groups.map((g) => g.views ?? 0));
@@ -25,21 +27,23 @@ function Bars({ title, groups, nameOf }: { title: string; groups: MetricsGroup[]
       </h2>
       {groups.length ? (
         <ul className="bars">
-          {groups.map((g) => (
-            <li key={g.key} style={artStyle(identVar(g.key))}>
-              <span className="bars__k">{nameOf(g.key)}</span>
-              <span className="bars__track">
-                {g.views !== null && max > 0 ? (
-                  <span className="bars__fill" style={{ width: `${(g.views / max) * 100}%` }} />
-                ) : null}
-              </span>
-              <span className="bars__v num">{fmtNum(g.views)}</span>
-              <span className="bars__n">
-                {g.publications} publication{g.publications === 1 ? "" : "s"}
-                {g.views === null ? " · no platform numbers" : ""}
-              </span>
-            </li>
-          ))}
+          {groups.map((g) => {
+            const f = groupFigure(g);
+            return (
+              <li key={g.key} style={artStyle(identVar(g.key))} data-figure={f.kind}>
+                <span className="bars__k">{nameOf(g.key)}</span>
+                <span className="bars__track">
+                  {g.views !== null && max > 0 ? (
+                    <span className="bars__fill" style={{ width: `${(g.views / max) * 100}%` }} />
+                  ) : null}
+                </span>
+                <span className="bars__v num" title={f.summary}>
+                  {f.value}
+                </span>
+                <span className="bars__n">{f.detail}</span>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="sum-p">Nothing published yet.</p>
