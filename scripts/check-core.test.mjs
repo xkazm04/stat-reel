@@ -65,3 +65,10 @@ test("check.mjs node --test steps FAIL (not a vacuous PASS) when their test file
   assert.equal(r.ok, false);
   assert.match(r.detail, /no files match scripts\/no-such-dir/);
 });
+
+test("dbt-parse turns dbt warnings (deprecations, unused config paths) into a failing exit", async () => {
+  const { dbtParseArgs } = await import("./check.mjs");
+  const args = dbtParseArgs("T");
+  assert.ok(args.includes("--warn-error"), "a deprecation dbt only warns about must fail the step");
+  assert.deepEqual(args.slice(args.indexOf("--target-path"), args.indexOf("--target-path") + 2), ["--target-path", "T"]);
+});

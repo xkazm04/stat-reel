@@ -12,12 +12,21 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const win = process.platform === "win32";
 const venvBin = path.join(root, "pipeline", ".venv", win ? "Scripts" : "bin");
 
+/**
+ * `--warn-error`: dbt only WARNS on a deprecation (slated to become an error in a later dbt), a --select that
+ * selects nothing or a config path that matches no model, and exits 0 - so the gate would stay green on exactly
+ * what it exists to catch early.
+ */
+export function dbtParseArgs(target) {
+  return ["parse", "--warn-error", "--project-dir", "pipeline/dbt", "--profiles-dir", "pipeline/dbt", "--target-path", target];
+}
+
 /** dbt parse needs no warehouse: dummy env, and a scratch target dir so the shared pipeline/dbt/target is untouched. */
 function dbtParse() {
   const target = mkdtempSync(path.join(tmpdir(), "statreel-dbt-parse-"));
   const dbt = path.join(venvBin, win ? "dbt.exe" : "dbt");
   const run = () =>
-    sh(dbt, ["parse", "--project-dir", "pipeline/dbt", "--profiles-dir", "pipeline/dbt", "--target-path", target], {
+    sh(dbt, dbtParseArgs(target), {
       STATREEL_WAREHOUSE: path.join(target, "dummy.duckdb"),
       F1DB_SNAPSHOT: path.join(target, "dummy-snapshot"),
     });
