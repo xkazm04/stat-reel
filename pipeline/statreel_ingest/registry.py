@@ -9,7 +9,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Verdict = Literal["legal", "non_commercial", "paid", "avoid"]
 Kind = Literal["hist", "bio", "events", "track", "live", "money"]
@@ -27,9 +27,10 @@ class HostNotRegistered(PermissionError):
 
 class RateLimit(BaseModel):
     model_config = ConfigDict(extra="allow")
-    requests: float
-    per_s: float
-    burst_per_s: float | None = None
+    # every figure must be positive: a zero or negative one yields a zero/negative spacing (no throttle)
+    requests: float = Field(gt=0)
+    per_s: float = Field(gt=0)
+    burst_per_s: float | None = Field(default=None, gt=0)
     note: str | None = None
 
 

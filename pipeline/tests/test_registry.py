@@ -132,3 +132,19 @@ def test_avoid_source_with_hosts_is_rejected(tmp_path):
     )
     with pytest.raises(ValueError, match="avoid"):
         Registry.load(p)
+
+
+@pytest.mark.parametrize("rate_limit", [
+    "{requests: 0, per_s: 60}",      # min_interval_s would divide by zero
+    "{requests: -5, per_s: 60}",     # negative spacing = no throttle at all
+    "{requests: 5, per_s: 0}",       # zero spacing
+    "{requests: 5, per_s: 60, burst_per_s: 0}",
+])
+def test_a_rate_limit_that_cannot_space_requests_is_rejected(tmp_path, rate_limit):
+    p = tmp_path / "s.yaml"
+    p.write_text(
+        "- {id: a, sport: F1, url: 'https://a', access: api, hosts: [a.example], verdict: legal, license: x,"
+        f" attribution: x, kinds: [hist], rate_limit: {rate_limit}, terms_url: 'https://a', terms_checked_at: 2026-09-29}}\n"
+    )
+    with pytest.raises(ValueError, match="greater than 0"):
+        Registry.load(p)
