@@ -11,7 +11,10 @@ export const UNDO_CAP = 10;
 export const UNDO_MS = 10_000;
 export const NOTICE_MS = 8_000;
 
-export type UndoEntry = { id: number; message: string; at: number; run: () => Promise<unknown> };
+/** What an accept left behind (outcome.ts): the job an undo must wait for, and whether the data gate refused. */
+export type UndoMeta = { jobId?: string | null; blocked?: boolean };
+
+export type UndoEntry = { id: number; message: string; at: number; run: () => Promise<unknown> } & UndoMeta;
 
 // ------------------------------------------------------------------ pure stack (newest last)
 
@@ -43,6 +46,8 @@ export type UndoState = {
   busy: boolean;
   /** the last refusal ("Could not undo: ..."), shown with the toast */
   notice: string | null;
+  /** the undo was refused because this generation job still runs: the toast offers its Cancel */
+  cancelJobId: string | null;
   /** the text of the one page-level live region: changes on every event, never remounted */
   said: string;
 };
@@ -51,7 +56,7 @@ export type UndoStore = {
   subscribe: (l: () => void) => () => void;
   getState: () => UndoState;
   /** Offer an undo for a decision just made. */
-  show: (message: string, run: () => Promise<unknown>) => void;
+  show: (message: string, run: () => Promise<unknown>, meta?: UndoMeta) => void;
   /** Undo the latest entry; false when there is none, one is in flight, or the server refused (entry kept). */
   undoLatest: (onSettled?: () => void) => Promise<boolean>;
   /** Drop everything (leaving the page). */
@@ -59,13 +64,21 @@ export type UndoStore = {
 };
 
 export function createUndoStore(
-  opts: { cap?: number; ttl?: number; now?: () => number; describeError?: (e: unknown) => string } = {},
+  opts: {
+    cap?: number;
+    ttl?: number;
+    now?: () => number;
+    describeError?: (e: unknown) => string;
+    /** a refusal that means "its generation job still runs" (409); with an entry job id it asks to cancel first */
+    isConflict?: (e: unknown) => boolean;
+    conflictNotice?: string;
+  } = {},
 ): UndoStore {
   const cap = opts.cap ?? UNDO_CAP;
   const ttl = opts.ttl ?? UNDO_MS;
   const now = opts.now ?? Date.now;
   const describe = opts.describeError ?? ((e: unknown) => (e instanceof Error ? e.message : String(e)));
-  let state: UndoState = { stack: [], busy: false, notice: null, said: "" };
+  let state: UndoState = { stack: [], busy: false, notice: null, cancelJobId: null, said: "" };
   let seq = 0;
   let flip = false;
   let expiry: ReturnType<typeof setTimeout> | undefined;
@@ -92,7 +105,14 @@ export function createUndoStore(
   const notify = (message: string) => {
     clearTimeout(noticeTimer);
     noticeTimer = setTimeout(() => set({ notice: null }), NOTICE_MS);
-    set({ notice: message, said: say(message) });
+    set({ notice: message, cancelJobId: null, said: say(message) });
+  };
+  /** the cancel offer stays until the owner acts (no timer) and the entry's clock restarts, so it outlives the cancel */
+  const notifyCancelFirst = (entry: UndoEntry, message: string) => {
+    clearTimeout(noticeTimer);
+    const stack = state.stack.map((e) => (e.id === entry.id ? { ...e, at: now() } : e));
+    set({ stack, notice: message, cancelJobId: entry.jobId ?? null, said: say(message) });
+    arm();
   };
 
   return {
@@ -101,22 +121,26 @@ export function createUndoStore(
       return () => listeners.delete(l);
     },
     getState: () => state,
-    show: (message, run) => {
-      const stack = push(expire(state.stack, now(), ttl), { id: ++seq, message, at: now(), run }, cap);
-      set({ stack, said: say(`${message}. Press Z to undo.`) });
+    show: (message, run, meta) => {
+      const stack = push(expire(state.stack, now(), ttl), { id: ++seq, message, at: now(), run, ...meta }, cap);
+      set({ stack, notice: null, cancelJobId: null, said: say(`${message}. Press Z to undo.`) });
       arm();
     },
     undoLatest: async (onSettled) => {
       const entry = latest(state.stack);
       if (!entry || state.busy) return false;
-      set({ busy: true });
+      set({ busy: true, cancelJobId: null });
       try {
         await entry.run();
-        set({ stack: removeEntry(state.stack, entry.id), notice: null, said: say(`Undone: ${entry.message}`) });
+        set({ stack: removeEntry(state.stack, entry.id), notice: null, cancelJobId: null, said: say(`Undone: ${entry.message}`) });
         arm();
         return true;
       } catch (e) {
         // keep the entry: the owner can retry once the server allows it
+        if (entry.jobId && opts.isConflict?.(e)) {
+          notifyCancelFirst(entry, opts.conflictNotice ?? describe(e));
+          return false;
+        }
         notify(`Could not undo: ${describe(e)}`);
         return false;
       } finally {
@@ -127,7 +151,7 @@ export function createUndoStore(
     reset: () => {
       clearTimeout(expiry);
       clearTimeout(noticeTimer);
-      set({ stack: [], busy: false, notice: null, said: "" });
+      set({ stack: [], busy: false, notice: null, cancelJobId: null, said: "" });
     },
   };
 }

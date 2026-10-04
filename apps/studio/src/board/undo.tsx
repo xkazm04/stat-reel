@@ -6,20 +6,26 @@
  *  - ONE host per page (BoardPage), so one live region and one shortcut listener;
  *  - the live region is mounted empty and only its text changes (a region that mounts with its
  *    text announces nothing on most readers);
+ *  - an accept entry carries its outcome (outcome.ts): a data-blocked one links to Sources, and an undo the
+ *    server refuses (409, its job still runs) offers that job's Cancel (JobBadge) and retries on the next Z;
+ *  - the shortcut is off while an overlay owns the keyboard (keys.ts: log drawer, non-lightbox dialogs);
  *  - while a modal <dialog> is open the page behind is inert, so the host renders inside that
  *    dialog (top layer) to stay reachable and audible.
  */
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { qk, serverError } from "../api";
-import { typing } from "./keys";
+import { CancelJobButton } from "./JobBadge";
+import { keysSuppressed } from "./keys";
+import { CANCEL_FIRST, isRunningConflict } from "./outcome";
 import { createUndoStore, UNDO_CAP, UNDO_MS } from "./undo-store";
 import "./undo.css";
 
 export { UNDO_CAP, UNDO_MS };
 
-const store = createUndoStore({ describeError: serverError });
+const store = createUndoStore({ describeError: serverError, isConflict: isRunningConflict, conflictNotice: CANCEL_FIRST });
 
 export const showUndo = store.show;
 export const dismissUndo = store.reset;
@@ -60,10 +66,10 @@ export function UndoToastHost() {
   // leaving the page drops the stack
   useEffect(() => dismissUndo, []);
 
-  // Z / Ctrl+Z / Cmd+Z undo the latest decision, unless the owner is typing (native text undo wins)
+  // Z / Ctrl+Z / Cmd+Z undo the latest decision, unless the owner is typing (native text undo wins) or an overlay is open
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== "z" || e.altKey || e.shiftKey || e.repeat || typing(e.target)) return;
+      if (e.key.toLowerCase() !== "z" || e.altKey || e.shiftKey || e.repeat || keysSuppressed(e.target)) return;
       if (e.ctrlKey && e.metaKey) return;
       if (!store.getState().stack.length) return;
       e.preventDefault();
@@ -90,6 +96,12 @@ export function UndoToastHost() {
               </span>
             ) : null}
           </span>
+          {top.blocked ? (
+            <Link to="/sources" className="bd-link" data-testid="undo-toast-sources">
+              Sources
+            </Link>
+          ) : null}
+          {s.cancelJobId ? <CancelJobButton jobId={s.cancelJobId} title={top.message} testId="undo-toast-cancel" /> : null}
           <button
             type="button"
             className="btn btn--sm"

@@ -117,3 +117,44 @@ describe("undo store", () => {
     expect(s.getState()).toMatchObject({ stack: [], notice: null, said: "" });
   });
 });
+
+describe("undo of an accept whose job still runs", () => {
+  const conflict = Object.assign(new Error("409"), { status: 409 });
+  const make = () => createUndoStore({ isConflict: (e) => (e as { status?: number }).status === 409, conflictNotice: "Cancel it first" });
+
+  it("a 409 on an entry with a job keeps it, offers that job's cancel and restarts its clock", async () => {
+    vi.useFakeTimers();
+    try {
+      const s = make();
+      let refuse = true;
+      s.show("Accepted · video queued", async () => {
+        if (refuse) throw conflict;
+      }, { jobId: "gj-1" });
+      expect(await s.undoLatest()).toBe(false);
+      expect(s.getState()).toMatchObject({ notice: "Cancel it first", cancelJobId: "gj-1" });
+      expect(s.getState().stack).toHaveLength(1);
+      // the cancel offer outlives the usual notice and entry windows' start: still there 9 s later
+      vi.advanceTimersByTime(9_000);
+      expect(s.getState().cancelJobId).toBe("gj-1");
+      refuse = false;
+      expect(await s.undoLatest()).toBe(true);
+      expect(s.getState()).toMatchObject({ stack: [], notice: null, cancelJobId: null });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("a 409 without a job id is an ordinary refusal", async () => {
+    const s = make();
+    s.show("Rejected", async () => {
+      throw conflict;
+    });
+    await s.undoLatest();
+    expect(s.getState().cancelJobId).toBeNull();
+    expect(s.getState().notice).toMatch(/^Could not undo/);
+  });
+  it("carries the blocked flag on the entry", () => {
+    const s = make();
+    s.show("Accepted · data blocked", async () => {}, { blocked: true });
+    expect(s.getState().stack[0]?.blocked).toBe(true);
+  });
+});

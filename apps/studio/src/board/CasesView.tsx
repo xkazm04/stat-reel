@@ -28,6 +28,7 @@ import {
   visibleCaseRows,
 } from "./library";
 import { JobBadge } from "./JobBadge";
+import { acceptOutcome } from "./outcome";
 import { useBoard } from "./shared";
 import { showUndo } from "./undo";
 
@@ -43,6 +44,11 @@ function useDecideCase() {
     mutationFn: async (v: { id: string; decision: CaseDecision; note?: string }) => {
       const r = await api.decideCase(v.id, v.decision, v.note);
       void qc.invalidateQueries({ queryKey: qk.generation }); // an accept queued visuals, a reject cancelled them
+      // an accept says what it queued (or why data blocked it) and carries its job: the owner has left the view by now
+      if (v.decision === "accept") {
+        const o = acceptOutcome(r, r.idea.title);
+        showUndo(o.message, () => api.undoCaseDecision(r.idea.id), { jobId: o.jobId, blocked: o.blocked });
+      }
       return r.idea;
     },
     onSuccess: (idea, v) => {

@@ -31,7 +31,8 @@ import {
   stateLabel,
   styleOf,
 } from "./board";
-import { typing } from "./keys";
+import { keysSuppressed } from "./keys";
+import { acceptOutcome } from "./outcome";
 import { showUndo } from "./undo";
 
 // ------------------------------------------------------------------ data
@@ -51,6 +52,11 @@ export function useDecide() {
     mutationFn: async (v: { id: string; decision: BoardDecision; note?: string }) => {
       const r = await api.decideBoard(v.id, v.decision, v.note);
       void qc.invalidateQueries({ queryKey: qk.generation }); // an accepted variant queues its video (or is data-blocked), siblings are archived
+      // an accept says what it queued (or why data blocked it) and carries its job: the owner has left the view by now
+      if (v.decision === "accept") {
+        const o = acceptOutcome(r, r.item.title);
+        showUndo(o.message, () => api.undoBoardDecision(r.item.id), { jobId: o.jobId, blocked: o.blocked });
+      }
       return r.item;
     },
     onSuccess: (item, v) => {
@@ -444,7 +450,7 @@ export function useJumpKeys(
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if ((k !== "j" && k !== "k") || e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return;
+      if ((k !== "j" && k !== "k") || e.ctrlKey || e.metaKey || e.altKey || keysSuppressed(e.target)) return;
       const t = e.target;
       if (scope?.current && t instanceof Node && t !== document.body && !scope.current.contains(t)) return;
       const { order: o, current: c, jump: go } = live.current;
@@ -512,7 +518,7 @@ export function Gate({
   useEffect(() => {
     if (!keys) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || typing(e.target)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || keysSuppressed(e.target)) return;
       const d = decisionForKey(e.key);
       if (!d) return;
       e.preventDefault();
