@@ -4,7 +4,7 @@ import path from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { paths } from "./config";
-import { Warehouse, checkReadOnlyLlmSql, factRefFormatHint, queryTimeoutMessage } from "./warehouse";
+import { FactKeyCollisionError, Warehouse, checkReadOnlyLlmSql, factRefFormatHint, queryTimeoutMessage } from "./warehouse";
 
 const hasWarehouse = existsSync(paths.warehouse);
 
@@ -112,6 +112,61 @@ describe("warehouse on a throwaway database (no repo warehouse needed)", () => {
 
   it("resolves fact columns that contain digits", async () => {
     expect((await wh.facts(["k1#points_2024"])).get("k1#points_2024")).toBe(7);
+  });
+});
+
+describe("fact_key contract: disjoint across views", () => {
+  const seed = async (setup: (run: (sql: string) => Promise<unknown>) => Promise<void>): Promise<{ wh: Warehouse; file: string }> => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "wh-fk-")), "t.duckdb");
+    const inst = await DuckDBInstance.create(file);
+    const c = await inst.connect();
+    await c.run("create schema llm");
+    await setup((sql) => c.run(sql));
+    c.closeSync();
+    inst.closeSync();
+    return { wh: await Warehouse.open(file), file };
+  };
+
+  it("raises a named error naming both views, in name order, whatever order they were created in", async () => {
+    // zeta is created BEFORE alpha: the error must still list alpha first (deterministic factViews order)
+    const { wh } = await seed(async (run) => {
+      await run("create view llm.zeta as select 'dup' as fact_key, 1 as n");
+      await run("create view llm.alpha as select 'dup' as fact_key, 2 as n");
+    });
+    try {
+      const err = await wh.facts(["dup#n"]).catch((e) => e);
+      expect(err).toBeInstanceOf(FactKeyCollisionError);
+      expect(err.name).toBe("FactKeyCollisionError");
+      expect(err.views).toEqual(["alpha", "zeta"]);
+      expect(err.message).toMatch(/'dup'.*alpha, zeta.*disjoint/);
+    } finally {
+      wh.close();
+    }
+  });
+
+  it("does not raise when the shared key is only asked for a column one view carries", async () => {
+    const { wh } = await seed(async (run) => {
+      await run("create view llm.alpha as select 'dup' as fact_key, 2 as only_a");
+      await run("create view llm.zeta as select 'dup' as fact_key, 1 as only_z");
+    });
+    try {
+      expect((await wh.facts(["dup#only_a"])).get("dup#only_a")).toBe(2);
+    } finally {
+      wh.close();
+    }
+  });
+
+  it("resolves disjoint keys across views with the same column", async () => {
+    const { wh } = await seed(async (run) => {
+      await run("create view llm.b as select 'kb' as fact_key, 20 as n");
+      await run("create view llm.a as select 'ka' as fact_key, 10 as n");
+    });
+    try {
+      const m = await wh.facts(["ka#n", "kb#n"]);
+      expect([m.get("ka#n"), m.get("kb#n")]).toEqual([10, 20]);
+    } finally {
+      wh.close();
+    }
   });
 });
 

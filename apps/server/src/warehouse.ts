@@ -29,6 +29,18 @@ export function factRefFormatHint(ref: string): string | undefined {
   return undefined;
 }
 
+/**
+ * One fact_key found in two llm views that both carry the requested column. fact_keys are disjoint across
+ * views by contract (the dbt singular test assert_fact_keys_disjoint_across_views); resolving such a ref
+ * would pick a view arbitrarily and put an unverifiable number on screen, so it fails by name instead.
+ */
+export class FactKeyCollisionError extends Error {
+  constructor(readonly factKey: string, readonly column: string, readonly views: string[]) {
+    super(`fact_key '${factKey}' exists in more than one llm view (${views.join(", ")}) carrying column '${column}'; fact_keys must be disjoint across views`);
+    this.name = "FactKeyCollisionError";
+  }
+}
+
 export type QueryResult = {
   columns: string[];
   rows: Record<string, unknown>[];
@@ -212,9 +224,11 @@ export class Warehouse {
     }
     const views = await this.factViews();
     for (const [column, rowsOf] of byColumn) {
-      let pending = [...rowsOf.keys()];
+      // Every view carrying the column is searched (no early exit once a key resolves), so a key present in
+      // two of them is caught instead of being resolved by whichever view happened to come first.
+      const pending = [...rowsOf.keys()];
+      const foundIn = new Map<string, string>(); // fact_key -> view
       for (const view of views) {
-        if (!pending.length) break;
         if (!view.columns.includes(column)) continue;
         const found = await this.rows(
           `select fact_key as k, "${column}" as v from llm."${view.name}" where fact_key in (${pending.map(() => "?").join(",")})`,
@@ -223,11 +237,13 @@ export class Warehouse {
         const seen = new Set<string>();
         for (const r of found) {
           const k = String(r.k);
-          if (seen.has(k)) continue; // first row wins, as before
+          if (seen.has(k)) continue; // first row wins within a view, as before
           seen.add(k);
+          const other = foundIn.get(k);
+          if (other) throw new FactKeyCollisionError(k, column, [other, view.name]);
+          foundIn.set(k, view.name);
           for (const ref of rowsOf.get(k) ?? []) out.set(ref, r.v as number | string);
         }
-        pending = pending.filter((k) => !seen.has(k));
       }
     }
     return out;
@@ -241,7 +257,8 @@ export class Warehouse {
       );
       this.factViewCache = rows
         .map((r) => ({ name: String(r.table_name), columns: (r.cols as string[]) ?? [] }))
-        .filter((v) => v.columns.includes("fact_key"));
+        .filter((v) => v.columns.includes("fact_key"))
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)); // duckdb_columns() order is unspecified
     }
     return this.factViewCache;
   }
