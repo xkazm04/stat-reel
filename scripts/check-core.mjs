@@ -43,6 +43,14 @@ export async function runSteps(steps, run, now = () => Date.now()) {
   return results;
 }
 
+/**
+ * `node --test <glob>` and `opa test <dir>` both exit 0 when nothing matches, so a step built on them names its
+ * population first: an empty one is a FAIL with the pattern, never a vacuous PASS. Returns null when there is work.
+ */
+export function requirePopulation(pattern, files) {
+  return files.length > 0 ? null : { ok: false, detail: `no files match ${pattern} - the step would pass having tested nothing` };
+}
+
 export function exitCode(results) {
   return results.length > 0 && results.every((r) => r.ok) ? 0 : 1;
 }
