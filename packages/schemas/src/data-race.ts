@@ -144,7 +144,7 @@ export const DataRaceEventSchema = z
       .max(DATA_RACE_LIMITS.eventTitleMaxChars, tooLong("event title (one line on the card)", DATA_RACE_LIMITS.eventTitleMaxChars)),
     date_label: z.string().min(1).max(DATA_RACE_LIMITS.dateLabelMaxChars, tooLong("date label", DATA_RACE_LIMITS.dateLabelMaxChars)),
     /** 1-2 short facts with refs */
-    facts: z.array(DataRaceFactSchema).min(1).max(2),
+    facts: z.array(DataRaceFactSchema).min(1).max(2, tooMany("facts on one card", 2)),
     /** from the timing plan (rule 2) */
     start_frame: z.number().int().nonnegative(),
     /** card lifespan, default 120; 105-135 allowed (rule 6; checked by checkGenerationRules) */
@@ -167,7 +167,7 @@ export const DataRaceSpotlightSchema = z
           .strict(),
       )
       .min(1)
-      .max(2),
+      .max(2, tooMany("spotlight facts", 2)),
   })
   .strict();
 
@@ -190,8 +190,8 @@ const DataRacePropsObject = z
     value_format: z
       .object({
         decimals: z.number().int().min(0).max(3).default(1),
-        prefix: z.string().max(4).default(""),
-        suffix: z.string().max(6).default(""),
+        prefix: z.string().max(4, tooLong("value prefix", 4)).default(""),
+        suffix: z.string().max(6, tooLong("value suffix", 6)).default(""),
       })
       .default({}),
     /** fixed axis maximum, >= the largest value (see the refinement); omit for the grow-only axis (max so far, never shrinks) */

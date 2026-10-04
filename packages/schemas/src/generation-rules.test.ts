@@ -419,6 +419,19 @@ describe("rule 0: text limits derived from the frame geometry", () => {
     ];
     for (const [path, n] of want) expect(messages(r, path).join(), path).toMatch(new RegExp(`shorten it - ${n} characters fit`));
   });
+  it("uses the same wordings on the value format and on the 1-2 fact lists", () => {
+    const r = run((p) => {
+      p.value_format = { decimals: 1, prefix: "US$ $", suffix: " M/year" };
+      const fact = { text: "40 saplings planted", ref: "sample:event:launch#count" };
+      ev(p, 0).facts = [fact, fact, fact];
+      (p.spotlight as Record<string, unknown>).facts = [1, 2, 3].map(() => ({ label: "Density", value_text: "65 / ha", ref: "sample:tree:juniper#density" }));
+      return undefined;
+    });
+    expect(messages(r, "value_format.prefix").join()).toMatch(/value prefix is too long: shorten it - 4 characters fit/);
+    expect(messages(r, "value_format.suffix").join()).toMatch(/value suffix is too long: shorten it - 6 characters fit/);
+    expect(messages(r, "events.0.facts").join()).toMatch(/too many facts on one card: at most 2 fit - drop some/);
+    expect(messages(r, "spotlight.facts").join()).toMatch(/too many spotlight facts: at most 2 fit - drop some/);
+  });
   it("accepts text exactly at each limit", () => {
     const r = run((p) => {
       p.title = "t".repeat(DATA_RACE_LIMITS.titleMaxChars);

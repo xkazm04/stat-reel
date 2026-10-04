@@ -65,6 +65,11 @@ describe("EraAdjusted text caps (derived from the frame geometry)", () => {
     expect(EraAdjustedPropsSchema.safeParse({ ...sampleEraProps, [key]: "m".repeat(n) }).success).toBe(true);
     expect(messageAt({ ...sampleEraProps, [key]: "m".repeat(n + 1) }, key)).toMatch(new RegExp(`shorten it - ${n} characters fit`));
   });
+  it("title and scene text say how many characters fit", () => {
+    expect(messageAt({ ...sampleEraProps, title: "t".repeat(61) }, "title")).toMatch(/title is too long: shorten it - 60 characters fit/);
+    const longScene = { ...sampleEraProps, scenes: sampleEraProps.scenes.map((s, i) => (i === 1 ? { ...s, on_screen: "o".repeat(81) } : s)) };
+    expect(messageAt(longScene, "scenes.1.on_screen")).toMatch(/on_screen is too long: shorten it - 80 characters fit/);
+  });
   it("row names", () => {
     expect(EraAdjustedPropsSchema.safeParse(withRow0Name("n".repeat(L.rowNameMaxChars))).success).toBe(true);
     expect(messageAt(withRow0Name("n".repeat(L.rowNameMaxChars + 1)), "rows.0.name")).toMatch(/shorten it - 32 characters fit/);

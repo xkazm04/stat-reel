@@ -91,7 +91,7 @@ export const FactKey = z.string().regex(FACT_KEY_PATTERN, FACT_KEY_MESSAGE);
 export const SceneSchema = z.object({
   id: z.string(),
   kind: SceneKind,
-  on_screen: z.string().max(80),
+  on_screen: z.string().max(80, eraTooLong("on_screen", 80)),
   /** which rows this scene emphasises (player ids); empty = all */
   focus: z.array(z.string()).default([]),
 });
@@ -116,7 +116,10 @@ export const ERA_TEXT_LIMITS = {
   attributionMaxChars: 76,
   attributionVerticalMaxChars: 27,
 } as const;
-const eraTooLong = (what: string, n: number) => `${what} is too long: shorten it - ${n} characters fit`;
+/** Hoisted (a declaration, not a const) so SceneSchema above can use the one wording too. */
+function eraTooLong(what: string, n: number): string {
+  return `${what} is too long: shorten it - ${n} characters fit`;
+}
 
 export const EraRowSchema = z.object({
   player_id: z.string(),
@@ -134,7 +137,7 @@ export const EraRowSchema = z.object({
 export const EraAdjustedPropsSchema = z.object({
   format: Format,
   hook_shape: HookShape,
-  title: z.string().max(60),
+  title: z.string().max(60, eraTooLong("title", 60)),
   metric_raw_label: z.string().max(ERA_TEXT_LIMITS.metricLabelMaxChars, eraTooLong("metric_raw_label", ERA_TEXT_LIMITS.metricLabelMaxChars)),
   metric_adjusted_label: z.string().max(ERA_TEXT_LIMITS.metricLabelMaxChars, eraTooLong("metric_adjusted_label", ERA_TEXT_LIMITS.metricLabelMaxChars)),
   rows: z.array(EraRowSchema).min(3).max(12),
