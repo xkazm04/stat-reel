@@ -62,3 +62,6 @@ test-results/
 playwright-report/
 data/board/
 data/generation/
+
+# Downloaded logo/flag assets (provenance lives in data/assets/logos/LEDGER.json); never committed
+data/assets/
