@@ -164,7 +164,13 @@ export interface ElevenLabsClientOptions {
   sleep?: (ms: number) => Promise<void>;
   /** first 429 backoff in ms, doubled per retry (default 1000) */
   retryBaseMs?: number;
+  /** per-attempt limit in ms, response body included (default 300000): a silent provider fails, never hangs */
+  timeoutMs?: number;
+  /** the job's cancel signal: aborts an in-flight request and rejects with the signal's reason */
+  signal?: AbortSignal;
 }
+
+export const DEFAULT_TIMEOUT_MS = 300_000;
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -250,6 +256,8 @@ export class ElevenLabsClient {
   private readonly baseUrl: string;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly retryBaseMs: number;
+  private readonly timeoutMs: number;
+  private readonly signal: AbortSignal | undefined;
 
   constructor(opts: ElevenLabsClientOptions) {
     this.apiKey = opts.apiKey;
@@ -257,6 +265,9 @@ export class ElevenLabsClient {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.sleep = opts.sleep ?? defaultSleep;
     this.retryBaseMs = opts.retryBaseMs ?? 1000;
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    if (!(this.timeoutMs > 0)) throw new RangeError(`timeoutMs must be > 0, got ${opts.timeoutMs}`);
+    this.signal = opts.signal;
   }
 
   async ttsWithTimestamps(p: TtsParams): Promise<TtsResult> {
@@ -330,10 +341,15 @@ export class ElevenLabsClient {
     return out;
   }
 
-  /** Sends a request; retries 429 up to 3 times with exponential backoff (or Retry-After). */
+  /**
+   * Sends a request; retries 429 up to 3 times with exponential backoff (or Retry-After). Each
+   * attempt is bounded by `timeoutMs` and by the caller's `signal`; a cancel rejects with the
+   * signal's reason (never a ProviderError), so the job runner records a cancel, not a failure.
+   */
   private async send(req: ProviderRequest, what: string, form?: FormData): Promise<Response> {
     const url = `${this.baseUrl}${req.endpoint}`;
     for (let attempt = 0; ; attempt++) {
+      this.signal?.throwIfAborted();
       const headers: Record<string, string> = { "xi-api-key": await this.apiKey(), accept: "*/*" };
       let body: BodyInit | undefined;
       if (form) body = form;
@@ -341,13 +357,21 @@ export class ElevenLabsClient {
         headers["content-type"] = "application/json";
         body = JSON.stringify(req.body);
       }
+      const timeout = AbortSignal.timeout(this.timeoutMs);
+      const signal = this.signal ? AbortSignal.any([this.signal, timeout]) : timeout;
       let res: Response;
       try {
         res = await this.fetchImpl(
           url,
-          body === undefined ? { method: req.method, headers } : { method: req.method, headers, body },
+          body === undefined ? { method: req.method, headers, signal } : { method: req.method, headers, body, signal },
         );
       } catch (e) {
+        this.signal?.throwIfAborted();
+        if (timeout.aborted)
+          throw new ProviderError(`ElevenLabs ${what} timed out after ${this.timeoutMs} ms`, {
+            httpStatus: 0,
+            code: "timeout",
+          });
         throw new ProviderError(`ElevenLabs ${what} request failed: ${(e as Error).message}`, { httpStatus: 0 });
       }
       if (res.ok) return res;

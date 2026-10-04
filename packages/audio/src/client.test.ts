@@ -325,6 +325,45 @@ describe("error mapping", () => {
     expect(calls).toHaveLength(1);
   });
 
+  /** a provider that never answers: resolves only when the request's signal aborts */
+  const hanging = () =>
+    vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          const s = init?.signal;
+          if (!s) return; // no signal: hangs forever
+          if (s.aborted) return reject(s.reason); // as fetch does
+          s.addEventListener("abort", () => reject(s.reason), { once: true });
+        }),
+    ) as unknown as typeof fetch;
+
+  it("a provider that never answers times out as a ProviderError instead of hanging the job", async () => {
+    const c = new ElevenLabsClient({ apiKey: async () => KEY, fetch: hanging(), timeoutMs: 20 });
+    const err = await Promise.race([
+      tts(c).catch((e: unknown) => e),
+      new Promise((r) => setTimeout(() => r("still hanging after 1 s"), 1000)),
+    ]);
+    expect(err).toBeInstanceOf(ProviderError);
+    expect((err as ProviderError).httpStatus).toBe(0);
+    expect((err as ProviderError).code).toBe("timeout");
+    expect((err as Error).message).toMatch(/timed out after 20 ms/);
+  });
+
+  it("the caller's cancel signal aborts an in-flight request with the caller's reason", async () => {
+    const ac = new AbortController();
+    const c = new ElevenLabsClient({ apiKey: async () => KEY, fetch: hanging(), signal: ac.signal });
+    const pending = tts(c).catch((e: unknown) => e);
+    const reason = new Error("cancelled by owner");
+    ac.abort(reason);
+    const err = await Promise.race([pending, new Promise((r) => setTimeout(() => r("still hanging"), 1000))]);
+    expect(err).toBe(reason);
+    // an already-cancelled job never reaches the provider
+    const f = vi.fn() as unknown as typeof fetch;
+    const dead = new ElevenLabsClient({ apiKey: async () => KEY, fetch: f, signal: AbortSignal.abort(reason) });
+    await expect(tts(dead)).rejects.toBe(reason);
+    expect(f).not.toHaveBeenCalled();
+  });
+
   it("network failure -> ProviderError", async () => {
     const f = vi.fn(async () => {
       throw new TypeError("fetch failed");
