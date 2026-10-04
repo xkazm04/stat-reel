@@ -236,3 +236,31 @@ describe("an optional JSON body is optional, not ignorable", () => {
     expect(calls.llm[1]).toEqual(["p1", "hi", "s1"]);
   });
 });
+
+describe("POST /policy-probe", () => {
+  it("a missing or partial with_source is a 400 naming the field, not a TypeError 500", async () => {
+    const calls: unknown[][] = [];
+    const app = buildApp({
+      bus: new EventBus(),
+      topics: {},
+      runner: { list: () => [] },
+      pipeline: {
+        policyProbe: async (...a: unknown[]) => {
+          calls.push(a);
+          return { allow: false, deny: ["probe"] };
+        },
+      },
+    } as unknown as AppDeps);
+    const target = { platform: "youtube", monetized: true, ai_disclosure: true };
+    const probe = (b: unknown) => app.request("/api/projects/p1/policy-probe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+    for (const bad of [{ target }, { target, with_source: { id: "x" } }]) {
+      const r = await probe(bad);
+      expect(r.status).toBe(400);
+      expect((await body(r)).error).toMatch(/with_source/);
+    }
+    expect(calls).toEqual([]);
+    const ok = await probe({ target, with_source: { id: "nc", license_class: "non_commercial", verdict: "allowed" } });
+    expect(ok.status).toBe(200);
+    expect(calls[0]?.[2]).toEqual({ id: "nc", license_class: "non_commercial", verdict: "allowed" });
+  });
+});

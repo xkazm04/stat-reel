@@ -8,7 +8,7 @@ import { HTTPException } from "hono/http-exception";
 import { compress } from "hono/compress";
 import { etag } from "hono/etag";
 import { streamSSE } from "hono/streaming";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { PublishTargetSchema, TopicInputSchema, TopicPatchSchema } from "@statreel/schemas";
 import { paths } from "./config";
 import { type EventBus, throttleProgress } from "./events";
@@ -41,6 +41,9 @@ export type AppDeps = {
   /** controlled topics + the videos ledger (ADR 011); built from `db` when omitted */
   topics?: TopicService;
 };
+
+/** The extra source a policy probe adds to the latest manifest; every field reaches the OPA input, so none may be missing. */
+const ProbeSourceSchema = z.object({ with_source: z.object({ id: z.string().min(1), license_class: z.string().min(1), verdict: z.string().min(1) }) });
 
 const SERVABLE = [paths.renders, paths.audio, paths.board, path.join(paths.fixtures, "audio")].map((p) => path.resolve(p));
 const TYPES: Record<string, string> = { ".mp4": "video/mp4", ".png": "image/png", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".srt": "text/plain", ".vtt": "text/vtt", ".json": "application/json" };
@@ -161,8 +164,8 @@ export function buildApp(d: AppDeps) {
     return c.json(d.pipeline.publish(c.req.param("id"), body));
   });
   app.post("/api/projects/:id/policy-probe", async (c) => {
-    const body = (await c.req.json()) as { target: unknown; with_source: { id: string; license_class: string; verdict: string } };
-    return c.json(await d.pipeline.policyProbe(c.req.param("id"), PublishTargetSchema.parse(body.target), body.with_source));
+    const body = (await c.req.json()) as { target?: unknown; with_source?: unknown };
+    return c.json(await d.pipeline.policyProbe(c.req.param("id"), PublishTargetSchema.parse(body.target), ProbeSourceSchema.parse(body).with_source));
   });
   app.post("/api/projects/:id/keyframes", async (c) => {
     // the render_keyframes tool's own schema (MAX_FRAMES, seconds >= 0): this door must not render what the MCP door refuses
