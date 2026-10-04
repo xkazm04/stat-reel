@@ -1,6 +1,6 @@
 {
   "rules": {
-    "assist/source/organizeImports": 82,
+    "assist/source/organizeImports": 77,
     "format": 231,
     "lint/a11y/noAriaHiddenOnFocusable": 1,
     "lint/a11y/noStaticElementInteractions": 1,
