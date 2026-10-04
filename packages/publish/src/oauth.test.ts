@@ -1,4 +1,5 @@
 /** Unit tests for the loopback OAuth helper. fetch is always mocked; nothing opens a browser. */
+import { get } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import {
   createPkce,
@@ -142,5 +143,80 @@ describe("LoopbackOAuth", () => {
       client_secret: "b",
     });
     expect(() => parseClientJson(JSON.stringify({ web: { client_id: "a" } }))).toThrow(/Desktop app/);
+  });
+});
+
+/** Plays the browser: GET the loopback redirect with the given query, resolve the status code. */
+function hitLoopback(authUrl: string, query: (state: string) => string): Promise<number> {
+  const u = new URL(authUrl);
+  const target = `${u.searchParams.get("redirect_uri")}/?${query(u.searchParams.get("state") ?? "")}`;
+  return new Promise((resolve, reject) => {
+    get(target, (res) => {
+      res.resume();
+      resolve(res.statusCode ?? 0);
+    }).on("error", reject);
+  });
+}
+
+describe("LoopbackOAuth.authorize (loopback on 127.0.0.1, fetch mocked)", () => {
+  it("rejects a callback whose state is not the one it sent, without a token request", async () => {
+    const fetchMock = vi.fn();
+    let status: Promise<number> = Promise.resolve(0);
+    const oauth = new LoopbackOAuth({
+      client,
+      store: memoryStore(),
+      fetch: fetchMock as unknown as typeof fetch,
+      openBrowser: (url) => {
+        status = hitLoopback(url, () => "code=c1&state=forged");
+      },
+    });
+    await expect(oauth.authorize()).rejects.toMatchObject({ code: "state_mismatch" });
+    expect(await status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("exchanges the code with the PKCE verifier and the loopback redirect it listened on", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ access_token: "a", refresh_token: "r", expires_in: 3600 }));
+    let redirect = "";
+    let status: Promise<number> = Promise.resolve(0);
+    const oauth = new LoopbackOAuth({
+      client,
+      store: memoryStore(),
+      fetch: fetchMock as unknown as typeof fetch,
+      now: () => 0,
+      random: (n) => Buffer.alloc(n, 3),
+      openBrowser: (url) => {
+        redirect = new URL(url).searchParams.get("redirect_uri") ?? "";
+        status = hitLoopback(url, (state) => `code=c1&state=${state}`);
+      },
+    });
+    await expect(oauth.authorize()).resolves.toMatchObject({ access_token: "a" });
+    expect(await status).toBe(200);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = Object.fromEntries(new URLSearchParams(String(init.body)));
+    expect(redirect).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(body).toMatchObject({
+      code: "c1",
+      redirect_uri: redirect,
+      code_verifier: createPkce(() => Buffer.alloc(32, 3)).verifier,
+    });
+  });
+
+  it("leaves no pending timeout behind when the browser cannot be opened", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const oauth = new LoopbackOAuth({
+        client,
+        store: memoryStore(),
+        openBrowser: () => {
+          throw new Error("no browser on this machine");
+        },
+      });
+      await expect(oauth.authorize()).rejects.toThrow(/no browser/);
+      // a leftover 5-minute timer keeps a CLI `connect` process alive long after it reported the failure
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

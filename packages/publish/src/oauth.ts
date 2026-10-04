@@ -182,9 +182,10 @@ export class LoopbackOAuth implements TokenProvider {
     });
     const { port } = server.address() as AddressInfo;
     const redirectUri = `http://127.0.0.1:${port}`;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const code = await new Promise<string>((res, rej) => {
-        const timer = setTimeout(
+        timer = setTimeout(
           () => rej(new OAuthError("authorization timed out", "timeout")),
           this.opts.authorizeTimeoutMs ?? 300_000,
         );
@@ -203,7 +204,6 @@ export class LoopbackOAuth implements TokenProvider {
               ? "StatReel is connected to YouTube. You can close this tab."
               : "Authorization failed. Return to StatReel.",
           );
-          clearTimeout(timer);
           if (error) rej(new OAuthError(`authorization denied: ${error}`, error));
           else if (!ok || !got) rej(new OAuthError("state mismatch in OAuth callback", "state_mismatch"));
           else res(got);
@@ -214,6 +214,8 @@ export class LoopbackOAuth implements TokenProvider {
       });
       return await this.exchangeCode(code, redirectUri, pkce.verifier);
     } finally {
+      // every way out (callback, denial, timeout, a browser that would not open) drops the timer
+      clearTimeout(timer);
       server.close();
     }
   }
