@@ -7,6 +7,7 @@
  *   visual_options  3 stills -> data/board/items/gen/<case_id>/<job_id>-v{n}.png, 3 board items
  */
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -54,6 +55,7 @@ export function insideJob(p: JobPaths, file: unknown, what: string): string {
   return abs;
 }
 
+const sha256File = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const isPng = (f: string) => readFileSync(f).subarray(0, 4).equals(PNG);
 
@@ -105,9 +107,17 @@ export class GenerationFinalizer {
       if (r.verified_by !== "commons-api" || merged.some((m) => m.sha256 === r.sha256)) continue;
       const src = path.resolve(p.work, r.file);
       if (!src.startsWith(p.work + path.sep) || !existsSync(src)) continue;
+      // work/ is session-writable: only the bytes fetch_asset downloaded may join the library under its verified row
+      if (sha256File(src) !== r.sha256) continue;
+      // the name is per entity, the identity is the sha256: a different file under a taken name gets a hash suffix
+      let name = path.basename(src);
+      if (existsSync(path.join(lib, name)) && sha256File(path.join(lib, name)) !== r.sha256) {
+        const ext = path.extname(name);
+        name = `${path.basename(name, ext)}-${r.sha256.slice(0, 8)}${ext}`;
+      }
       mkdirSync(lib, { recursive: true });
-      copyFileSync(src, path.join(lib, path.basename(src)));
-      merged.push({ ...r, library_file: `data/assets/logos/${path.basename(src)}` } as never);
+      copyFileSync(src, path.join(lib, name));
+      merged.push({ ...r, library_file: `data/assets/logos/${name}` } as never);
       changed = true;
     }
     if (changed) writeFileSync(libFile, `${JSON.stringify(merged, null, 2)}

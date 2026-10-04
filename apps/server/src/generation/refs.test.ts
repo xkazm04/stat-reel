@@ -103,4 +103,17 @@ describe("stageRefs", () => {
     expect(manifest.entries.map((e) => e.path)).toEqual(expect.arrayContaining(["logos/LEDGER.json", "logos/ferrari.svg", "data-race-props.schema.json"]));
     expect(manifest.pending).toEqual([]);
   });
+
+  it("stages each ledgered logo from its library_file, so two rows that shared a job file name stay distinct", () => {
+    const logos = path.join(root, "data", "assets", "logos");
+    put(path.join(logos, "LEDGER.json"), JSON.stringify([
+      { file: "assets/logos/ferrari.png", library_file: "data/assets/logos/ferrari.png" },
+      { file: "assets/logos/ferrari.png", library_file: "data/assets/logos/ferrari-0badc0de.png" },
+    ]));
+    put(path.join(logos, "ferrari.png"), "first");
+    put(path.join(logos, "ferrari-0badc0de.png"), "second");
+    const { paths, manifest } = stage();
+    expect(manifest.entries.filter((e) => e.role === "logo").map((e) => e.path).sort()).toEqual(["logos/ferrari-0badc0de.png", "logos/ferrari.png"]);
+    expect(readFileSync(path.join(paths.refs, "logos", "ferrari-0badc0de.png"), "utf8")).toBe("second");
+  });
 });
