@@ -12,9 +12,11 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { isFailedToolContent, isFailedToolResult } from "./tool-result";
 
 export * from "./draft-prompt";
 export * from "./limits";
+export * from "./tool-result";
 
 export type LlmEvent =
   | { type: "session"; session_id: string; tools?: string[] }
@@ -23,7 +25,9 @@ export type LlmEvent =
   | { type: "tool_result"; id: string; content: string; is_error?: boolean }
   | { type: "result"; ok: boolean; result: string; session_id: string; cost_usd?: number; turns?: number; refusal?: boolean;
       /** the CLI's result subtype (success | error_max_turns | error_max_budget_usd | error_during_execution) */
-      subtype?: string }
+      subtype?: string;
+      /** the CLI itself reported `stop_reason: "refusal"` (not inferred from the wording) */
+      refusal_explicit?: boolean }
   | { type: "stderr"; text: string };
 
 export type RunOptions = {
@@ -41,7 +45,11 @@ export type RunOptions = {
   vars?: Record<string, string>;
   onEvent: (e: LlmEvent) => void;
 };
-export type RunResult = { ok: boolean; session_id: string; result: string; cost_usd?: number; events: LlmEvent[] };
+export type RunResult = {
+  ok: boolean; session_id: string; result: string; cost_usd?: number; events: LlmEvent[];
+  /** tail of the CLI's stderr, set only when the run did not succeed (the owner needs it to see why) */
+  stderr?: string;
+};
 export interface LlmEngine {
   readonly name: "claude-code" | "codex";
   run(opts: RunOptions): Promise<RunResult>;
@@ -78,8 +86,9 @@ export function parseStreamLine(line: string): LlmEvent[] {
   }
   if (msg.type === "result") {
     const text = String(msg.result ?? "");
+    const explicit = msg.stop_reason === "refusal" || msg.subtype === "refusal";
     return [{ type: "result", ok: msg.subtype === "success" && !msg.is_error, result: text, session_id: msg.session_id,
-      cost_usd: msg.total_cost_usd, turns: msg.num_turns, refusal: REFUSAL.test(text), subtype: msg.subtype }];
+      cost_usd: msg.total_cost_usd, turns: msg.num_turns, refusal: explicit || REFUSAL.test(text), refusal_explicit: explicit || undefined, subtype: msg.subtype }];
   }
   return [];
 }
@@ -140,19 +149,45 @@ export function recordFixture(dir: string, engine: string, o: KeyOpts, rawLines:
 
 const systemOf = (o: KeyOpts) => (o.systemPromptFile && existsSync(o.systemPromptFile) ? readFileSync(o.systemPromptFile, "utf8") : undefined);
 
+/** Tools whose success means the co-pilot's work was stored (props or a script). */
+const STORING_TOOLS = new Set(["set_props", "write_script"]);
+
+/** True when a set_props / write_script call in the run came back without an error. */
+export function storedSuccessfully(events: LlmEvent[]): boolean {
+  const stored = new Set(events.flatMap((e) => (e.type === "tool_call" && STORING_TOOLS.has(e.tool) ? [e.id] : [])));
+  return events.some((e) => e.type === "tool_result" && stored.has(e.id) && !e.is_error && !isFailedToolContent(e.content));
+}
+
+/**
+ * Whether the run's final result is a refusal. The wording regex alone is not enough: a successful wrap-up that
+ * says "I won't touch the other scenes" is not one. So: an explicit CLI refusal always counts; wording counts
+ * only when the run stored nothing (no successful set_props / write_script).
+ */
+export function isRefusal(events: LlmEvent[]): boolean {
+  const result = events.findLast((e) => e.type === "result") as Extract<LlmEvent, { type: "result" }> | undefined;
+  if (!result) return false;
+  if (result.refusal_explicit) return true;
+  return !!result.refusal && !storedSuccessfully(events);
+}
+
 function collect(events: LlmEvent[], opts: RunOptions): RunResult {
   const result = [...events].reverse().find((e) => e.type === "result") as Extract<LlmEvent, { type: "result" }> | undefined;
   const session = events.find((e) => e.type === "session") as Extract<LlmEvent, { type: "session" }> | undefined;
-  return { ok: !!result?.ok && !result.refusal, session_id: result?.session_id ?? session?.session_id ?? opts.resume ?? "", result: result?.result ?? "", cost_usd: result?.cost_usd, events };
+  return { ok: !!result?.ok && !isRefusal(events), session_id: result?.session_id ?? session?.session_id ?? opts.resume ?? "", result: result?.result ?? "", cost_usd: result?.cost_usd, events };
 }
+
+const STDERR_TAIL = 800;
+/** The last STDERR_TAIL chars of a CLI's stderr, trimmed ("" when it said nothing). */
+export const stderrTail = (stderr: string): string => stderr.trim().slice(-STDERR_TAIL);
 
 export class ClaudeEngine implements LlmEngine {
   readonly name = "claude-code" as const;
-  constructor(private readonly bin = resolveClaudeBin(), private readonly fixturesDir?: string) {}
+  /** `binArgs` go before the CLI flags (tests run a stand-in as `node fake.cjs`) */
+  constructor(private readonly bin = resolveClaudeBin(), private readonly fixturesDir?: string, private readonly binArgs: string[] = []) {}
 
   run(opts: RunOptions): Promise<RunResult> {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.bin, claudeArgs(opts), { cwd: opts.cwd, signal: opts.signal, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(this.bin, [...this.binArgs, ...claudeArgs(opts)], { cwd: opts.cwd, signal: opts.signal, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
       child.stdin.end(opts.prompt, "utf8");
       const raw: string[] = [];
       const events: LlmEvent[] = [];
@@ -174,21 +209,53 @@ export class ClaudeEngine implements LlmEngine {
       child.stderr.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
       child.on("error", reject);
       child.on("close", (code) => {
-        for (const e of parseStreamLine(buf)) events.push(e);
+        for (const e of parseStreamLine(buf)) {
+          events.push(e);
+          opts.onEvent(e);
+        }
         if (buf.trim()) raw.push(buf);
         const res = collect(events, opts);
+        // A failed run keeps the CLI's stderr: as an event (the transcript shows it) and on the result (the job error).
+        const tail = stderrTail(stderr);
+        if (tail && (!res.ok || code !== 0)) {
+          const e: LlmEvent = { type: "stderr", text: tail };
+          events.push(e);
+          opts.onEvent(e);
+          res.stderr = tail;
+        }
         if (this.fixturesDir && process.env.LLM_RECORD === "1") {
           recordFixture(this.fixturesDir, this.name, opts, raw);
         }
-        if (code !== 0 && !res.result) reject(new Error(`claude exited ${code}: ${stderr.slice(-800)}`));
+        if (code !== 0 && !res.result) reject(new Error(`claude exited ${code}: ${tail}`));
         else resolve(res);
       });
     });
   }
 }
 
+/**
+ * A recorded call succeeded but the app's handler now fails it: the replay would otherwise carry on as if
+ * the props/script were stored. Thrown by ReplayEngine unless `allowRegressions` is set.
+ */
+export class ReplayRegressionError extends Error {
+  constructor(readonly tool: string, readonly detail: string) {
+    super(`replay regression: ${tool} succeeded in the recording but now fails: ${detail}`);
+    this.name = "ReplayRegressionError";
+  }
+}
+
+export type ReplayOptions = {
+  /** tests that expect a handler to fail where the recording succeeded; the failure is then reported as is_error */
+  allowRegressions?: boolean;
+};
+
 export class ReplayEngine implements LlmEngine {
-  constructor(readonly name: "claude-code" | "codex", private readonly fixturesDir: string, private readonly execute: ToolExecutor) {}
+  constructor(
+    readonly name: "claude-code" | "codex",
+    private readonly fixturesDir: string,
+    private readonly execute: ToolExecutor,
+    private readonly options: ReplayOptions = {},
+  ) {}
 
   async run(opts: RunOptions): Promise<RunResult> {
     const file = fixtureFile(this.fixturesDir, this.name, opts);
@@ -201,7 +268,12 @@ export class ReplayEngine implements LlmEngine {
           // the app's own result replaces the recorded one: replay exercises the real handlers
           const call = events.find((x) => x.type === "tool_call" && x.id === e.id) as Extract<LlmEvent, { type: "tool_call" }> | undefined;
           const live = call ? await this.execute(call.tool, call.input) : undefined;
-          const replaced: LlmEvent = { ...e, content: live === undefined ? e.content : JSON.stringify(live) };
+          // is_error follows the LIVE result (same rule as the MCP wrapper), so a handler regression is not masked by the recorded flag
+          const failed = live === undefined ? !!e.is_error : isFailedToolResult(live);
+          if (call && live !== undefined && failed && !e.is_error && !this.options.allowRegressions) {
+            throw new ReplayRegressionError(call.tool, JSON.stringify(live).slice(0, 300));
+          }
+          const replaced: LlmEvent = { ...e, content: live === undefined ? e.content : JSON.stringify(live), is_error: failed };
           events.push(replaced);
           opts.onEvent(replaced);
           continue;

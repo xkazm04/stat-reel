@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import { ClaudeEngine, draftPrompt, type LlmEngine, type LlmEvent, type LlmLimits, llmLimitsFromEnv, ReplayEngine, type StopReason, stopMessage, stopReasonFromSubtype } from "@statreel/llm";
+import { ClaudeEngine, draftPrompt, isRefusal, type LlmEngine, type LlmEvent, type LlmLimits, llmLimitsFromEnv, ReplayEngine, type StopReason, stopMessage, stopReasonFromSubtype } from "@statreel/llm";
 import { modes, paths, repoRoot, server } from "./config";
 import { type Db, llmEvents, llmSessions, now } from "./db";
 import type { EventBus } from "./events";
@@ -72,10 +72,10 @@ export class LlmService {
       mkdirSync(cwd, { recursive: true });
       this.db.update(llmSessions).set({ ended_at: null }).where(eq(llmSessions.id, sessionId)).run();
 
-      // The CLI has no max-turns flag (verified), so the turn and wall-clock caps abort the run here.
+      // The CLI has no max-turns flag (verified), so the tool-call cap (LLM_MAX_TURNS) and the wall-clock cap abort the run here.
       const limit = new AbortController();
       let stopped: StopReason | undefined;
-      let turns = 0;
+      let toolCalls = 0;
       // the CLI's own result event (cost, turns) of this run: kept for the session ledger even when the run then fails or hits a cap
       let spend: { cost_usd: number | null; turns: number | null } | null = null;
       const stop = (r: StopReason) => {
@@ -90,19 +90,20 @@ export class LlmService {
           onEvent: (e: LlmEvent) => {
             emit(e);
             if (e.type === "result") spend = { cost_usd: e.cost_usd ?? null, turns: e.turns ?? null };
-            if (e.type === "tool_call" && ++turns >= this.limits.maxTurns) stop("max_turns");
+            if (e.type === "tool_call" && ++toolCalls >= this.limits.maxTurns) stop("max_tool_calls");
           },
         });
         this.db.update(llmSessions).set({ external_session_id: res.session_id || undefined }).where(eq(llmSessions.id, sessionId)).run();
-        const last = res.events.at(-1);
-        if (last?.type === "result" && last.refusal) throw new Refusal(engine.name, last.result.slice(0, 200));
+        // the engine may append a stderr event after the result, so look for the result, not the last event
+        const last = res.events.findLast((e) => e.type === "result");
+        if (last?.type === "result" && isRefusal(res.events)) throw new Refusal(engine.name, last.result.slice(0, 200));
         const reason = stopped ?? (last?.type === "result" ? stopReasonFromSubtype(last.subtype) : undefined);
-        if (reason) throw new Error(stopMessage(reason, this.limits, last?.type === "result" ? last.turns : undefined));
-        if (!res.ok) throw new Error(`LLM session ended without success: ${res.result.slice(0, 300)}`);
+        if (reason) throw new Error(stopMessage(reason, this.limits, reason === "max_tool_calls" ? toolCalls : last?.type === "result" ? last.turns : undefined));
+        if (!res.ok) throw new Error(`LLM session ended without success: ${res.result.slice(0, 300)}${res.stderr ? ` | CLI stderr: ${res.stderr}` : ""}`);
         return { session_id: res.session_id, result: res.result, cost_usd: res.cost_usd };
       } catch (err) {
         // our own cap aborted the run: report that, not the AbortError the engine surfaced
-        if (stopped && !ctx.signal.aborted) throw new Error(stopMessage(stopped, this.limits, turns));
+        if (stopped && !ctx.signal.aborted) throw new Error(stopMessage(stopped, this.limits, stopped === "max_tool_calls" ? toolCalls : undefined));
         throw err;
       } finally {
         clearTimeout(timer);

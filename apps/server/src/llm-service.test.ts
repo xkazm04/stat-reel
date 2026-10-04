@@ -25,7 +25,9 @@ function setup(script: Script, limits = DEFAULT_LIMITS, projects: Record<string,
       const events = await script(o);
       for (const e of events) o.onEvent(e);
       const r = events.findLast((e) => e.type === "result") as Extract<LlmEvent, { type: "result" }> | undefined;
-      return { ok: !!r?.ok, session_id: r?.session_id ?? "", result: r?.result ?? "", events };
+      // like ClaudeEngine: a failed run carries its stderr tail
+      const stderr = r?.ok ? undefined : (events.findLast((e) => e.type === "stderr") as Extract<LlmEvent, { type: "stderr" }> | undefined)?.text;
+      return { ok: !!r?.ok, session_id: r?.session_id ?? "", result: r?.result ?? "", events, ...(stderr ? { stderr } : {}) };
     },
   };
   const svc = new LlmService(db, bus, runner, { get: (id: string) => projects[id] } as unknown as ProjectService, {} as Tools, () => engine, limits);
@@ -81,7 +83,7 @@ describe("LlmService session lifecycle", () => {
     const { job_id } = svc.start("p1");
     await runner.idle();
     expect(runner.get(job_id)?.status).toBe("failed");
-    expect(runner.get(job_id)?.error).toMatch(/stopped at 3 turns .*continue the session/);
+    expect(runner.get(job_id)?.error).toMatch(/stopped at 3 tool calls .*LLM_MAX_TURNS/);
   });
 
   it("enforces the wall-clock cap through the abort signal", async () => {
@@ -179,5 +181,60 @@ describe("LlmService cost ledger", () => {
     const { session_id } = svc.start("p1");
     await runner.idle();
     expect(sessionRow(db, session_id)).toMatchObject({ cost_usd: null, turns: null });
+  });
+});
+
+describe("LlmService refusal precision and failure legibility", () => {
+  const call = (tool: string, id: string): LlmEvent => ({ type: "tool_call", id, tool, input: {} });
+  const done = (content: string, id: string): LlmEvent => ({ type: "tool_result", id, content });
+
+  it("a successful run whose wrap-up says 'I won't' after storing props succeeds, not refused", async () => {
+    const { runner, svc } = setup(async () => [
+      { type: "session", session_id: "ext-1" }, call("set_props", "a"), done('{"version":1}', "a"),
+      result({ result: "Props stored. I won't touch the script unless you ask.", refusal: true }),
+    ]);
+    const { job_id } = svc.start("p1");
+    await runner.idle();
+    expect(runner.get(job_id)?.status).toBe("succeeded");
+  });
+
+  it("the same wording with nothing stored is still a refusal", async () => {
+    const { runner, svc } = setup(async () => [{ type: "session", session_id: "ext-1" }, result({ result: "I can't help with that.", refusal: true })]);
+    const { job_id } = svc.start("p1");
+    await runner.idle();
+    expect(runner.get(job_id)?.status).toBe("refused");
+  });
+
+  it("an explicit CLI refusal is a refusal even after stored work", async () => {
+    const { runner, svc } = setup(async () => [
+      { type: "session", session_id: "ext-1" }, call("set_props", "a"), done('{"version":1}', "a"),
+      result({ result: "Declined.", refusal: true, refusal_explicit: true }),
+    ]);
+    const { job_id } = svc.start("p1");
+    await runner.idle();
+    expect(runner.get(job_id)?.status).toBe("refused");
+  });
+
+  it("a failed run puts the CLI stderr tail in the job error and keeps the stderr event in the transcript", async () => {
+    const { db, runner, svc } = setup(async () => [
+      { type: "session", session_id: "ext-1" }, result({ ok: false, subtype: "error_during_execution", result: "" }), { type: "stderr", text: "auth expired: run claude login" },
+    ]);
+    const { session_id, job_id } = svc.start("p1");
+    await runner.idle();
+    expect(runner.get(job_id)?.error).toMatch(/ended without success.*CLI stderr: auth expired: run claude login/);
+    expect(db.select().from(llmEvents).where(eq(llmEvents.session_id, session_id)).all().map((e) => e.type)).toContain("stderr");
+  });
+
+  it("the tool-call cap message says tool calls, not turns, when counting calls", async () => {
+    const { runner, svc } = setup(async (o) => {
+      for (let i = 0; i < 5; i++) {
+        o.onEvent({ type: "tool_call", id: `t${i}`, tool: "query", input: {} });
+        if (o.signal?.aborted) throw new Error("aborted");
+      }
+      return [];
+    }, { ...DEFAULT_LIMITS, maxTurns: 2 });
+    const { job_id } = svc.start("p1");
+    await runner.idle();
+    expect(runner.get(job_id)?.error).toMatch(/stopped at 2 tool calls \(limit 2\)/);
   });
 });

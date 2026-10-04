@@ -6,6 +6,11 @@
  * are enforced by the caller through an AbortSignal (see LlmService). Defaults are generous against
  * the one recorded run (9 turns, $0.35, ~70 s) and bound a runaway loop.
  */
+/**
+ * `maxTurns` (env LLM_MAX_TURNS, name kept stable) caps TOOL CALLS, not the CLI's assistant turns: the run is
+ * aborted from the tool_call event stream, and one assistant turn may hold several parallel calls. The stop
+ * message therefore says "tool calls" ("max_tool_calls"); "max_turns" is only the CLI's own `error_max_turns`.
+ */
 export type LlmLimits = { maxTurns: number; maxBudgetUsd: number; timeoutMs: number };
 
 export const DEFAULT_LLM_LIMITS: LlmLimits = { maxTurns: 40, maxBudgetUsd: 3, timeoutMs: 15 * 60_000 };
@@ -15,7 +20,7 @@ const positive = (raw: string | undefined, fallback: number): number => {
   return raw !== undefined && raw.trim() !== "" && Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-/** Env overrides: LLM_MAX_TURNS, LLM_MAX_BUDGET_USD, LLM_TIMEOUT_MS. Invalid values fall back to the default. */
+/** Env overrides: LLM_MAX_TURNS (a tool-call cap), LLM_MAX_BUDGET_USD, LLM_TIMEOUT_MS. Invalid values fall back to the default. */
 export function llmLimitsFromEnv(env: Record<string, string | undefined> = process.env): LlmLimits {
   return {
     maxTurns: Math.floor(positive(env.LLM_MAX_TURNS, DEFAULT_LLM_LIMITS.maxTurns)),
@@ -24,13 +29,15 @@ export function llmLimitsFromEnv(env: Record<string, string | undefined> = proce
   };
 }
 
-export type StopReason = "max_turns" | "max_budget" | "timeout";
+export type StopReason = "max_turns" | "max_tool_calls" | "max_budget" | "timeout";
 
 /** Actionable message for a stop: says what stopped it and what the owner can do next. */
 export function stopMessage(reason: StopReason, limits: LlmLimits, turns?: number): string {
   switch (reason) {
     case "max_turns":
       return `Co-pilot stopped at ${turns ?? limits.maxTurns} turns (limit ${limits.maxTurns}) - send a follow-up to continue the session and go further, or raise LLM_MAX_TURNS.`;
+    case "max_tool_calls":
+      return `Co-pilot stopped at ${turns ?? limits.maxTurns} tool calls (limit ${limits.maxTurns}) - send a follow-up to continue the session and go further, or raise LLM_MAX_TURNS (it caps tool calls).`;
     case "max_budget":
       return `Co-pilot stopped at its $${limits.maxBudgetUsd} budget cap - send a follow-up to continue the session, or raise LLM_MAX_BUDGET_USD.`;
     case "timeout":
