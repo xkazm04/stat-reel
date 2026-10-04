@@ -1,5 +1,6 @@
 /** Integration tests: run the real OPA binary against policy/publish.rego. */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ProvenanceManifestSchema, PublishTargetSchema, sampleManifest } from "@statreel/schemas";
@@ -23,9 +24,9 @@ const realFontManifest = {
   fonts: [{ family: shippedFont.family, license: shippedFont.license, sha256: shippedFont.sha256 }],
 };
 const manifest = ProvenanceManifestSchema.parse(realFontManifest);
-const opaAvailable = process.env.OPA_BIN
-  ? existsSync(process.env.OPA_BIN)
-  : process.platform !== "win32" || existsSync(defaultOpaBin());
+// a bare `opa` (PATH fallback) is assumed present; a resolved path must exist
+const opaBin = defaultOpaBin();
+const opaAvailable = opaBin === "opa" || existsSync(opaBin);
 
 // A silent skip is how a gate rots: with OPA_REQUIRED=1 (CI / `just check`) a missing opa FAILS this suite.
 describe("opa availability", () => {
@@ -200,6 +201,24 @@ describe("policy/fonts_allow.json", () => {
     const key = (f: { family: string; sha256: string }) => `${f.family}|${f.sha256}`;
     const want = [...new Set(fm.fonts.filter((f) => f.license === "OFL-1.1").map(key))].sort();
     expect(allow.statreel.fonts_allow.map(key).sort()).toEqual(want);
+  });
+});
+
+describe("defaultOpaBin", () => {
+  const root = mkdtempSync(join(tmpdir(), "statreel-opa-"));
+  const bare = mkdtempSync(join(tmpdir(), "statreel-noopa-"));
+  mkdirSync(join(root, ".tools"));
+  writeFileSync(join(root, ".tools", "opa"), "");
+
+  it("uses the binary `just setup` installs on every platform, like scripts/check.mjs", () => {
+    expect(defaultOpaBin({}, "linux", root)).toBe(join(root, ".tools", "opa"));
+    expect(defaultOpaBin({}, "darwin", root)).toBe(join(root, ".tools", "opa"));
+    expect(defaultOpaBin({}, "win32", root)).toBe(join(root, ".tools", "opa.exe"));
+  });
+
+  it("falls back to opa on PATH off Windows when nothing is installed, and OPA_BIN wins", () => {
+    expect(defaultOpaBin({}, "linux", bare)).toBe("opa");
+    expect(defaultOpaBin({ OPA_BIN: "/opt/opa" }, "linux", root)).toBe("/opt/opa");
   });
 });
 

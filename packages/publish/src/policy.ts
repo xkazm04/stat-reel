@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { type PolicyResult, PolicyResultSchema } from "@statreel/schemas";
 
 export interface EvaluatePolicyOptions {
-  /** path to the opa binary; default env OPA_BIN, else `<repo>/.tools/opa.exe` on win32, else `opa` */
+  /** path to the opa binary; default `defaultOpaBin()` (OPA_BIN, else `<repo>/.tools/opa[.exe]`, else `opa`) */
   opaBin?: string;
   /** directory holding publish.rego; default `<repo>/policy` */
   policyDir?: string;
@@ -31,10 +31,18 @@ export function repoRoot(start: string = dirname(fileURLToPath(import.meta.url))
   }
 }
 
-export function defaultOpaBin(): string {
-  if (process.env.OPA_BIN) return process.env.OPA_BIN;
-  if (process.platform === "win32") return join(repoRoot(), ".tools", "opa.exe");
-  return "opa";
+/**
+ * `OPA_BIN`, else the binary `just setup` installs (`<repo>/.tools/opa[.exe]`, the one scripts/check.mjs runs),
+ * else `opa` on PATH - the PATH fallback only off Windows and only when nothing is installed.
+ */
+export function defaultOpaBin(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  root?: string,
+): string {
+  if (env.OPA_BIN) return env.OPA_BIN;
+  const local = join(root ?? repoRoot(), ".tools", platform === "win32" ? "opa.exe" : "opa");
+  return platform === "win32" || existsSync(local) ? local : "opa";
 }
 
 export class PolicyEvaluationError extends Error {
