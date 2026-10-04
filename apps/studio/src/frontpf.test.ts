@@ -4,6 +4,7 @@ import {
   acrossCount,
   clock,
   durationRange,
+  heatmapWay,
   laneRotation,
   lanesLabel,
   lineIsQuiet,
@@ -168,5 +169,16 @@ describe("front failure copy names the cause it has (async-ui-states/failure-sta
     expect(loadCause(new ApiError(404, { error: "no such project" }, "GET /api/projects/p: no such project"))).toBe(
       "the API answered: no such project",
     );
+  });
+});
+
+describe("the Front's heatmap way (async-ui-states/failure-states: failure is not empty, empty is not loading)", () => {
+  it("tells loading, failure, an empty mode and counts apart", () => {
+    expect(heatmapWay({ isLoading: true, isError: false }, 0)).toBe("loading");
+    expect(heatmapWay({ isLoading: false, isError: true }, 0)).toBe("error");
+    expect(heatmapWay({ isLoading: false, isError: false }, 0)).toBe("empty");
+    expect(heatmapWay({ isLoading: false, isError: false }, 40)).toBe("ready");
+    // a failed refetch while counts are held keeps the counts (degrade, never destroy)
+    expect(heatmapWay({ isLoading: false, isError: true }, 40)).toBe("ready");
   });
 });

@@ -187,6 +187,17 @@ export function clock(seconds: number): string {
 export const loadCause = (e: unknown): string =>
   serverAnswered(e) ? `the API answered: ${serverError(e)}` : "API offline";
 
+/**
+ * Which state the Front's "Open the heatmap" way is in. Held counts win (a failed refetch keeps
+ * them); otherwise a failure, a load in flight and an answered-but-empty mode are three different
+ * claims and must not share one sentence.
+ */
+export function heatmapWay(q: { isLoading: boolean; isError: boolean }, perMode: number): "loading" | "error" | "empty" | "ready" {
+  if (perMode > 0) return "ready";
+  if (q.isError) return "error";
+  return q.isLoading ? "loading" : "empty";
+}
+
 /** "Ten lanes", or just "Lanes" while the use cases are not loaded (never a hardcoded count). */
 export const lanesLabel = (n: number): string => (n > 0 ? `${numberWord(n)} lanes` : "Lanes");
 

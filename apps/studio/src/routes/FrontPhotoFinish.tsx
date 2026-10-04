@@ -39,6 +39,7 @@ import {
   acrossCount,
   clock,
   durationRange,
+  heatmapWay,
   laneRotation,
   lanesLabel,
   loadCause,
@@ -112,6 +113,7 @@ export function FrontPhotoFinish() {
         mode={mode}
         sources={sources}
         srcState={src}
+        heatmap={hm}
         cells={cells}
         usecases={usecases}
         projects={pr}
@@ -195,6 +197,7 @@ function Frame({
   mode,
   sources,
   srcState,
+  heatmap,
   cells,
   usecases,
   projects,
@@ -203,6 +206,7 @@ function Frame({
   mode: Mode;
   sources: Source[];
   srcState: Q<unknown>;
+  heatmap: Q<unknown>;
   cells: HeatmapCell[];
   usecases: UseCase[];
   projects: Q<{ projects: ProjectWithJobs[] }>;
@@ -224,6 +228,7 @@ function Frame({
   const across = acrossCount(sources, mode);
   const n = countStatuses(cells, mode);
   const perMode = cells.filter((c) => c.mode === mode).length;
+  const heatState = heatmapWay(heatmap, perMode);
   const list = projects.data?.projects ?? [];
   const sc = studioCounts(list);
   const resume = resumeCandidate(list) ?? [...list].sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
@@ -394,12 +399,17 @@ function Frame({
             <span className="pf-way__label">Open the heatmap</span>
             <span className="pf-way__detail">
               <span>
-                {perMode ? (
+                {heatState === "ready" ? (
                   <>
                     <b className="num">{perMode}</b> lanes in {MODE_LABEL[mode].toLowerCase()} mode: {heatNum}
                   </>
+                ) : heatState === "error" ? (
+                  // the way itself opens the heatmap, whose Failure retries; no second control inside a link
+                  `The heatmap did not load (${loadCause(heatmap.error)}).`
+                ) : heatState === "loading" ? (
+                  "Reading the heatmap."
                 ) : (
-                  "The heatmap has not answered yet."
+                  `The heatmap has no cells in ${MODE_LABEL[mode].toLowerCase()} mode yet.`
                 )}
               </span>
               <Arrow />
