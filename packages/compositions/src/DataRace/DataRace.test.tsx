@@ -17,7 +17,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { COMPOSITIONS, compositionIdFor } from "../compositions";
 import { calculateDataRaceMetadata } from "../Root";
-import { renderTimingMd } from "../timing/index";
+import { computeTimingPlan, renderTimingMd } from "../timing/index";
 import { DataRaceFrame } from "./DataRaceFrame";
 import { buildSampleDataRace } from "./fixture";
 import { CHIP, CUE_BUDGET, raceChips } from "./chips";
@@ -184,6 +184,36 @@ describe("race", () => {
     expect(hookBlock.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain(props.hook);
     expect(html).not.toContain("NO. 1 AT THE END");
     expect(html.slice(html.indexOf("data-hook")).match(/data-logo="(file|wordmark)"/g)?.length).toBe(10);
+  });
+
+  it("a hook of any allowed length (compute_timing_plan: 0-300 frames) shows its question and hands over to the chart without a pop", () => {
+    const withHook = (hookFrames: number): DataRaceRenderProps => ({
+      ...props,
+      events: [],
+      timing_plan: computeTimingPlan({
+        periods: plan.periods,
+        entities: plan.entities,
+        values: Object.fromEntries(props.entities.map((e) => [e.id, e.values])),
+        opts: { hookFrames, timelineFrames: 960 },
+      }),
+    });
+    for (const h of [20, 30, 36, 40, 60, 300]) {
+      const p = withHook(h);
+      const st = (f: number) => dataRaceState(p, f);
+      expect(st(0).hookOpacity, `hook ${h}: question on screen at frame 0`).toBe(1);
+      expect(st(h).hookOpacity, `hook ${h}: gone when data time starts`).toBe(0);
+      expect(st(h).chartOpacity, `hook ${h}: chart fully up when data time starts`).toBe(1);
+      for (let f = 1; f <= h; f++) {
+        expect(Math.abs(st(f).hookOpacity - st(f - 1).hookOpacity), `hook ${h}: hook step at ${f}`).toBeLessThanOrEqual(0.2);
+        expect(Math.abs(st(f).chartOpacity - st(f - 1).chartOpacity), `hook ${h}: chart step at ${f}`).toBeLessThanOrEqual(0.2);
+      }
+    }
+    // no hook: the video opens on the chart, data time is never hidden
+    expect(dataRaceState(withHook(0), 0).chartOpacity).toBe(1);
+    // the 60-frame default keeps its curves (chart 24 -> 60, hook 36 -> 60)
+    const d = withHook(60);
+    expect([24, 42, 60].map((f) => dataRaceState(d, f).chartOpacity)).toEqual([0, 0.5, 1]);
+    expect([36, 48, 59].map((f) => dataRaceState(d, f).hookOpacity)).toEqual([1, 0.5, 1 - 23 / 24]);
   });
 
   it("is seek-stable: any frame renders identically in any order", () => {

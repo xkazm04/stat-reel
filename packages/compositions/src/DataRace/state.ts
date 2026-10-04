@@ -248,12 +248,19 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
     });
   });
 
-  // scene opacities
-  let chartOpacity = clamp01((frame - 24) / 36);
+  // scene opacities. The hook holds, then fades out by hook_end while the chart fades in under it.
+  // The default 60-frame hook fades the chart in over 24 -> 60 and the hook out over 36 -> 60; a
+  // shorter hook (compute_timing_plan allows 0-300 frames) scales both windows into its own length,
+  // so its question is still on screen at frame 0 and a hook of 0 opens straight on the chart.
+  const h = s.hook_end;
+  const chartIn = Math.min(24, (h * 2) / 5);
+  const chartFull = Math.min(60, h);
+  const hookOut = Math.min(36, (h * 3) / 5);
+  let chartOpacity = chartFull > chartIn ? clamp01((frame - chartIn) / (chartFull - chartIn)) : 1;
   // the spotlight keeps the chart (others dim, winner scales) and fades it with the scene at its end
   if (phase === "spotlight") chartOpacity = clamp01((ENDING_FRAMES.spotlight - phaseFrame) / 8);
   if (phase === "like" || phase === "powered") chartOpacity = 0;
-  const hookOpacity = frame < s.hook_end ? 1 - clamp01((frame - 36) / (s.hook_end - 36)) : 0;
+  const hookOpacity = frame < h ? 1 - clamp01((frame - hookOut) / (h - hookOut)) : 0;
 
   return {
     phase,
