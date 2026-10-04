@@ -76,10 +76,14 @@ def expected_from_raw(results_csv: Path, races_csv: Path) -> dict[str, dict]:
     con = duckdb.connect()
     indy = {r[0] for r in con.execute(f"select id from read_csv('{races_csv.as_posix()}') where grandPrixId = 'indianapolis'").fetchall()}
     rows = con.execute(f"select raceId, driverId, positionNumber, positionText, sharedCar from read_csv('{results_csv.as_posix()}')").fetchall()
-    sharers = defaultdict(int)
-    for race, _, pos, _, shared in rows:
-        if shared and pos:
-            sharers[(race, pos)] += 1
+    # f1db flags sharedCar only on the drivers who took a car over, so a classified position is shared when ANY
+    # entry at it is flagged, and its points split between every driver classified there
+    at, shared_at = defaultdict(int), set()
+    for race, _, pos, text, shared in rows:
+        if pos and text not in NON_STARTS:
+            at[(race, pos)] += 1
+            if shared:
+                shared_at.add((race, pos))
     # a driver can appear twice in one race (took over a team-mate's car): one start, both results score
     races: dict[str, set] = defaultdict(set)
     points: dict[str, float] = defaultdict(float)
@@ -88,7 +92,7 @@ def expected_from_raw(results_csv: Path, races_csv: Path) -> dict[str, dict]:
             continue
         races[driver].add(race)
         pts = CURRENT_POINTS.get(pos, 0) if pos else 0
-        points[driver] += pts / sharers[(race, pos)] if shared and pos else pts
+        points[driver] += pts / at[(race, pos)] if (race, pos) in shared_at else pts
     return {d: {"starts": len(races[d]), "points": points[d]} for d in races}
 
 
@@ -130,6 +134,19 @@ def test_mart_matches_the_independent_oracle(replay_run):
         if v["starts"]:
             assert got[driver][0] == v["starts"], driver
             assert got[driver][1] == pytest.approx(v["points"]), driver
+
+
+def test_a_shared_car_scores_its_position_once_split_between_all_its_drivers(replay_run):
+    """f1db flags sharedCar only on the drivers who took a car over; the driver who started it reads false. The car
+    still finished in ONE position: its current-system points summed over every driver classified with it equal
+    that position's points (f1db's own as-awarded points split the same way - 1951 French GP: Fagioli 4 + Fangio 5)."""
+    con = replay_run["con"]
+    groups = con.execute("""
+        select match_id, position_number, count(*), sum(points_current_system), bool_and(shared_car)
+        from core.player_match_results where started and position_number between 1 and 10
+        group by all having bool_or(shared_car)""").fetchall()
+    assert any(n > 1 and not all_flagged for _, _, n, _, all_flagged in groups), "fixture has a shared car whose starter is unflagged"
+    assert [(m, p, pts) for m, p, _, pts, _ in groups if abs(pts - CURRENT_POINTS[p]) > 1e-9] == []
 
 
 def test_indianapolis_only_drivers_are_not_in_the_mart(replay_run):
