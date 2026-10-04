@@ -3,6 +3,18 @@ import { metricsDaily, openDb, projects, publications, renders } from "./db";
 import { metricsOverview } from "./metrics";
 
 describe("metrics overview (DESIGN §6.1 screen 6)", () => {
+  it("average view duration is the latest measured snapshot, like every other metric (a later unmeasured day is not 'unknown')", () => {
+    const db = openDb(":memory:");
+    db.insert(projects).values({ id: "p1", title: "T", use_case_id: "era-adjusted-rankings", sport: "F1", format: "vertical", mode: "monetized", status: "published", created_at: "2026-09-30" }).run();
+    db.insert(renders).values({ id: "r1", project_id: "p1", job_id: "j", format: "vertical", path: "v.mp4", manifest_path: "m.json", checks_json: "{}", created_at: "2026-09-30" }).run();
+    db.insert(publications).values({ id: "pub1", render_id: "r1", platform: "youtube", external_id: "abc", visibility: "private", status: "private", mode: "live" }).run();
+    db.insert(metricsDaily).values([
+      { publication_id: "pub1", date: "2026-09-29", views: 10, likes: 1, comments: null, shares: null, watch_time_s: 100, avg_view_duration_s: 12, subs_delta: null },
+      { publication_id: "pub1", date: "2026-09-30", views: 30, likes: 2, comments: null, shares: null, watch_time_s: null, avg_view_duration_s: null, subs_delta: null },
+    ]).run();
+    expect(metricsOverview(db).publications[0]).toMatchObject({ views: 30, watch_time_s: 100, avg_view_duration_s: 12 });
+  });
+
   it("lifetime snapshots: total is the latest snapshot, per-day is the difference (not a sum), nulls stay null", () => {
     const db = openDb(":memory:");
     db.insert(projects).values({ id: "p1", title: "T", use_case_id: "era-adjusted-rankings", sport: "F1", format: "vertical", mode: "monetized", status: "published", created_at: "2026-09-30" }).run();

@@ -56,7 +56,7 @@ export function metricsOverview(db: Db) {
       platform: pub.platform, external_id: pub.external_id, visibility: pub.visibility, url: pub.url, published_at: pub.published_at, mode: pub.mode,
       views: latest(daily, "views"), likes: latest(daily, "likes"), comments: latest(daily, "comments"), shares: latest(daily, "shares"),
       watch_time_s: latest(daily, "watch_time_s"), subs_delta: latest(daily, "subs_delta"),
-      avg_view_duration_s: daily.length ? daily.at(-1)!.avg_view_duration_s : null,
+      avg_view_duration_s: latest(daily, "avg_view_duration_s"),
       daily: daily.map((d, i) => ({ date: d.date, views: dViews[i]!, likes: dLikes[i]!, views_total: d.views, likes_total: d.likes, avg_view_duration_s: d.avg_view_duration_s })),
       data: pub.mode === "dry" ? "dry-run: nothing was uploaded, so there are no platform metrics" : daily.length ? "platform" : "not pulled yet",
     };
