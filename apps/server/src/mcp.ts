@@ -7,17 +7,17 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isFailedToolResult } from "@statreel/llm";
 import { z } from "zod";
 import type { GenerationMcpTools } from "./generation/mcp-tools";
 import type { Tools } from "./tools";
 import { MAX_FRAMES, toolShapes } from "./tool-schemas";
 
-/** A result that carries `error` (string) or a non-empty `errors` array is a failed call: flag it isError. */
-export function isFailedResult(v: unknown): boolean {
-  if (!v || typeof v !== "object") return false;
-  const r = v as { error?: unknown; errors?: unknown };
-  return (typeof r.error === "string" && r.error !== "") || (Array.isArray(r.errors) && r.errors.length > 0);
-}
+/**
+ * A result that carries `error` (string) or a non-empty `errors` array is a failed call: flag it isError.
+ * One rule for live and replay: the ReplayEngine applies the same helper to the live handler result.
+ */
+export const isFailedResult = isFailedToolResult;
 
 export const text = (v: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(v, null, 1) }],
