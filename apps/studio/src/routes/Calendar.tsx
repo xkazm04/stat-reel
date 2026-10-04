@@ -11,7 +11,7 @@
 import type { Mode } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearch } from "@tanstack/react-router";
-import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type FormEvent, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   api,
   type CalendarSlot,
@@ -36,12 +36,12 @@ import {
   latestSlotPerProject,
   mapScheduleError,
   moveDefault,
-  needsDecision,
   nextFullHour,
   relWhen,
   SLOT_META,
   type SlotStatusKey,
   slotDrift,
+  slotGroups,
   slotStatus,
   splitTags,
   timeLabel,
@@ -158,9 +158,8 @@ export function CalendarPage() {
   const chById = new Map(channels.map((c) => [c.id, c]));
   const ucName = (id: string) => hm.data?.usecases.find((u) => u.id === id)?.name ?? id;
   const newest = useMemo(() => latestSlotPerProject(slots), [slots]);
-  const attention = slots.filter(needsDecision);
-  const upcoming = slots.filter((s) => isUpcoming(s.status) && !needsDecision(s));
-  const history = slots.filter((s) => !isUpcoming(s.status) && !needsDecision(s)).reverse();
+  const groups = slotGroups(slots);
+  const groupSize = (k: string) => groups.find((g) => g.key === k)?.slots.length ?? 0;
 
   return (
     <main id="main" className="page cal-page">
@@ -275,52 +274,28 @@ export function CalendarPage() {
               tag={slots.length}
               actions={
                 <span>
-                  {upcoming.length} upcoming · {history.length} done or stopped
+                  {groupSize("upcoming")} upcoming · {groupSize("history")} done or stopped
                 </span>
               }
             >
-              {slots.length ? (
-                <>
-                  {attention.length ? <h3 className="slot-group">Needs your decision</h3> : null}
-                  <ul className="slot-list">
-                    {attention.map((s) => (
-                      <SlotRow
-                        key={s.id}
-                        s={s}
-                        slots={slots}
-                        channel={chById.get(s.channel_id)}
-                        pubs={pubs}
-                        testid={newest.get(s.project_id)?.id === s.id}
-                      />
-                    ))}
-                  </ul>
-                  {upcoming.length ? <h3 className="slot-group">Upcoming</h3> : null}
-                  <ul className="slot-list">
-                    {upcoming.map((s) => (
-                      <SlotRow
-                        key={s.id}
-                        s={s}
-                        slots={slots}
-                        channel={chById.get(s.channel_id)}
-                        pubs={pubs}
-                        testid={newest.get(s.project_id)?.id === s.id}
-                      />
-                    ))}
-                  </ul>
-                  {history.length ? <h3 className="slot-group">History</h3> : null}
-                  <ul className="slot-list">
-                    {history.map((s) => (
-                      <SlotRow
-                        key={s.id}
-                        s={s}
-                        slots={slots}
-                        channel={chById.get(s.channel_id)}
-                        pubs={pubs}
-                        testid={newest.get(s.project_id)?.id === s.id}
-                      />
-                    ))}
-                  </ul>
-                </>
+              {groups.length ? (
+                groups.map((g) => (
+                  <Fragment key={g.key}>
+                    <h3 className="slot-group">{g.label}</h3>
+                    <ul className="slot-list">
+                      {g.slots.map((s) => (
+                        <SlotRow
+                          key={s.id}
+                          s={s}
+                          slots={slots}
+                          channel={chById.get(s.channel_id)}
+                          pubs={pubs}
+                          testid={newest.get(s.project_id)?.id === s.id}
+                        />
+                      ))}
+                    </ul>
+                  </Fragment>
+                ))
               ) : (
                 <Empty title="No slot yet">
                   Schedule a ready video above, or publish it now; slots appear here and on the week.

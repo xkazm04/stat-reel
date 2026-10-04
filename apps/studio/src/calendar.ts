@@ -90,6 +90,26 @@ export const DRIFT_META: Record<SlotDrift, { label: string; hint: string }> = {
 export const needsDecision = (s: { status: string; drift?: SlotDrift | null }): boolean =>
   s.status === "missed" || (s.status === "scheduled" && slotDrift(s) !== null);
 
+export type SlotGroupKey = "attention" | "upcoming" | "history";
+export type SlotGroup<T> = { key: SlotGroupKey; label: string; slots: T[] };
+const GROUP_LABEL: Record<SlotGroupKey, string> = { attention: "Needs your decision", upcoming: "Upcoming", history: "History" };
+
+/**
+ * The "Every slot" list as its groups: the slots the owner must decide on, the upcoming ones, and
+ * the history (newest first). Only groups that hold a slot are returned, so the list never draws an
+ * empty <ul> (a stray rule on the card, an empty list to a screen reader).
+ */
+export function slotGroups<T extends { status: string; drift?: SlotDrift | null }>(slots: T[]): SlotGroup<T>[] {
+  const by: Record<SlotGroupKey, T[]> = {
+    attention: slots.filter(needsDecision),
+    upcoming: slots.filter((s) => isUpcoming(s.status) && !needsDecision(s)),
+    history: slots.filter((s) => !isUpcoming(s.status) && !needsDecision(s)).reverse(),
+  };
+  return (Object.keys(by) as SlotGroupKey[])
+    .filter((key) => by[key].length > 0)
+    .map((key) => ({ key, label: GROUP_LABEL[key], slots: by[key] }));
+}
+
 /** The newest slot (by created_at, then publish_at) of each project. */
 export function latestSlotPerProject<T extends SlotLike>(slots: T[]): Map<string, T> {
   const out = new Map<string, T>();

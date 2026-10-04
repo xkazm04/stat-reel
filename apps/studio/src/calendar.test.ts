@@ -8,6 +8,7 @@ import {
   parseCalendarSearch,
   SLOT_META,
   slotDrift,
+  slotGroups,
   channelLabel,
   dayKey,
   fromLocalInput,
@@ -179,6 +180,22 @@ describe("mapScheduleError", () => {
   });
   it("never prefixes a raw Server label", () => {
     expect(mapScheduleError("boom").message).toBe("boom");
+  });
+});
+
+describe("slotGroups", () => {
+  const s = (id: string, status: string, drift: "gate_denied" | null = null) => ({ id, status, drift });
+  it("returns only the groups that hold a slot, in decision / upcoming / history order", () => {
+    // the common case: nothing to decide, nothing done yet -> one group, no empty lists
+    expect(slotGroups([s("a", "scheduled"), s("b", "publishing")]).map((g) => g.key)).toEqual(["upcoming"]);
+    expect(slotGroups([]).length).toBe(0);
+    const all = slotGroups([s("p1", "published"), s("m", "missed"), s("u", "scheduled"), s("d", "scheduled", "gate_denied"), s("p2", "failed")]);
+    expect(all.map((g) => [g.key, g.slots.map((x) => x.id)])).toEqual([
+      ["attention", ["m", "d"]],
+      ["upcoming", ["u"]],
+      ["history", ["p2", "p1"]], // newest first
+    ]);
+    expect(all.map((g) => g.label)).toEqual(["Needs your decision", "Upcoming", "History"]);
   });
 });
 
