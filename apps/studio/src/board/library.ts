@@ -24,12 +24,64 @@ export const STYLE_GROUPS: readonly { status: StyleStatus; title: string; hint: 
   { status: "retired", title: "Retired", hint: "Once accepted, now out of the pool. Loops do not build on them." },
 ];
 
+/** The rejected group, listed last and only when the owner asks to see rejected styles (see `filterStyles`). */
+export const REJECTED_GROUP = {
+  status: "rejected",
+  title: "Rejected",
+  hint: "More style rejects than accepts. Hidden by default; loops never reuse them. Reject counts show which kind of reject each was.",
+} as const satisfies { status: StyleStatus; title: string; hint: string };
+
 /** Rejected styles are hidden (D.1, Q3); the loops still read them from /api/styles. */
 export const visibleStyles = <T extends { status: StyleStatus }>(styles: readonly T[]): T[] =>
   styles.filter((s) => s.status !== "rejected");
 
+export type StyleFilter = { showRejected: boolean; atRiskOnly: boolean };
+export const DEFAULT_STYLE_FILTER: StyleFilter = { showRejected: false, atRiskOnly: false };
+
+/**
+ * The gallery's filter: by default today's view (rejected hidden). `showRejected` reveals them; `atRiskOnly`
+ * narrows to styles whose newest decision was a style reject without the verdict having flipped (the server's
+ * `at_risk`), which is a triage queue of its own. At-risk takes precedence: a rejected style is never at risk.
+ */
+export function filterStyles<T extends { status: StyleStatus; at_risk?: true }>(styles: readonly T[], f: StyleFilter): T[] {
+  if (f.atRiskOnly) return styles.filter((s) => s.at_risk === true);
+  return f.showRejected ? [...styles] : visibleStyles(styles);
+}
+
+/**
+ * What `at_risk` honestly means (apps/server/src/library.ts): the newest decision on the style is a style reject
+ * (reject_style or reject_both) and the verdict is not yet "rejected" - the verdict is rejected once style rejects
+ * outnumber accepts, so it takes `accepts - style_rejects + 1` more style rejects to flip it (one on a 1:1 tie).
+ * It is a warning about the margin, not a prediction; null when the style is not at risk.
+ */
+export function atRiskWords(s: Pick<StyleEntry, "at_risk" | "accepts" | "style_rejects">): string | null {
+  if (!s.at_risk) return null;
+  const n = Math.max(1, s.accepts - s.style_rejects + 1);
+  return `At risk: the latest decision was a style reject. ${n} more style reject${n === 1 ? "" : "s"} would turn it rejected (${s.accepts} accepted vs ${s.style_rejects} style-rejected now).`;
+}
+
+/** "2 style-rejected (1 style only · 1 style and case)"; null when nothing was style-rejected. */
+export function rejectSplitWords(s: Pick<StyleEntry, "reject_style" | "reject_both">): string | null {
+  const n = s.reject_style + s.reject_both;
+  if (!n) return null;
+  const parts = [s.reject_style ? `${s.reject_style} style only` : null, s.reject_both ? `${s.reject_both} style and case` : null].filter(Boolean);
+  return `${n} style-rejected (${parts.join(" · ")})`;
+}
+
+export const atRiskCount = (styles: readonly { at_risk?: true }[]): number => styles.filter((s) => s.at_risk === true).length;
+
+/**
+ * The count on a tab button, from data already loaded (null = unknown or nothing to say, so no badge: an
+ * unloaded list is not zero). Designs: pending designs. Use cases: the case inbox (ideas awaiting a decision).
+ * Styles: styles at risk of flipping to rejected.
+ */
+export function tabCount(tab: Tab, c: { pendingDesigns?: number | null; inboxCases?: number | null; atRiskStyles?: number | null }): { n: number; word: string } | null {
+  const pick = tab === "designs" ? { n: c.pendingDesigns, word: "pending" } : tab === "cases" ? { n: c.inboxCases, word: "to decide" } : { n: c.atRiskStyles, word: "at risk" };
+  return typeof pick.n === "number" && pick.n > 0 ? { n: pick.n, word: pick.word } : null;
+}
+
 export function groupStyles(styles: readonly StyleEntry[]): { status: StyleStatus; title: string; hint: string; styles: StyleEntry[] }[] {
-  return STYLE_GROUPS.map((g) => ({ ...g, styles: styles.filter((s) => s.status === g.status) })).filter((g) => g.styles.length);
+  return [...STYLE_GROUPS, REJECTED_GROUP].map((g) => ({ ...g, styles: styles.filter((s) => s.status === g.status) })).filter((g) => g.styles.length);
 }
 
 /** The items of one style, hero first, in board order otherwise. */

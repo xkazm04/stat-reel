@@ -2029,3 +2029,36 @@ button.tl-b {
 .stepper__s--pending::before {
   content: "\25CB";
 }
+
+/* --- Board signal surfacing (BU2): style filters, at-risk note, tab counts. Words and a shape carry the state, colour only echoes it. --- */
+.bd-lib__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--color-text-muted);
+}
+.bd-lib__filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bd-style__risk {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 3px solid var(--status-ask);
+  background: var(--status-ask-wash);
+  color: var(--color-text);
+}
+.bd-style__risk b {
+  color: var(--status-ask);
+}
+.bd-tabs button b .bd-tabs__n {
+  font-family: var(--font-body, inherit);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0;
+}

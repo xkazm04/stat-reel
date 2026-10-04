@@ -1,7 +1,7 @@
 import type { UseCase } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import type { BoardItem, CaseIdea, StyleEntry } from "../api";
-import { caseDecisionForKey, caseRows, groupStyles, ideaTopic, inbox, needsTopic, topicGroups, nextUndecided, parseTab, styleItems, visibleCaseRows, visibleStyles } from "./library";
+import { atRiskCount, atRiskWords, caseDecisionForKey, DEFAULT_STYLE_FILTER, filterStyles, rejectSplitWords, tabCount, caseRows, groupStyles, ideaTopic, inbox, needsTopic, topicGroups, nextUndecided, parseTab, styleItems, visibleCaseRows, visibleStyles } from "./library";
 
 const item = (id: string, over: Partial<BoardItem> = {}): BoardItem => ({
   id, image: `items/${id}.png`, image_url: `/files/board/items/${id}.png`, video: null, video_url: null, duration_s: null,
@@ -62,7 +62,38 @@ describe("Style gallery", () => {
     const all = [style("a", "accepted"), style("x", "rejected"), style("o", "open")];
     expect(visibleStyles(all).map((s) => s.id)).toEqual(["a", "o"]);
     expect(groupStyles(visibleStyles(all)).map((g) => g.status)).toEqual(["accepted", "open"]);
-    expect(groupStyles(all).map((g) => g.status)).not.toContain("rejected");
+    // grouping itself no longer drops them: the owner's filter decides (filterStyles)
+    expect(groupStyles(all).map((g) => g.status)).toEqual(["accepted", "open", "rejected"]);
+  });
+
+  it("the filter hides rejected by default, reveals them on request, and narrows to at-risk", () => {
+    const risky = style("r", "open", { at_risk: true, accepts: 1, style_rejects: 1 });
+    const all = [style("a", "accepted"), style("x", "rejected"), risky];
+    expect(filterStyles(all, DEFAULT_STYLE_FILTER).map((s) => s.id)).toEqual(["a", "r"]);
+    expect(filterStyles(all, { showRejected: true, atRiskOnly: false }).map((s) => s.id)).toEqual(["a", "x", "r"]);
+    expect(filterStyles(all, { showRejected: true, atRiskOnly: true }).map((s) => s.id)).toEqual(["r"]);
+    expect(atRiskCount(all)).toBe(1);
+  });
+
+  it("words at-risk by the real margin (accepts - style rejects + 1 more rejects), never when not at risk", () => {
+    expect(atRiskWords(style("n", "open"))).toBeNull();
+    expect(atRiskWords(style("t", "open", { at_risk: true, accepts: 1, style_rejects: 1 }))).toContain("1 more style reject would");
+    expect(atRiskWords(style("m", "accepted", { at_risk: true, accepts: 3, style_rejects: 1 }))).toContain("3 more style rejects would");
+  });
+
+  it("splits style rejects into style-only and style-and-case", () => {
+    expect(rejectSplitWords({ reject_style: 0, reject_both: 0 })).toBeNull();
+    expect(rejectSplitWords({ reject_style: 2, reject_both: 1 })).toBe("3 style-rejected (2 style only · 1 style and case)");
+    expect(rejectSplitWords({ reject_style: 0, reject_both: 1 })).toBe("1 style-rejected (1 style and case)");
+  });
+
+  it("tab counts come from loaded data only: unknown and zero show nothing", () => {
+    expect(tabCount("designs", { pendingDesigns: 12 })).toEqual({ n: 12, word: "pending" });
+    expect(tabCount("cases", { inboxCases: 4 })).toEqual({ n: 4, word: "to decide" });
+    expect(tabCount("styles", { atRiskStyles: 2 })).toEqual({ n: 2, word: "at risk" });
+    expect(tabCount("cases", {})).toBeNull();
+    expect(tabCount("designs", { pendingDesigns: 0 })).toBeNull();
+    expect(tabCount("styles", { atRiskStyles: null })).toBeNull();
   });
 
   it("puts the hero first and skips items that are gone", () => {

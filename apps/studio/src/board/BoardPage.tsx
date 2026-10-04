@@ -15,9 +15,10 @@
  * accepted looks (lock / retire); Use cases the stories judged without art style, with the
  * case-loop inbox.
  */
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { lazy, Suspense, useMemo } from "react";
-import type { BoardItem } from "../api";
+import { api, type BoardItem, qk } from "../api";
 import { Defer, SkeletonRows } from "../components/arrive";
 import { Empty, Failure, Loading } from "../components/ui";
 import {
@@ -36,7 +37,7 @@ import {
   type Variant,
   visibleItems,
 } from "./board";
-import { parseTab, TABS, type Tab } from "./library";
+import { atRiskCount, inbox, parseTab, TABS, type Tab, tabCount } from "./library";
 import { filterFromSearch, searchFromFilter } from "./search";
 import { useBoard, useCaseNames } from "./shared";
 import { QueueStrip } from "./QueueStrip";
@@ -121,6 +122,14 @@ export function BoardPage() {
   const styleOpts = useMemo(() => axisOptions(all, "style", names), [all, names]);
   const caseOpts = useMemo(() => axisOptions(all, "case", names), [all, names]);
   const filtered = !isDefaultFilter(filter);
+  // tab counts read the caches the tabs fill (enabled: false = never a request of their own); an unvisited tab shows none
+  const cachedCases = useQuery({ queryKey: qk.cases, queryFn: () => api.cases(), enabled: false });
+  const cachedStyles = useQuery({ queryKey: qk.styles, queryFn: () => api.styles(), enabled: false });
+  const tabCounts = {
+    pendingDesigns: board.data ? counts.pending : null,
+    inboxCases: cachedCases.data ? inbox(cachedCases.data.ideas).length : null,
+    atRiskStyles: cachedStyles.data ? atRiskCount(cachedStyles.data.styles) : null,
+  };
   const V = variant === 2 ? LightTableVariant : variant === 3 ? MatrixVariant : WallVariant;
 
   return (
@@ -163,7 +172,9 @@ export function BoardPage() {
       <QueueStrip />
 
       <nav className="bd-tabs" aria-label="Board sections">
-        {TABS.map((o) => (
+        {TABS.map((o) => {
+          const c = tabCount(o.tab, tabCounts);
+          return (
           <button
             key={o.tab}
             type="button"
@@ -171,10 +182,19 @@ export function BoardPage() {
             data-testid={`board-tab-${o.tab}`}
             onClick={() => setTab(o.tab)}
           >
-            <b>{o.name}</b>
+            <b>
+              {o.name}
+              {c ? (
+                <span className="bd-tabs__n" data-testid={`board-tab-count-${o.tab}`}>
+                  {" "}
+                  <span className="num">{c.n}</span> {c.word}
+                </span>
+              ) : null}
+            </b>
             <span>{o.sub}</span>
           </button>
-        ))}
+          );
+        })}
       </nav>
 
       {tab === "styles" ? (

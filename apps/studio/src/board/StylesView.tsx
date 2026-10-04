@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { api, type BoardItem, qk, serverError, type StyleEntry, type StylePatch } from "../api";
 import { Empty, Failure, Loading } from "../components/ui";
-import { groupStyles, styleItems, visibleStyles } from "./library";
+import { atRiskCount, atRiskWords, DEFAULT_STYLE_FILTER, filterStyles, groupStyles, rejectSplitWords, type StyleFilter, styleItems } from "./library";
 import { Shot, shotAlt, useBoard } from "./shared";
 
 const STATUS_WORD: Record<StyleEntry["status"], string> = {
@@ -40,30 +40,49 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
   const styles = useStyles();
   const board = useBoard();
   const byId = useMemo(() => new Map((board.data?.items ?? []).map((i) => [i.id, i])), [board.data]);
-  const groups = useMemo(() => groupStyles(visibleStyles(styles.data?.styles ?? [])), [styles.data]);
+  const [filter, setFilter] = useState<StyleFilter>(DEFAULT_STYLE_FILTER);
+  const groups = useMemo(() => groupStyles(filterStyles(styles.data?.styles ?? [], filter)), [styles.data, filter]);
   const [open, setOpen] = useState<string | null>(null);
 
   if (styles.isError) return <Failure error={styles.error} what="The style library" />;
   if (styles.isLoading || board.isLoading) return <Loading what="the style library" />;
-  if (!groups.length)
+  const listed = styles.data?.styles ?? [];
+  if (!listed.length)
     return (
-      <Empty title={styles.data?.styles.length ? "No styles to show" : "No styles yet"} className="bd-empty">
-        {styles.data?.styles.length
-          ? "Every style so far was rejected, so none is listed. Loops still read them as feedback."
-          : "Styles appear as soon as a loop posts designs. Accept designs on the Designs tab to grow the pool."}
+      <Empty title="No styles yet" className="bd-empty">
+        Styles appear as soon as a loop posts designs. Accept designs on the Designs tab to grow the pool.
       </Empty>
     );
 
-  const all = styles.data?.styles ?? [];
+  const all = listed;
+  const atRisk = atRiskCount(all);
   const n = (s: StyleEntry["status"]) => all.filter((x) => x.status === s).length;
   return (
     <div className="bd-lib" data-testid="board-styles">
       <p className="bd-lib__intro">
         <b className="num">{n("locked")}</b> locked · <b className="num">{n("accepted")}</b> accepted ·{" "}
         <b className="num">{n("open")}</b> not judged · <b className="num">{n("retired")}</b> retired ·{" "}
-        <b className="num">{n("rejected")}</b> rejected (hidden here). Loops build on accepted and locked styles, rebuild
+        <b className="num">{n("rejected")}</b> rejected{filter.showRejected || filter.atRiskOnly ? "" : " (hidden unless you show them)"}. Loops build on accepted and locked styles, rebuild
         locked ones faithfully, and never reuse retired or rejected ones. Text size is not part of a style.
       </p>
+      <fieldset className="bd-lib__filters" data-testid="style-filters">
+        <legend className="sr-only">Which styles to list</legend>
+        <label>
+          <input type="checkbox" checked={filter.showRejected} disabled={filter.atRiskOnly} data-testid="style-filter-rejected" onChange={(e) => setFilter((f) => ({ ...f, showRejected: e.target.checked }))} />
+          Show rejected styles <span className="num">({n("rejected")})</span>
+        </label>
+        <label>
+          <input type="checkbox" checked={filter.atRiskOnly} data-testid="style-filter-atrisk" onChange={(e) => setFilter((f) => ({ ...f, atRiskOnly: e.target.checked }))} />
+          Only styles at risk <span className="num">({atRisk})</span>
+        </label>
+      </fieldset>
+      {!groups.length ? (
+        <Empty title={filter.atRiskOnly ? "No style is at risk" : "No styles to show"} className="bd-empty">
+          {filter.atRiskOnly
+            ? "At risk means the latest decision was a style reject while the verdict has not flipped. None is in that state."
+            : "Every style so far was rejected, so none is listed. Show rejected styles above, or let the loops keep reading them as feedback."}
+        </Empty>
+      ) : null}
       {groups.map((g) => (
         <section key={g.status} className={`bd-lib__group bd-lib__group--${g.status}`} aria-labelledby={`sg-${g.status}`}>
           <header className="bd-lib__gh">
@@ -107,6 +126,7 @@ function StyleCard({
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(style.owner_note ?? "");
   const hero = items[0];
+  const risk = atRiskWords(style);
   const send = (p: StylePatch) => patch.mutate({ id: style.id, patch: p });
   const caseName = (k: string) => (k.startsWith("proposed:") ? k.slice(9) : (names.get(k) ?? k));
 
@@ -119,9 +139,17 @@ function StyleCard({
           <span className={`bd-style__mark bd-style__mark--${style.status}`}>{STATUS_WORD[style.status]}</span>
         </header>
         <p className="bd-style__tally num">
-          {style.accepts} accepted · {style.style_rejects} style-rejected · {style.pending} pending · {style.total}{" "}
+          {style.accepts} accepted · {rejectSplitWords(style) ?? "0 style-rejected"} · {style.pending} pending · {style.total}{" "}
           design{style.total === 1 ? "" : "s"}
         </p>
+        {risk ? (
+          <p className="bd-style__risk" data-testid={`style-atrisk-${style.id}`}>
+            <b>
+              <span aria-hidden="true">▲ </span>At risk
+            </b>{" "}
+            {risk}
+          </p>
+        ) : null}
         {style.notes ? <p className="bd-style__notes">{style.notes}</p> : null}
         {style.owner_note && !editing ? (
           <p className="bd-style__owner">
