@@ -7,16 +7,18 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type Db, openDb } from "../db";
 import { EventBus } from "../events";
 import { JobRunner } from "../jobs";
+import { httpCallbacks } from "./callbacks";
 import { acquireLease } from "./lease";
 import { jobPaths } from "./paths";
 import { GenerationQueue } from "./queue";
 import { registerGenerationRoutes } from "./routes";
-import { CASE_A, CASE_B, insertCase } from "./testing";
+import { CASE_A, CASE_B, insertCase, until } from "./testing";
 
 let dir: string;
 let db: Db;
 let queue: GenerationQueue;
 let app: Hono<{ Bindings: HttpBindings }>;
+let runner: JobRunner;
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "statreel-routes-"));
@@ -25,7 +27,7 @@ beforeEach(() => {
   insertCase(db, CASE_A);
   insertCase(db, CASE_B);
   app = new Hono<{ Bindings: HttpBindings }>();
-  const runner = new JobRunner(db, new EventBus());
+  runner = new JobRunner(db, new EventBus());
   runner.register("gen_render", async () => ({}), { lane: "render" });
   registerGenerationRoutes(app, { db, queue, bus: new EventBus(), runner, dataRoot: dir });
 });
@@ -143,5 +145,19 @@ describe("/api/generation", () => {
     expect((await json(r)).render_job_id).toBeTruthy();
     expect((await post(`/api/generation/jobs/${job.id}/render`, { kind: "stills", props_path: "../../../etc/passwd" })).status).toBe(400);
     expect((await post(`/api/generation/jobs/${job.id}/finalize`, { nope: 1 })).status).toBe(400);
+  });
+
+  it("the worker reads its render job by id, however many jobs were created after it", async () => {
+    // the server's job list, exactly as app.ts serves it: the newest 50 of every kind
+    app.get("/api/jobs", (c) => c.json({ jobs: runner.list(undefined, 50) }));
+    const cb = httpCallbacks("http://t", ((url: string, init?: RequestInit) => app.request(url.replace("http://t", ""), init)) as typeof fetch);
+    const { job } = await json(await enqueue());
+    queue.claim();
+    const { render_job_id } = await cb.render(job.id, { kind: "stills", props_path: "out/variants/v1.props.json", frames: [10] });
+    await until(() => runner.get(render_job_id)?.status === "succeeded");
+    for (let i = 0; i < 60; i++) runner.enqueue("gen_render", { generation_job_id: job.id, kind: "stills", props_path: "x", frames: [] });
+    await expect(cb.renderStatus(render_job_id)).resolves.toMatchObject({ status: "succeeded" });
+    expect((await app.request("/api/generation/renders/nope")).status).toBe(404);
+    await until(() => runner.list().every((j) => j.status === "succeeded"));
   });
 });

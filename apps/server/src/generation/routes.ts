@@ -176,6 +176,13 @@ export function registerGenerationRoutes(app: Hono<{ Bindings: HttpBindings }>, 
     return c2.json({ render_job_id });
   });
 
+  // the worker polls ONE render job by id: /api/jobs is the newest 50 of every kind, a page and not a lookup
+  app.get("/api/generation/renders/:renderId", (c2) => {
+    const r = d.runner.get(c2.req.param("renderId"));
+    if (r?.kind !== "gen_render") return c2.json({ error: "not found" }, 404);
+    return c2.json({ status: r.status, error: r.error, result: r.result_json ? JSON.parse(r.result_json) : undefined });
+  });
+
   // T7 stub: records what the worker validated. T10/T11 create the board items / the videos row here.
   app.post("/api/generation/jobs/:id/finalize", async (c2) => {
     const job = running(c2.req.param("id"));
