@@ -40,9 +40,7 @@ describe.skipIf(!opaAvailable)("evaluatePolicy (real opa)", () => {
     expect(r.deny).toEqual([]);
     expect(r.allow).toBe(true);
     expect(r.warn).toEqual([]);
-    expect(r.checks_run).toContain("evidence_missing");
-    expect(r.checks_run).toContain("source_not_legal_on_monetized");
-    expect(r.checks_run.length).toBe(27);
+    expect([...r.checks_run].sort()).toEqual(regoRules().checksRun.sort());
   });
 
   it("denies a non-commercial source on a monetized channel (DESIGN §8 negative e2e)", async () => {
@@ -133,6 +131,60 @@ describe.skipIf(!opaAvailable)("evaluatePolicy (real opa)", () => {
     await expect(
       evaluatePolicy(manifest, target, { policyDir: dirname(fileURLToPath(import.meta.url)) }),
     ).rejects.toBeInstanceOf(PolicyEvaluationError);
+  });
+});
+
+/**
+ * checks_run is a hand-written list in publish.rego; the rule bodies are the ground truth. A deny/warn
+ * head (comments stripped) is owned by the `# rule: <name>` annotation in the comment block directly
+ * above it, or - for a second body of one rule - repeats the previous head line verbatim.
+ */
+function regoRules() {
+  const src = readFileSync(join(repoRoot(), "policy", "publish.rego"), "utf8");
+  const list = /^checks_run := \[([^\]]*)\]/m.exec(src)?.[1] ?? "";
+  const checksRun = [...list.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1] as string);
+  const annotations: string[] = [];
+  const owners: string[] = [];
+  let pending: string | null = null;
+  let prevHead = "";
+  for (const line of src.split(/\r?\n/)) {
+    const ann = /^#\s*rule:\s*([a-z0-9_]+)\s*$/.exec(line);
+    if (ann) {
+      pending = ann[1] as string;
+      annotations.push(pending);
+      continue;
+    }
+    const code = line.replace(/#.*$/, "").trimEnd();
+    if (!code) continue;
+    if (/^(deny|warn) contains\b/.test(code)) {
+      const owner = pending ?? (code === prevHead ? (owners.at(-1) ?? "<unannotated>") : "<unannotated>");
+      owners.push(owner);
+      prevHead = code;
+    }
+    pending = null;
+  }
+  const tests = readFileSync(join(repoRoot(), "policy", "publish_test.rego"), "utf8");
+  const sections = [...tests.matchAll(/^# -{3,}\s+(?:warn:\s+)?([a-z0-9_]+)/gm)].map((m) => m[1] as string);
+  return { checksRun, annotations, owners, sections };
+}
+
+describe("policy/publish.rego checks_run", () => {
+  const { checksRun, annotations, owners, sections } = regoRules();
+
+  it("lists every rule exactly once, and only rules that exist", () => {
+    expect(checksRun.length).toBeGreaterThan(20);
+    expect(new Set(checksRun).size).toBe(checksRun.length);
+    expect(new Set(annotations).size).toBe(annotations.length);
+    expect([...annotations].sort()).toEqual([...checksRun].sort());
+  });
+
+  it("every deny/warn head is annotated, and every annotated rule has a head", () => {
+    expect(owners).not.toContain("<unannotated>");
+    expect([...new Set(owners)].sort()).toEqual([...checksRun].sort());
+  });
+
+  it("every rule has its own section in publish_test.rego", () => {
+    expect(checksRun.filter((r) => !sections.includes(r))).toEqual([]);
   });
 });
 
