@@ -35,7 +35,7 @@ const CANVAS_PROBE = `(() => {
         const y0 = bl === "top" || bl === "hanging" ? rest[1] : bl === "middle" ? rest[1] - px / 2 : bl === "bottom" || bl === "ideographic" ? rest[1] - px : rest[1] - px * 0.8;
         const pts = [[x0, y0], [x0 + w, y0], [x0, y0 + px], [x0 + w, y0 + px]].map(([x, y]) => [(m.a * x + m.c * y + m.e) * (cr.width / (c.width || 1)) + cr.left, (m.b * x + m.d * y + m.f) * css + cr.top]);
         const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-        if (this.globalAlpha > 0.15) window.__textLog.push({ text: String(text).slice(0, 48), px: px * Math.hypot(m.c, m.d) * css, x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
+        if (this.globalAlpha > 0.15) window.__textLog.push({ text: String(text), px: px * Math.hypot(m.c, m.d) * css, x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
       } catch {}
       return orig.call(this, text, ...rest);
     };
@@ -78,7 +78,7 @@ const MEASURE_TEXT = () => {
     r.selectNodeContents(n);
     for (const rc of r.getClientRects()) {
       if (rc.width < 1 || rc.height < 1 || rc.right < 0 || rc.bottom < 0 || rc.left > W || rc.top > H) continue;
-      out.push({ text: text.slice(0, 48), px: rc.height / emRatio(getComputedStyle(el)), x: rc.left, y: rc.top, w: rc.width, h: rc.height });
+      out.push({ text, px: rc.height / emRatio(getComputedStyle(el)), x: rc.left, y: rc.top, w: rc.width, h: rc.height });
       break;
     }
   }
@@ -226,10 +226,10 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
       const small = new Map();
       for (const { found } of frames) for (const x of found) if (x.px < MIN_TEXT_PX - SIZE_SLACK && !small.has(x.text)) small.set(x.text, x.px);
       const box = textOutsideSafeBox(frames.flatMap(({ t, found }) => found.map((x) => ({ ...x, t }))), meta.format);
-      if (box.outside.length) errors.push(`safe box: ${box.outside.length} text item(s) outside it, e.g. ${box.outside.slice(0, 3).map((o) => `"${o.text}" at t=${o.t.toFixed(1)}s (${Math.round(o.x)},${Math.round(o.y)})`).join(", ")} - readable text stays inside the safe box (atmosphere may bleed out)`);
+      if (box.outside.length) errors.push(`safe box: ${box.outside.length} text item(s) outside it, e.g. ${box.outside.slice(0, 3).map((o) => `"${o.text.slice(0, 48)}" at t=${o.t.toFixed(1)}s (${Math.round(o.x)},${Math.round(o.y)})`).join(", ")} - readable text stays inside the safe box (atmosphere may bleed out)`);
       const noAttr = frames.filter(({ found }) => !attributionPresent(found.map((x) => x.text)).ok).map(({ t }) => t.toFixed(1));
       if (noAttr.length) errors.push(`attribution "${ATTRIBUTION}" is not visible at t=${noAttr.join(", ")}s - it must be on screen for the whole run`);
-      if (small.size) errors.push(`text too small: ${small.size} text item(s) under ${MIN_TEXT_PX} px, e.g. ${[...small].slice(0, 4).map(([s, px]) => `"${s}" ${px.toFixed(0)}px`).join(", ")} - every readable text must be >= ${MIN_TEXT_PX} px; drop it or enlarge it`);
+      if (small.size) errors.push(`text too small: ${small.size} text item(s) under ${MIN_TEXT_PX} px, e.g. ${[...small].slice(0, 4).map(([s, px]) => `"${s.slice(0, 48)}" ${px.toFixed(0)}px`).join(", ")} - every readable text must be >= ${MIN_TEXT_PX} px; drop it or enlarge it`);
     }
   } catch (e) {
     errors.push(`page failed: ${e.message.split("\n")[0]}`);
