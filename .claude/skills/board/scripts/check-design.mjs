@@ -9,7 +9,10 @@ import { assessClockLabels, assessFrameFacts, assessLongevity, ATTRIBUTION, attr
 
 /** Owner rule (2026-10-01): nothing on screen is small. Every readable text is >= 28 px in the artboard. */
 export const MIN_TEXT_PX = 28;
-const LINE_TO_EM = 1.21; // rendered line box / font-size for the staged faces (measured: Barlow, Inter 1.21; JetBrains 1.32)
+// A text box's height is its face's ascent + descent, which differs per face (Barlow and Inter 1.21 em,
+// JetBrains Mono 1.32 em), so MEASURE_TEXT measures each computed face once at 100 px instead of
+// assuming one ratio: a single 1.21 let 25 px JetBrains Mono read as 27.3 px and pass the floor.
+const SIZE_SLACK = 0.5; // px: float noise of an exact measurement, not a tolerance on the owner's floor
 
 // Canvas text has no DOM: record each fillText/strokeText with its effective size in artboard px.
 const CANVAS_PROBE = `(() => {
@@ -40,9 +43,27 @@ const CANVAS_PROBE = `(() => {
 })();`;
 
 /** Readable text drawn at the current frame, with its effective size in artboard px. */
-const MEASURE_TEXT = (lineToEm) => {
+const MEASURE_TEXT = () => {
   const out = (window.__textLog || []).filter((x) => /[A-Za-z0-9]/.test(x.text));
   window.__textLog = [];
+  // text box height per em of each computed face, measured once at 100 px (cached for the page)
+  const ratios = (window.__emRatio ??= new Map());
+  const emRatio = (cs) => {
+    const key = `${cs.fontStyle}|${cs.fontWeight}|${cs.fontStretch}|${cs.fontFamily}`;
+    if (!ratios.has(key)) {
+      const s = document.createElement("span");
+      s.style.cssText = "position:absolute;left:-10000px;top:0;white-space:nowrap;line-height:normal;font-size:100px";
+      Object.assign(s.style, { fontFamily: cs.fontFamily, fontWeight: cs.fontWeight, fontStyle: cs.fontStyle, fontStretch: cs.fontStretch });
+      s.textContent = "Hg";
+      document.body.appendChild(s);
+      const r = document.createRange();
+      r.selectNodeContents(s.firstChild);
+      const h = r.getClientRects()[0]?.height;
+      s.remove();
+      ratios.set(key, h > 0 ? h / 100 : 1.21);
+    }
+    return ratios.get(key);
+  };
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const W = innerWidth, H = innerHeight;
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -57,7 +78,7 @@ const MEASURE_TEXT = (lineToEm) => {
     r.selectNodeContents(n);
     for (const rc of r.getClientRects()) {
       if (rc.width < 1 || rc.height < 1 || rc.right < 0 || rc.bottom < 0 || rc.left > W || rc.top > H) continue;
-      out.push({ text: text.slice(0, 48), px: rc.height / lineToEm, x: rc.left, y: rc.top, w: rc.width, h: rc.height });
+      out.push({ text: text.slice(0, 48), px: rc.height / emRatio(getComputedStyle(el)), x: rc.left, y: rc.top, w: rc.width, h: rc.height });
       break;
     }
   }
@@ -151,7 +172,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
         // one pass per sample frame: clock, optional frameFacts, and the frame's visible text (MEASURE_TEXT)
         const clock = await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); return Number(window.statreel.dataClock(tt)); }, t);
         const hash = await shot();
-        const texts = (await page.evaluate(MEASURE_TEXT, LINE_TO_EM)).map(({ text, px }) => ({ text, px }));
+        const texts = (await page.evaluate(MEASURE_TEXT)).map(({ text, px }) => ({ text, px }));
         const declared = await page.evaluate((tt) => (typeof window.statreel.frameFacts === "function" ? window.statreel.frameFacts(tt) ?? null : null), t);
         samples.push({ t, clock, hash, texts, declared });
       }
@@ -178,9 +199,9 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
       for (const f of [0.1, 0.3, 0.5, 0.7, 0.9]) {
         const t = Math.round(meta.duration_s * f * 30) / 30;
         await page.evaluate(async (tt) => { window.__textLog = []; await window.statreel.seek(tt); }, t);
-        const found = await page.evaluate(MEASURE_TEXT, LINE_TO_EM);
+        const found = await page.evaluate(MEASURE_TEXT);
         frames.push({ t, found });
-        for (const x of found) if (x.px < MIN_TEXT_PX - 1 && !small.has(x.text)) small.set(x.text, x.px);
+        for (const x of found) if (x.px < MIN_TEXT_PX - SIZE_SLACK && !small.has(x.text)) small.set(x.text, x.px);
       }
       // safe box + attribution gates (lib.textOutsideSafeBox / attributionPresent): same frames, same capture
       const box = textOutsideSafeBox(frames.flatMap(({ t, found }) => found.map((x) => ({ ...x, t }))), meta.format);
