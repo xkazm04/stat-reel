@@ -164,12 +164,29 @@ export function eraPropsJsonSchema(): unknown {
   return zodToJsonSchema(inner, "EraAdjustedProps");
 }
 
-/** Every figure in props must equal the fact it cites. Returns human-readable problems. */
+/** A fact as a number: a finite number, or a numeric string (a DECIMAL handed back as text); otherwise null. */
+const numericFact = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && /^\s*-?\d+(\.\d+)?([eE][+-]?\d+)?\s*$/.test(v)) return Number(v);
+  return null;
+};
+
+/**
+ * Every figure in props must equal the fact it cites. Returns human-readable problems. A fact that is not
+ * a number (a text column, a null, an empty string) never traces a figure: `Number()` would turn it into
+ * NaN, which no comparison flags, or into a confident 0.
+ */
 export function untracedFigures(props: EraAdjustedProps, facts: Map<string, number | string>): string[] {
   const problems: string[] = [];
   const check = (who: string, key: string, value: number) => {
-    if (!facts.has(key)) problems.push(`${who}: unknown fact ${key}`);
-    else if (Math.abs(Number(facts.get(key)) - value) > 1e-6) problems.push(`${who}: ${value} != fact ${key} = ${facts.get(key)}`);
+    if (!facts.has(key)) {
+      problems.push(`${who}: unknown fact ${key}`);
+      return;
+    }
+    const raw = facts.get(key);
+    const fact = numericFact(raw);
+    if (fact === null) problems.push(`${who}: ${value} cites ${key}, which is not a number (${JSON.stringify(raw)})`);
+    else if (Math.abs(fact - value) > 1e-6) problems.push(`${who}: ${value} != fact ${key} = ${raw}`);
   };
   for (const r of props.rows) {
     check(r.name, r.raw_fact_key, r.raw_value);

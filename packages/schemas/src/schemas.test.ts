@@ -92,6 +92,24 @@ describe("fact binding (ADR 003 #2)", () => {
     expect(problems.some((p) => p.includes("999"))).toBe(true);
     expect(problems.some((p) => p.includes("unknown fact"))).toBe(true);
   });
+
+  it("refuses a figure citing a fact that is not a number (text column, null, empty)", () => {
+    const props = EraAdjustedPropsSchema.parse(sampleEraProps);
+    const r0 = props.rows[0] as (typeof props.rows)[number];
+    const known = new Map<string, number | string>();
+    for (const r of props.rows) {
+      known.set(r.raw_fact_key, r.raw_value);
+      known.set(r.adjusted_fact_key, r.adjusted_value);
+      known.set(r.raw_rank_fact_key, r.raw_rank);
+      known.set(r.adjusted_rank_fact_key, r.adjusted_rank);
+    }
+    for (const bad of ["Juan Manuel Fangio", null, ""] as unknown as (number | string)[]) {
+      const facts = new Map(known).set(r0.raw_fact_key, bad);
+      expect(untracedFigures(props, facts), String(bad)).toEqual([`${r0.name}: ${r0.raw_value} cites ${r0.raw_fact_key}, which is not a number (${JSON.stringify(bad)})`]);
+    }
+    // a numeric string (a DECIMAL the driver hands back as text) is still a number
+    expect(untracedFigures(props, new Map(known).set(r0.raw_fact_key, String(r0.raw_value)))).toEqual([]);
+  });
 });
 
 describe("script tokens (ADR 003 #7)", () => {
