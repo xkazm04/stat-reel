@@ -18,7 +18,13 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "statreel-flow-"));
   db = openDb(path.join(dir, "app.sqlite"));
   queue = new GenerationQueue(db);
-  flow = new GenerationFlow({ db, board: new BoardService(db, dir), cases: new CaseIdeas(db), queue, gate: () => ({ ok: true }) });
+  flow = new GenerationFlow({
+    db,
+    board: new BoardService(db, dir),
+    cases: new CaseIdeas(db),
+    queue,
+    gate: () => ({ ok: true }),
+  });
 });
 afterEach(() => {
   db.$client.close();

@@ -54,14 +54,28 @@ describe("MCP catalogs are scoped per agent (least privilege)", () => {
     const client = new Client({ name: "t", version: "0" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([buildGenerationMcpServer({} as Tools, {} as GenerationMcpTools).connect(a), client.connect(b)]);
-    const tools = Object.fromEntries((await client.listTools()).tools.map((t) => [t.name, t.inputSchema as { properties: Record<string, Record<string, unknown>>; required?: string[] }]));
+    const tools = Object.fromEntries(
+      (await client.listTools()).tools.map((t) => [
+        t.name,
+        t.inputSchema as { properties: Record<string, Record<string, unknown>>; required?: string[] },
+      ]),
+    );
     const timing = tools.compute_timing_plan;
     expect(timing?.required).toEqual(expect.arrayContaining(["job_id", "periods", "entities", "values"]));
-    expect(timing?.properties.periods).toMatchObject({ type: "array", minItems: 2, maxItems: DATA_RACE_LIMITS.maxPeriods });
-    expect(timing?.properties.entities).toMatchObject({ type: "array", minItems: 2, maxItems: DATA_RACE_LIMITS.maxEntities });
+    expect(timing?.properties.periods).toMatchObject({
+      type: "array",
+      minItems: 2,
+      maxItems: DATA_RACE_LIMITS.maxPeriods,
+    });
+    expect(timing?.properties.entities).toMatchObject({
+      type: "array",
+      minItems: 2,
+      maxItems: DATA_RACE_LIMITS.maxEntities,
+    });
     expect(timing?.properties.events).toMatchObject({ type: "array", maxItems: DATA_RACE_LIMITS.maxEvents });
     expect(timing?.properties.opts).toMatchObject({ type: "object", additionalProperties: false });
-    for (const k of ["periods", "entities", "values", "events", "opts"]) expect(Object.keys(timing?.properties[k] ?? {})).not.toEqual([]);
+    for (const k of ["periods", "entities", "values", "events", "opts"])
+      expect(Object.keys(timing?.properties[k] ?? {})).not.toEqual([]);
     const fetch = tools.fetch_asset;
     expect(fetch?.properties.kind).toMatchObject({ enum: [...ASSET_KINDS] });
     expect(fetch?.properties.url).toMatchObject({ minLength: 1, maxLength: 2000 });
@@ -80,10 +94,16 @@ describe("MCP catalogs are scoped per agent (least privilege)", () => {
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([buildGenerationMcpServer({} as Tools, gen).connect(a), client.connect(b)]);
     const entities = Array.from({ length: 11 }, (_, i) => `e${i}`);
-    const bad = await client.callTool({ name: "compute_timing_plan", arguments: { job_id: "gj-0123abcd", periods: ["a", "b"], entities, values: {} } });
+    const bad = await client.callTool({
+      name: "compute_timing_plan",
+      arguments: { job_id: "gj-0123abcd", periods: ["a", "b"], entities, values: {} },
+    });
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.content)).toMatch(/entities/);
-    const ok = await client.callTool({ name: "compute_timing_plan", arguments: { job_id: "gj-0123abcd", periods: ["a", "b"], entities: ["x", "y"], values: { x: [1, 2], y: [2, 1] } } });
+    const ok = await client.callTool({
+      name: "compute_timing_plan",
+      arguments: { job_id: "gj-0123abcd", periods: ["a", "b"], entities: ["x", "y"], values: { x: [1, 2], y: [2, 1] } },
+    });
     expect(ok.isError).toBeFalsy();
     expect(seen).toHaveLength(1);
   });

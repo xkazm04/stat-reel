@@ -7,15 +7,20 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GenerationConfigSchema, type GenerationJob } from "@statreel/schemas";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const spawned: FakeChild[] = [];
 type FakeChild = EventEmitter & { pid: number; stdin: PassThrough; stdout: PassThrough; stderr: PassThrough };
 vi.mock("node:child_process", async (importOriginal) => ({
   ...(await importOriginal<typeof import("node:child_process")>()),
   spawn: () => {
-    const c = Object.assign(new EventEmitter(), { pid: 4242, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() });
+    const c = Object.assign(new EventEmitter(), {
+      pid: 4242,
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    });
     spawned.push(c);
     return c;
   },
@@ -39,7 +44,12 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-const JOB = { id: "gj-0123abcd", type: "visual_options", case_id: "ci-aaaaaaa1", board_item_id: null } as unknown as GenerationJob;
+const JOB = {
+  id: "gj-0123abcd",
+  type: "visual_options",
+  case_id: "ci-aaaaaaa1",
+  board_item_id: null,
+} as unknown as GenerationJob;
 
 function start() {
   const p = jobPaths(JOB.id, dir);
@@ -48,19 +58,33 @@ function start() {
   const lines: string[] = [];
   const config = GenerationConfigSchema.parse({});
   const engine = createLiveEngine({ config, dataRoot: dir, apiBase: "http://127.0.0.1:1", bin: "claude" });
-  const run = engine.run({ job: JOB, paths: p, config, signal: new AbortController().signal, setPid: () => {}, note: () => {}, log: (l) => lines.push(l) });
+  const run = engine.run({
+    job: JOB,
+    paths: p,
+    config,
+    signal: new AbortController().signal,
+    setPid: () => {},
+    note: () => {},
+    log: (l) => lines.push(l),
+  });
   const child = spawned[0] as FakeChild;
   return { p, lines, run, child };
 }
 
-const resultLine = (text: string) => `${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: text, session_id: "s", total_cost_usd: 0.5, num_turns: 3 })}\n`;
+const resultLine = (text: string) =>
+  `${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: text, session_id: "s", total_cost_usd: 0.5, num_turns: 3 })}\n`;
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 describe("live engine staging", () => {
   it("stages the DataRaceProps JSON Schema into refs/ (T9 has landed: nothing is pending)", async () => {
     const p = jobPaths(JOB.id, dir);
     mkdirSync(p.work, { recursive: true });
-    const engine = createLiveEngine({ config: GenerationConfigSchema.parse({}), dataRoot: dir, apiBase: "http://127.0.0.1:1", bin: "claude" });
+    const engine = createLiveEngine({
+      config: GenerationConfigSchema.parse({}),
+      dataRoot: dir,
+      apiBase: "http://127.0.0.1:1",
+      bin: "claude",
+    });
     const out = await engine.stage?.(JOB, p, { data_status: "staged" });
     expect(staged).toHaveLength(1);
     expect(JSON.stringify(staged[0]?.propsJsonSchema?.())).toContain("timing_plan_sha256");
