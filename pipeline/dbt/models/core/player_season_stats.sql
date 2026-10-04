@@ -1,6 +1,8 @@
 -- Per driver per season. Starts, wins, podiums and current-system points EXCLUDE the Indianapolis
--- 500; points_awarded is the historical total as awarded (all rounds). A driver who took over a
--- team-mate's car appears twice in one race: that is one start, and both classified results score.
+-- 500; points_awarded is the historical Grand Prix total as awarded (all rounds) and sprint_points the
+-- Sprint total (2021 onwards), kept apart so per-race and career "as awarded" figures stay Grand Prix
+-- only. A driver who took over a team-mate's car appears twice in one race: that is one start, and
+-- both classified results score.
 with results as (
     select r.*, m.is_indianapolis
     from {{ ref('player_match_results') }} r
@@ -16,14 +18,21 @@ agg as (
         coalesce(sum(points_current_system) filter (where not is_indianapolis), 0)           as points_current_system
     from results
     group by all
+),
+sprints as (
+    select season, driver_id as player_id, sum(points_awarded) as sprint_points
+    from {{ ref('stg_f1db__sprint_race_results') }}
+    group by all
 )
 select
     agg.*,
+    coalesce(sp.sprint_points, 0)::double                                                    as sprint_points,
     st.championship_position,
     coalesce(st.championship_won, false)                                                     as championship_won,
     s.races_held_excl_indianapolis                                                           as season_races,
     agg.points_current_system / nullif(25.0 * s.races_held_excl_indianapolis, 0)             as season_share
 from agg
 join {{ ref('seasons') }} s using (sport, season)
+left join sprints sp on sp.season = agg.season and sp.player_id = agg.player_id
 left join {{ ref('stg_f1db__season_driver_standings') }} st
     on st.season = agg.season and st.driver_id = agg.player_id

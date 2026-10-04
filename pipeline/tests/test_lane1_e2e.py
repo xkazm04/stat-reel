@@ -163,6 +163,20 @@ def test_titles_count_championships_won_not_the_leader_of_a_season_in_progress(r
     assert leader and not won.get(leader[0][0]), "fixture has a mid-season leader with no title"
 
 
+def test_driver_season_points_plus_sprint_points_reconcile_with_official_championship_points(replay_run):
+    """points_awarded is Grand Prix only; sprint_points carries the Sprint part (2021 on), so the two add up to
+    f1db's championship points in every season without dropped scores (1991 on)."""
+    con = replay_run["con"]
+    rows = con.execute("""
+        select d.season, d.player_id, d.points_awarded, d.sprint_points, o.championship_points
+        from llm.f1_driver_seasons d
+        join staging_f1db.stg_f1db__season_driver_standings o on o.season = d.season and o.driver_id = d.player_id
+        where d.season >= 1991""").fetchall()
+    assert {r[0] for r in rows} >= {2008, 2024, 2025, 2026}
+    assert [r for r in rows if abs(r[2] + r[3] - r[4]) > 1e-9] == []
+    assert any(r[3] > 0 for r in rows) and all(r[3] == 0 for r in rows if r[0] < 2021)
+
+
 def test_lineage_marks_every_model_legal_from_f1db(replay_run):
     con = replay_run["con"]
     rows = dict(con.execute("select model, license_class from meta.model_lineage").fetchall())
