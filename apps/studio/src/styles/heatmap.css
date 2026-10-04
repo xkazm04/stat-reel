@@ -1260,3 +1260,28 @@ a.tp-cell--video:hover,
   margin-left: auto;
   align-items: flex-end;
 }
+
+/* the cell layer on cards: left summary, the picture in the middle, notes down the right */
+.hl-body .card.hl-block {
+  margin-top: 0;
+}
+.hl-sum > .card__body {
+  display: grid;
+  gap: 14px;
+}
+.hl-side {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.hl-needs > .card__body {
+  display: grid;
+  gap: 16px;
+}
+.hl-caps .table-wrap {
+  max-width: 100%;
+}
+.hl-body {
+  grid-template-columns: minmax(300px, 0.95fr) minmax(0, 1.85fr) minmax(280px, 1.1fr);
+  gap: 0 16px;
+}

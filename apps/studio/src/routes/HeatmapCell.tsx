@@ -13,6 +13,7 @@ import type { HeatmapCell, Mode, Source, Sport, UseCase } from "@statreel/schema
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { errorText, type ProjectWithJobs } from "../api";
+import { Card } from "../components/Card";
 import { useCreateProject } from "../components/createProject";
 import { DnsList, FinishPicture, ModeSwitch, testWord } from "../components/finish";
 import { Arrow, StatusChip } from "../components/glyphs";
@@ -287,7 +288,7 @@ function CellBody(p: BodyProps) {
   return (
     <div className="hl-body">
       {/* ---- the cell */}
-      <section className="hl-sum" aria-labelledby="hl-title">
+      <Card className="hl-sum" pad="lg" aria-labelledby="hl-title">
         <p className="eyebrow">
           <span className="hl-lane">
             Lane {pad2(p.lane)} of {pad2(p.lanes)}
@@ -365,10 +366,7 @@ function CellBody(p: BodyProps) {
             : "none designed"}{" "}
           · {tested} of {cell.kinds.length} kind{cell.kinds.length === 1 ? "" : "s"} tested
         </p>
-        <div className="hl-block">
-          <h3 className="sec-h">
-            <span>In the studio · {mine.length}</span>
-          </h3>
+        <Card className="hl-block" title="In the studio" tag={mine.length} pad="sm">
           {mine.length ? (
             <ul className="hl-projects">
               {mine.map((x) => (
@@ -385,17 +383,17 @@ function CellBody(p: BodyProps) {
           ) : (
             <p className="hl-p">No project for this pairing yet.</p>
           )}
-        </div>
-      </section>
+        </Card>
+      </Card>
 
       {/* ---- what it needs */}
-      <section className="hl-needs" aria-label="What it needs">
-        <h3 className="sec-h">
-          <span>
-            Photo-finish · one lane per data kind · right of the line is allowed
-          </span>
-          <span>complexity stage {uc.stage}</span>
-        </h3>
+      <Card
+        className="hl-needs"
+        aria-label="What it needs"
+        title="Photo-finish"
+        tag="one lane per data kind · right of the line is allowed"
+        actions={<span>complexity stage {uc.stage}</span>}
+      >
         {cell.kinds.length === 0 ? (
           <p className="hl-p">This use case declares no required data kind.</p>
         ) : (
@@ -404,21 +402,15 @@ function CellBody(p: BodyProps) {
             <CapTable cell={cell} sport={sport} caps={p.caps} />
           </>
         )}
-      </section>
+      </Card>
 
       {/* ---- around it */}
       <aside className="hl-side" aria-label="Never fetched, make next, attribution">
-        <div className="hl-block">
-          <h3 className="sec-h">
-            <span>Did not start · off-limits, never fetched · {never.length}</span>
-          </h3>
+        <Card className="hl-block" title="Did not start" tag={`off-limits, never fetched · ${never.length}`} pad="sm">
           <DnsList sources={never} empty="No off-limits source touches this cell." />
-        </div>
+        </Card>
         <MakeNext {...p} />
-        <div className="hl-block">
-          <h3 className="sec-h">
-            <span>Attribution</span>
-          </h3>
+        <Card className="hl-block" title="Attribution" pad="sm">
           {attributions.length ? (
             <p className="hl-attr">
               Every video from this cell carries: <b>{attributions.join(" · ")}</b>
@@ -427,7 +419,7 @@ function CellBody(p: BodyProps) {
             <p className="hl-p">No passing source yet, so no attribution line.</p>
           )}
           {uc.notes ? <p className="hl-attr">{uc.notes}</p> : null}
-        </div>
+        </Card>
       </aside>
     </div>
   );
@@ -445,8 +437,7 @@ function CapTable({ cell, sport, caps }: { cell: HeatmapCell; sport: Sport; caps
   );
   if (!rows.length) return null;
   return (
-    <div className="hl-caps">
-      <h4 className="eyebrow">Capability tests · what was actually run</h4>
+    <Card className="hl-caps" title="Capability tests" tag="what was actually run" pad="none">
       <div className="table-wrap">
         <table className="tbl">
           <thead>
@@ -473,7 +464,7 @@ function CapTable({ cell, sport, caps }: { cell: HeatmapCell; sport: Sport; caps
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -485,10 +476,7 @@ function MakeNext({ uc, sport, mode, cell, cells, usecases, onCell }: BodyProps)
   const name = (id: string) => usecases.find((u) => u.id === id)?.name ?? id;
   const near = neighbours(cells, cell, stage, 4);
   return (
-    <div className="hl-block">
-      <h3 className="sec-h">
-        <span>Make next · this cell</span>
-      </h3>
+    <Card className="hl-block" title="Make next" tag="this cell" pad="sm">
       {fixes.length ? (
         <ol className="hl-fixes">
           {fixes.map((f) => (
@@ -556,6 +544,6 @@ function MakeNext({ uc, sport, mode, cell, cells, usecases, onCell }: BodyProps)
           </div>
         </>
       ) : null}
-    </div>
+    </Card>
   );
 }
