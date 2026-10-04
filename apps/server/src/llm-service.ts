@@ -133,7 +133,11 @@ export class LlmService {
       if (!prev) throw new Error(`unknown co-pilot session ${sessionId}`);
       if (prev.project_id !== projectId) throw new Error(`co-pilot session ${sessionId} belongs to another project, not ${projectId}`);
       // without the CLI's own id the follow-up would silently open a brand-new CLI session (no memory of this one)
-      if (!prev.external_session_id) throw new Error(`co-pilot session ${sessionId} has no CLI session to resume (the run ended before it started) - start a new session instead`);
+      if (!prev.external_session_id) {
+        // no ended_at yet = the first run is queued or still starting: telling the owner it "ended" sends them away from a live run
+        if (!prev.ended_at) throw new Error(`co-pilot session ${sessionId} is still running and has not reported its CLI session yet - wait for it to finish, then send the follow-up`);
+        throw new Error(`co-pilot session ${sessionId} has no CLI session to resume (the run ended before it started) - start a new session instead`);
+      }
       resume = prev.external_session_id;
     } else {
       sessionId = randomUUID();

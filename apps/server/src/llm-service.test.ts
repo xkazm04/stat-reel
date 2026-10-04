@@ -127,6 +127,16 @@ describe("LlmService session lifecycle", () => {
     expect(() => svc.start("p1", "more", session_id)).toThrow(/no CLI session to resume/);
   });
 
+  it("a follow-up sent before the first run reported its CLI session says the run is still going, not that it ended", async () => {
+    const { runner, svc } = setup(happy);
+    const { session_id } = svc.start("p1");
+    // the first run is queued/starting: no CLI session id yet, no ended_at
+    expect(() => svc.start("p1", "more", session_id)).toThrow(/still running.*wait for it to finish/);
+    expect(() => svc.start("p1", "more", session_id)).not.toThrow(/ended before it started/);
+    await runner.idle();
+    expect(() => svc.start("p1", "more", session_id)).not.toThrow();
+  });
+
   it("refuses a follow-up for an unknown session or another project's session", async () => {
     const other = { ...project, id: "p2" };
     const { runner, svc } = setup(happy, DEFAULT_LIMITS, { p1: project, p2: other });
