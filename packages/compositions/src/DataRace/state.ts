@@ -244,7 +244,8 @@ export function dataRaceState(props: DataRaceRenderProps, frame: number): DataRa
       offsetY: CARD.push.y * depth,
       scale: 1 - CARD.push.scale * depth,
       brightness: 1 - CARD.push.brightness * depth,
-      opacity: clamp01(1 - c.exit) * clamp01((frame - c.start + 1) / 3),
+      // a card sinking from depth 2 to the cap fades with the newer card's entrance instead of vanishing
+      opacity: clamp01(1 - c.exit) * clamp01((frame - c.start + 1) / 3) * clamp01(CARD.maxDepth - depth),
     });
   });
 

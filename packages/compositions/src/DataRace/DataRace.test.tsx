@@ -147,6 +147,24 @@ describe("event stack", () => {
     expect(CARD.maxDepth).toBe(3);
   });
 
+  it("a card pushed past the depth cap fades out with the newer card's entrance instead of vanishing", () => {
+    // four cards 20 frames apart: the fourth entrance buries the first at depth 3
+    const crowded: DataRaceRenderProps = {
+      ...props,
+      events: props.events.slice(0, 4).map((e, i) => ({ ...e, start_frame: 300 + i * 20 })),
+    };
+    const vanishing: string[] = [];
+    let prev = new Map<string, number>();
+    for (let f = 290; f < 520; f++) {
+      const cur = new Map(dataRaceState(crowded, f).cards.map((c) => [c.id, c.opacity]));
+      for (const [id, op] of prev) if (op - (cur.get(id) ?? 0) > 0.3) vanishing.push(`${id} at ${f}: ${op.toFixed(2)} -> ${(cur.get(id) ?? 0).toFixed(2)}`);
+      prev = cur;
+    }
+    expect(vanishing).toEqual([]);
+    // once the newest card is fully in, the buried card is gone and three remain
+    expect(dataRaceState(crowded, 300 + 3 * 20 + 30).cards).toHaveLength(3);
+  });
+
   it("never shows more than 3 cards, over the whole video", () => {
     let max = 0;
     for (let f = 0; f < plan.sections.total; f += 2) max = Math.max(max, dataRaceState(props, f).cards.length);
