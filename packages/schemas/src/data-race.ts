@@ -232,6 +232,14 @@ export const DataRacePropsSchema = DataRacePropsObject.superRefine((p, ctx) => {
   p.missing_logos.forEach((m, i) => {
     if (!entityIds.has(m)) add(["missing_logos", i], `missing_logos names unknown entity '${m}' (entities: ${known()})`);
   });
+  // a fixed axis below the data clips every larger bar to the same full width while its label differs
+  // (the composition clamps value / axis_max to 1): the trick axis of data-video-art-direction
+  if (p.axis_max !== undefined) {
+    let peak: { v: number; id: string } | undefined;
+    for (const e of p.entities) for (const v of e.values) if (v !== null && (!peak || v > peak.v)) peak = { v, id: e.id };
+    if (peak && p.axis_max < peak.v)
+      add(["axis_max"], `axis_max ${p.axis_max} is below the largest value ${peak.v} (entity '${peak.id}'): raise it to at least ${peak.v}, or omit it for the grow-only axis`);
+  }
 });
 export type DataRaceProps = z.infer<typeof DataRacePropsSchema>;
 /** The input shape (defaults not yet applied). */

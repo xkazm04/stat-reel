@@ -356,6 +356,13 @@ describe("rule 0: cross-field refinements (path + observed value)", () => {
     });
     expect(issues(r, "entities.0.values").join()).toMatch(/too many values \(one per period\): at most 120 fit/);
   });
+  it("rejects a fixed axis_max below the largest value (every bar above it would clip to full width)", () => {
+    // the base data peaks at 74 (juniper's last value: 10 + 9 + 11 * 5)
+    const r = run((p) => set(p, "axis_max", 70));
+    expect(issues(r, "axis_max").join()).toMatch(/axis_max 70 is below the largest value 74 \(entity 'juniper'\)/);
+    expect(codes(run((p) => set(p, "axis_max", 74)))).not.toContain("schema");
+    expect(codes(run((p) => set(p, "axis_max", 100)))).not.toContain("schema");
+  });
   it("accepts exactly the cap", () => {
     const r = run((p) => {
       p.periods = Array.from({ length: DATA_RACE_LIMITS.maxPeriods }, (_, i) => `P${i}`);
