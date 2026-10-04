@@ -141,3 +141,19 @@ describe("heatmap helpers", () => {
     );
   });
 });
+
+describe("text floor (shared.css --text-xs: nothing a user must read is smaller)", () => {
+  it("the heatmap and calendar styles set no font size under 12 px", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const read = (f: string) =>
+      readFileSync(fileURLToPath(new URL(`./styles/${f}`, import.meta.url)), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const floor = Number(/--text-xs:\s*(\d+)px/.exec(readFileSync(fileURLToPath(new URL("../../../packages/design-tokens/src/shared.css", import.meta.url)), "utf8"))?.[1]);
+    expect(floor).toBe(12);
+    for (const f of ["heatmap.css", "calendar.css"]) {
+      const sizes = [...read(f).matchAll(/font-size:\s*([\d.]+)px/g)].map((m) => Number(m[1]));
+      expect(sizes.length, f).toBeGreaterThan(10);
+      expect(sizes.filter((s) => s < floor), f).toEqual([]);
+    }
+  });
+});

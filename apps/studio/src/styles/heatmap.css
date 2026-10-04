@@ -1207,7 +1207,7 @@ html.hm-layer-open {
 .tp-none {
   grid-column: 1 / -1;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-dim);
   white-space: nowrap;
   justify-self: start;
@@ -1233,7 +1233,7 @@ a.tp-cell--video:hover,
   outline: 1px solid var(--color-signal);
   outline-offset: -1px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-brand);
 }
 .tp-foot {
