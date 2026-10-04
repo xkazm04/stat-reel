@@ -325,6 +325,20 @@ describe("publish job render pin + resumable upload (publish-job-render-pin-and-
     expect(ytUpload.mock.calls[1]?.[0].file).toContain("r-new");
   });
 
+  it("refuses to upload a render a second time once it is published (a double click, a slot after a direct publish)", async () => {
+    const { root, runner, pipeline } = setup();
+    addRender(root, pipeline, "r1", "2026-04-01T00:00:00Z");
+    ytUpload.mockResolvedValue({ id: "vid1", privacyStatus: "private", mode: "dry" });
+    expect((await publish(runner, {})).status).toBe("succeeded");
+    const again = await publish(runner, {});
+    expect(again.status).toBe("refused");
+    expect(again.error).toMatch(/render r1 is already published \(youtube, private, publication /);
+    addSlot(pipeline, "r1");
+    expect((await publish(runner, { scheduleId: "sl1" })).status).toBe("refused");
+    expect(ytUpload).toHaveBeenCalledTimes(1);
+    expect(pipeline.publications("p1")).toHaveLength(1);
+  });
+
   it("fails with a named error when the pinned render no longer exists", async () => {
     const { root, runner, pipeline } = setup();
     addRender(root, pipeline, "r-new", "2026-04-02T00:00:00Z");

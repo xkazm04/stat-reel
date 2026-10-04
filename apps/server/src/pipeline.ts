@@ -415,6 +415,10 @@ export class Pipeline implements PipelineApi {
       if (!render) throw new Error(`pinned render ${slot.render_id} (slot ${slot.id}) no longer exists`);
     }
     if (!render) throw new Error("no render to publish");
+    // one upload per render and publish mode: a second click, or a slot firing after a direct publish, must not
+    // create a second private video (a dry run does not block the live upload that follows the Google app)
+    const done = this.db.select().from(publications).where(eq(publications.render_id, render.id)).all().find((x) => x.mode === modes.publish);
+    if (done) throw new Refusal("publish", `render ${render.id} is already published (${done.platform}, ${done.visibility}, publication ${done.id}); render again to publish a new video`);
     const policy = render.policy_json ? JSON.parse(render.policy_json) : null;
     if (!policy?.allow) throw new Refusal("publish gate", (policy?.deny ?? ["not gated"]).join("; "));
     const manifest = JSON.parse(readFileSync(render.manifest_path, "utf8")) as ProvenanceManifest;
