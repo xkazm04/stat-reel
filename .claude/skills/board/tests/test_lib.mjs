@@ -299,6 +299,15 @@ test("frameFacts: a wrong value, a missing leader, an unknown driver and a perio
   assert.match(assessFrameFacts({ period: 1991, top: [{ name: "Senna", value: 2 }] }, tables, { clock: 1990.9 }).problems.join(), /dataClock=1990\.90/);
 });
 
+test("frameFacts: the period is pinned to the clock only when the clock counts seasons", () => {
+  // a race-unit design (one season, clock = round 1..N) declaring the standings it draws
+  const decl = { period: { season: 1990, round: 2 }, top: [{ name: "Prost", value: 1 }, { name: "Senna", value: 1 }] };
+  assert.deepEqual(assessFrameFacts(decl, tables, { clock: 2, unit: "race" }).problems, []);
+  assert.deepEqual(assessFrameFacts(decl, tables, { clock: 3, unit: "career-start" }).problems, []);
+  assert.match(assessFrameFacts(decl, tables, { clock: 1991.2, unit: "season" }).problems.join(), /dataClock=1991\.20/);
+  assert.match(assessFrameFacts(decl, tables, { clock: 1991.2 }).problems.join(), /dataClock=1991\.20/, "unit defaults to season");
+});
+
 test("frameFacts: a design that does not declare it is skipped, never failed", () => {
   for (const d of [undefined, null]) assert.deepEqual(assessFrameFacts(d, tables), { ok: true, declared: false, problems: [], note: "not declared" });
 });

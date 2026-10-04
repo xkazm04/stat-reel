@@ -185,7 +185,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
       const labels = assessClockLabels(samples, { unit: meta.timeline.unit });
       for (const p of labels.problems.slice(0, 3)) errors.push(`clock label: ${p}`);
       const declaredFrames = samples.filter((s) => s.declared);
-      const factProblems = declaredFrames.flatMap((s) => assessFrameFacts(s.declared, data.tables, { t: s.t, clock: s.clock }).problems);
+      const factProblems = declaredFrames.flatMap((s) => assessFrameFacts(s.declared, data.tables, { t: s.t, clock: s.clock, unit: meta.timeline.unit }).problems);
       for (const p of factProblems.slice(0, 3)) errors.push(`frameFacts: ${p}`);
       truth = { labels: { checked: labels.checked, unlabelled: labels.unlabelled, skipped: labels.skipped ?? null }, frameFacts: declaredFrames.length ? `${declaredFrames.length} frames recomputed` : "not declared" };
       const seen = new Map();

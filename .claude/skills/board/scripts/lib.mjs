@@ -301,7 +301,8 @@ const FRAME_FACT_METRICS = ["wins", "podiums", "points_awarded", "points_current
  * wins|podiums|points_awarded|points_current_system (default wins); `scope` "cumulative" (default,
  * career totals through the period, counted from `from` when the design's window starts later) or "season". Recomputed from the staged f1_race_results
  * (Indianapolis 500 excluded). Not declared -> `declared: false` and no failure. `ctx.clock` also
- * pins period.season to floor(dataClock).
+ * pins period.season to floor(dataClock) when `ctx.unit` is "season" (the default); a race or
+ * career-start clock counts rounds, not years, so it is not compared (as in assessClockLabels).
  */
 export function assessFrameFacts(declared, tables, ctx = {}) {
   if (declared === undefined || declared === null) return { ok: true, declared: false, problems: [], note: "not declared" };
@@ -317,7 +318,7 @@ export function assessFrameFacts(declared, tables, ctx = {}) {
   const results = tables?.f1_race_results;
   if (!Array.isArray(results)) problems.push(`${t}f1_race_results is not staged, frameFacts cannot be checked`);
   if (problems.length) return { ok: false, declared: true, problems };
-  if (typeof ctx.clock === "number" && period.season !== Math.floor(ctx.clock + CLOCK_EPS))
+  if ((ctx.unit ?? "season") === "season" && typeof ctx.clock === "number" && period.season !== Math.floor(ctx.clock + CLOCK_EPS))
     problems.push(`${t}frameFacts.period season ${period.season} but dataClock=${ctx.clock.toFixed(2)}`);
   const upTo = period.round ?? Infinity;
   const totals = new Map();
