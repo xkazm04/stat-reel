@@ -112,10 +112,17 @@ export class ProjectService {
     return { version, errors: [] };
   }
 
-  /** Update only the timing block (audio stage) without a new author version. */
-  attachTiming(id: string, timing: EraAdjustedProps["timing"]): number {
+  /**
+   * Update only the timing block (audio stage) without a new author version. `measuredOn` is the props
+   * version the timing was measured against: when an author version landed meanwhile (the audio job ran
+   * for minutes), the timing describes scenes that may no longer exist, so it is refused, not merged.
+   */
+  attachTiming(id: string, timing: EraAdjustedProps["timing"], measuredOn?: number): number {
     const cur = this.latestProps(id);
     if (!cur) throw new Error(`project ${id} has no props`);
+    if (measuredOn !== undefined && cur.version !== measuredOn) {
+      throw new Error(`props changed while the audio was made (v${measuredOn} -> v${cur.version}); produce again to time the new props`);
+    }
     // cur.props throws StalePropsError (version + first issue) for a row that no longer validates;
     // the merged result is validated again so an unvalidated timing block is never stored
     const merged = EraAdjustedPropsSchema.safeParse({ ...cur.props, timing });

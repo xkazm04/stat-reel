@@ -67,7 +67,25 @@ describe("audio job cancellation (pipeline-real-cancel-cleanup)", () => {
     expect(tts).toHaveBeenCalledTimes(1); // the second scene's provider call was never made
     expect(attachTiming).not.toHaveBeenCalled();
   });
+
+  it("attaches the timing to the props version it was measured on (a newer author version refuses it)", async () => {
+    const { root, runner, attachTiming } = setup();
+    tts.mockImplementation(async () => voicedTake(root));
+    const id = runner.enqueue("audio", { projectId: "p1", chain: false }, "p1");
+    await runner.idle();
+    expect(runner.get(id)?.status).toBe("succeeded");
+    expect(attachTiming).toHaveBeenCalledWith("p1", expect.objectContaining({ duration_s: expect.any(Number) }), propsRow.version);
+  });
 });
+
+/** A finished TTS take of "hello" (real alignment, so words and cues build), with the asset the cache reported. */
+function voicedTake(root: string, asset: Record<string, unknown> = {}) {
+  const file = path.join(root, `take-${Math.random().toString(36).slice(2)}.mp3`);
+  writeFileSync(file, "x");
+  const chars = [..."hello"];
+  const alignment = { characters: chars, character_start_times_seconds: chars.map((_, i) => i * 0.1), character_end_times_seconds: chars.map((_, i) => i * 0.1 + 0.1) };
+  return { durationS: 0.5, audioPath: file, alignment, asset: { kind: "tts", sha256: createHash("sha256").update(file).digest("hex"), ...asset } };
+}
 
 describe("render cleanup on failure / cancel", () => {
   beforeEach(() => runWorker.mockReset());

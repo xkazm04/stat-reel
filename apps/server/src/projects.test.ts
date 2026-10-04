@@ -176,6 +176,15 @@ describe("validated props reads", () => {
     expect(svc.latestProps(p.id)?.created_by).toBe("system");
   });
 
+  it("attachTiming refuses timing measured on an older props version than the latest, and stores nothing", () => {
+    const { svc, p, put } = setup();
+    put(1, sampleEraProps);
+    put(2, sampleEraProps); // a new author version stored while the audio job ran on v1
+    expect(() => svc.attachTiming(p.id, undefined, 1)).toThrow(/props changed while the audio was made \(v1 -> v2\)/);
+    expect(svc.propsHistory(p.id)).toHaveLength(2);
+    expect(svc.attachTiming(p.id, undefined, 2)).toBe(3); // the version it was measured on is still the latest
+  });
+
   it("attachTiming rejects a malformed timing block instead of storing it", () => {
     const { svc, p, put } = setup();
     put(1, sampleEraProps);

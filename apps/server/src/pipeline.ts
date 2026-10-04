@@ -235,7 +235,7 @@ export class Pipeline implements PipelineApi {
         path: "", sha256: a.sha256!, generated_at: a.generated_at ?? now(),
       }).run();
     }
-    this.projects.attachTiming(p.projectId, timing);
+    this.projects.attachTiming(p.projectId, timing, propsRow.version);
     ctx.progress(1, "audio ready");
     if (p.chain && p.target && !ctx.signal.aborted) this.runner.enqueue("render", { projectId: p.projectId, target: p.target }, p.projectId);
     return { duration_s: duration, cues: cues.length, max_cps: maxCps(cues), music_cues: plan.cues.length, budget: budget.snapshot() };
