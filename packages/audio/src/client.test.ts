@@ -202,6 +202,19 @@ describe("ElevenLabsClient", () => {
     expect(calls[0]?.url).toBe("https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128");
   });
 
+  it("a billed 200 with an unusable body keeps the provider's request-id for the support claim", async () => {
+    const empty = () => new Response(new Uint8Array(0), { status: 200, headers: { "request-id": "m-9" } });
+    const music = await client(mockFetch([empty]).fetch)
+      .c.composeMusic({ prompt: "bed", musicLengthMs: 5000, forceInstrumental: true })
+      .catch((e: unknown) => e);
+    expect(music).toBeInstanceOf(ProviderError);
+    expect((music as ProviderError).requestId).toBe("m-9");
+    const fa = await client(mockFetch([json(200, { loss: 1 }, { "request-id": "fa-1" })]).fetch)
+      .c.forcedAlignment(Buffer.from("mp3"), "Hi")
+      .catch((e: unknown) => e);
+    expect((fa as ProviderError).requestId).toBe("fa-1");
+  });
+
   it("forcedAlignment sends multipart file + text and converts to CharAlignment", async () => {
     const { fetch, calls } = mockFetch([
       json(200, {

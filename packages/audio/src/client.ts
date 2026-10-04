@@ -299,9 +299,9 @@ export class ElevenLabsClient {
     const req = buildMusicRequest(p);
     const res = await this.send(req, "music compose");
     const audio = Buffer.from(await res.arrayBuffer());
-    if (audio.length === 0)
-      throw new ProviderError("ElevenLabs music compose returned an empty body", { httpStatus: res.status });
     const requestId = res.headers.get("request-id") ?? undefined;
+    if (audio.length === 0)
+      throw new ProviderError("ElevenLabs music compose returned an empty body", { httpStatus: res.status, requestId });
     return requestId ? { audio, requestId } : { audio };
   }
 
@@ -312,7 +312,10 @@ export class ElevenLabsClient {
     const res = await this.send({ method: "POST", endpoint: "/v1/forced-alignment" }, "forced alignment", form);
     const json = (await res.json()) as Omit<ForcedAlignmentResult, "alignment">;
     if (!Array.isArray(json.characters) || !Array.isArray(json.words))
-      throw new ProviderError("ElevenLabs forced alignment returned no characters/words", { httpStatus: res.status });
+      throw new ProviderError("ElevenLabs forced alignment returned no characters/words", {
+        httpStatus: res.status,
+        requestId: res.headers.get("request-id") ?? undefined,
+      });
     return {
       characters: json.characters,
       words: json.words,
