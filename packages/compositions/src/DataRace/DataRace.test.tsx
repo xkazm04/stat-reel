@@ -23,6 +23,7 @@ import { buildSampleDataRace } from "./fixture";
 import { CHIP, CUE_BUDGET, raceChips } from "./chips";
 import { contrastRatio } from "./contrast";
 import { SPOTLIGHT_DIM, SPOTLIGHT_SCALE } from "./ending";
+import { cardLayout, footerLayout } from "./layout";
 import { LABEL_RIGHT, L, formatValue, valueLabelLayout } from "./parts";
 import { CARD, type DataRaceRenderProps, AXIS_HEADROOM, axisMaxAt, dataRaceState, orderedEvents, phaseAt } from "./state";
 
@@ -478,11 +479,47 @@ describe("sample badge, colours, type", () => {
     expect(markup(midFrame)).toContain("tabular-nums");
   });
 
-  it("keeps text inside the safe box (y 150-1580)", () => {
-    const html = markup(midFrame);
-    const tops = [...html.matchAll(/top:\s*([\d.]+)px/g)].map((m) => Number(m[1]));
-    expect(Math.min(...tops.filter((t) => t > 100))).toBeGreaterThanOrEqual(150);
-    expect(1544 + 34).toBeLessThanOrEqual(1580);
+  it("keeps every positioned box inside the safe box (y 150-1580) on every scene, cards and badge included", () => {
+    const SAFE = { top: 150, bottom: 1580 };
+    const out: string[] = [];
+    let checked = 0;
+    const frames = [0, 30, midFrame, plan.sections.timeline_end - 1, plan.sections.timeline_end + 40, ...props.events.map((e) => e.start_frame + 20)];
+    for (const f of frames) {
+      // every box positioned against the frame itself (a full-frame layer such as the hook overlay counts
+      // as the frame), with a top and a height; boxes inside a row or a card are positioned by their parent
+      // per open element: true = the frame or a full-frame layer, false = a positioned box, null = an unpositioned wrapper
+      const stack: (boolean | null)[] = [];
+      for (const m of markup(f).matchAll(/<(\/?)([a-zA-Z]+)([^>]*?)(\/?)>/g)) {
+        if (m[1]) {
+          stack.pop();
+          continue;
+        }
+        const style = /style="([^"]*)"/.exec(m[3] as string)?.[1] ?? "";
+        const positioned = /position:(absolute|relative)/.test(style);
+        const top = /(?:^|;)top:(-?[\d.]+)px/.exec(style);
+        const height = /(?:^|;)height:([\d.]+)px/.exec(style);
+        const fullFrame = stack.length === 0 || (style.includes("top:0px") && Number(height?.[1]) >= L.height);
+        // the containing block is the nearest positioned ancestor; `null` entries are unpositioned wrappers
+        const parentIsFrame = [...stack].reverse().find((s) => s !== null) ?? true;
+        if (positioned && !fullFrame && parentIsFrame && top && height) {
+          const [t, b] = [Number(top[1]), Number(top[1]) + Number(height[1])];
+          checked++;
+          if (t < SAFE.top || b > SAFE.bottom) out.push(`frame ${f}: box ${t}-${b} (${style.slice(0, 60)})`);
+        }
+        if (!m[4]) stack.push(positioned ? fullFrame : null);
+      }
+      // the stacked cards (positioned by a transform) and the sample badge (sized by its content)
+      for (const c of dataRaceState(props, f).cards) {
+        const ev = props.events.find((e) => e.id === c.id) as (typeof props.events)[number];
+        const [t, b] = [L.cardTop + c.offsetY, L.cardTop + c.offsetY + cardLayout(ev).height * c.scale];
+        if (t < SAFE.top || b > SAFE.bottom) out.push(`frame ${f}: card ${c.id} ${t}-${b}`);
+      }
+    }
+    const foot = footerLayout(props.source_line);
+    if (foot.badgeY < SAFE.top || foot.badgeY + L.badgeH > foot.top) out.push(`badge ${foot.badgeY}-${foot.badgeY + L.badgeH} vs footer top ${foot.top}`);
+    expect(out).toEqual([]);
+    // the walk reached the frame-level boxes (title, unit, clock, rows, ticks, footer) on every frame
+    expect(checked).toBeGreaterThan(frames.length * 10);
   });
 });
 
