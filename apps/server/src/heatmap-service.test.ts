@@ -42,6 +42,30 @@ describe("HeatmapService snapshots (freshness)", () => {
     expect(await svc.current()).not.toBe(first);
   });
 
+  it("a warehouse that cannot be read is an error, never a snapshotted 'not tested' heatmap", async () => {
+    const db = openDb(":memory:");
+    let fail = true;
+    const wh = { rows: async () => {
+      if (fail) throw new Error("IO Error: Could not set lock on file \"warehouse.duckdb\"");
+      return [cap("hist", "2020-01-01T00:00:00")];
+    } } as unknown as Warehouse;
+    const svc = new HeatmapService(db, wh, new Set());
+    await expect(svc.current()).rejects.toThrow(/Could not set lock/);
+    expect(count(db)).toBe(0); // nothing for the trend to remember
+    fail = false;
+    const cells = await svc.current(); // nothing was cached: the next read computes from the real capabilities
+    expect(cells.some((c) => c.kinds.some((k) => k.tested))).toBe(true);
+  });
+
+  it("a warehouse with no meta.capabilities yet (no transform has run) reads as nothing tested", async () => {
+    // DuckDB's two wordings: the meta schema is missing, or only the table is
+    for (const message of ["Catalog Error: Table with name \"meta.capabilities\" does not exist because schema \"meta\" does not exist.",
+      "Catalog Error: Table with name capabilities does not exist!\nDid you mean \"pg_catalog.pg_tables\"?"]) {
+      const wh = { rows: async () => { throw new Error(message); } } as unknown as Warehouse;
+      expect(await new HeatmapService(openDb(":memory:"), wh, new Set()).capabilities()).toEqual([]);
+    }
+  });
+
   it("serves capabilities with the pipeline's staleness window attached (live only)", async () => {
     const svc = new HeatmapService(openDb(":memory:"), fakeWh(() => [cap("live", "2026-10-01T00:00:00"), cap("hist", "2026-10-01T00:00:00")]), new Set());
     const caps = (await svc.capabilities()) as Capability[];

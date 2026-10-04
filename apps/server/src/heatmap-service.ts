@@ -22,7 +22,10 @@ function stalenessWindows(): Map<string, number> {
   return out;
 }
 
-const hashCells = (cells: HeatmapCell[]) => createHash("sha256").update(JSON.stringify(cells)).digest("hex");
+/** DuckDB's message when meta.capabilities (or the meta schema) does not exist yet. */
+const NO_CAPABILITIES_TABLE = /^Catalog Error: Table with name "?(meta\.)?capabilities"? does not exist/;
+
+const hashCells =(cells: HeatmapCell[]) => createHash("sha256").update(JSON.stringify(cells)).digest("hex");
 
 export class HeatmapService {
   private cache?: HeatmapCell[];
@@ -40,13 +43,17 @@ export class HeatmapService {
   }
 
   async capabilities(): Promise<Capability[]> {
+    let rows: Capability[];
     try {
-      const windows = stalenessWindows();
-      const rows = (await this.wh.rows("select * from meta.capabilities")) as unknown as Capability[];
-      return rows.map((c) => ({ ...c, max_staleness_days: windows.get(`${c.sport}|${c.kind}|${c.source_id}`) ?? null }));
-    } catch {
-      return []; // no transform has run yet: every cell reports "not tested"
+      rows = (await this.wh.rows("select * from meta.capabilities")) as unknown as Capability[];
+    } catch (e) {
+      // no transform has run yet (the table or its schema is missing): every cell reports "not tested".
+      // Any other failure is an error: read as "nothing tested" it would be snapshotted into the trend and cached.
+      if (e instanceof Error && NO_CAPABILITIES_TABLE.test(e.message)) return [];
+      throw e;
     }
+    const windows = stalenessWindows();
+    return rows.map((c) => ({ ...c, max_staleness_days: windows.get(`${c.sport}|${c.kind}|${c.source_id}`) ?? null }));
   }
 
   /**
