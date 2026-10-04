@@ -17,7 +17,7 @@ const write = (generation: unknown, extra: object = {}) => writeFileSync(file, J
 describe("generation config precedence: default < file < env", () => {
   it("defaults when there is no file", () => {
     const { config, sources } = loadGenerationConfig({ file, env: {} });
-    expect(config.model).toBe("claude-sonnet-5-5");
+    expect(config.model).toBe("sonnet");
     expect(config.budgetUsd).toBeNull();
     expect(config.timeoutMin).toBeNull();
     expect(sources.model).toBe("default");

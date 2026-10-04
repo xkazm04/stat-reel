@@ -99,7 +99,7 @@ export const GenerationConfigSchema = z.object({
     })
     .default({}),
   /** Pinned by full id; verified with `claude -p --model <id>` (docs/specs/2026-10-03-app-refresh/T8-probe-results.md). */
-  model: z.string().regex(MODEL_ID_RE, "model id has unexpected characters").default("claude-sonnet-5-5"),
+  model: z.string().regex(MODEL_ID_RE, "model id has unexpected characters").default("sonnet"),
   fallbackModel: z.string().regex(MODEL_ID_RE).nullable().default(null),
   effort: z.enum(["low", "medium", "high", "xhigh", "max"]).nullable().default(null),
   /** never bypassPermissions: it is not in the enum, so config load refuses it */

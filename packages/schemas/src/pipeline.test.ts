@@ -48,7 +48,7 @@ describe("generation schemas", () => {
     expect(c.timeoutMin).toBeNull();
     expect(c.permissionMode).toBe("dontAsk");
     expect(c.web.search && c.web.fetch).toBe(true);
-    expect(c.model).toBe("claude-sonnet-5-5");
+    expect(c.model).toBe("sonnet");
   });
   it("refuses bypassPermissions and dangerous extraArgs", () => {
     expect(GenerationConfigSchema.safeParse({ permissionMode: "bypassPermissions" }).success).toBe(false);

@@ -64,7 +64,7 @@
 - **New exposure from the web:** prompt injection and GET-based exfiltration. Mitigated by the absence of a shell, writes confined to the job folder, a read-only data MCP, `fetch_asset` rules, an optional `fetchDomains` allowlist, and output validation.
 - **Unbounded cost and runtime** until caps are configured. Cancel is always available.
 - **Resolved in T8** (details and commands in `docs/specs/2026-10-03-app-refresh/T8-probe-results.md`):
-  - model id: `claude-sonnet-5-5` works (`sonnet` aliases to it), `claude-sonnet-5.5` does not;
+  - model id: `claude-sonnet-5-5` works (`sonnet` aliases to it), `claude-sonnet-5.5` does not. **Owner decision 2026-10-04: the default is the floating `sonnet` alias** (a pinned id stays available through `STATREEL_GEN_MODEL` / `.statreel/config.json`); the resolved model is recorded in each run's result;
   - `--restricted` keeps WebSearch/WebFetch when `--tools` names them, so it stays; file confinement needs it;
   - `WebFetch(domain:...)` rules work under `dontAsk`;
   - the `mcp__statreel__*` wildcard is accepted; the CLI exits about 0.6 s after `result` with an HTTP MCP server;

@@ -234,7 +234,7 @@ describe("worker", () => {
     const p = jobPaths(j.id, dir);
     expect(JSON.parse(readFileSync(p.caseJson, "utf8")).title).toBe(`Case ${CASE_A}`);
     expect(readFileSync(p.runLog, "utf8")).toContain("finalize ok");
-    expect(JSON.parse(done.params_json)).toMatchObject({ mode: "fake", model: "claude-sonnet-5-5", timeoutMin: null, budgetUsd: null });
+    expect(JSON.parse(done.params_json)).toMatchObject({ mode: "fake", model: "sonnet", timeoutMin: null, budgetUsd: null });
     expect(await w.tick()).toBe("idle");
   });
 

@@ -28,7 +28,7 @@ Command (3 runs, prompt "Reply OK" on stdin):
 | `claude-sonnet-5.5` | 1 | "There's an issue with the selected model (claude-sonnet-5.5). It may not exist or you may not have access to it." | none |
 | `sonnet` (alias) | 0 | OK | `claude-sonnet-5-5` |
 
-Pinned default: **`claude-sonnet-5-5`** (`packages/schemas/src/generation.ts`). The ADR-005 spelling
+Probed default: `claude-sonnet-5-5`; **owner decision 2026-10-04: the shipped default is the `sonnet` alias** (`packages/schemas/src/generation.ts`), which resolves to it today. The ADR-005 spelling
 `claude-sonnet-5.5` does not work. Side effect seen: without `--strict-mcp-config` the session also loaded
 the account's claude.ai connectors (Gmail, Calendar, Drive, monday.com); the runner always passes
 `--strict-mcp-config`.

@@ -15,7 +15,7 @@ describe("buildClaudeArgs (flags verified against claude 2.1.288)", () => {
   it("default args for each type", () => {
     for (const type of ["visual_options", "generate_video"] as const) {
       expect(build({}, type)).toEqual([
-        "-p", "--restricted", "--output-format", "stream-json", "--verbose", "--model", "claude-sonnet-5-5",
+        "-p", "--restricted", "--output-format", "stream-json", "--verbose", "--model", "sonnet",
         "--permission-mode", "dontAsk", "--permission-prompts", "none",
         "--tools", "Read,Write,Edit,Glob,Grep,WebSearch,WebFetch",
         "--allowedTools", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "mcp__statreel__*",
