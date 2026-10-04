@@ -11,10 +11,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { api, qk } from "../api";
 import { formatSpend } from "./jobs";
+import { tailLog } from "./logtail";
 
 export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => void }) {
   const [text, setText] = useState("");
-  const offset = useRef(0);
   const pre = useRef<HTMLPreElement>(null);
   const root = useRef<HTMLElement>(null);
   const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
@@ -22,27 +22,11 @@ export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => vo
   close.current = onClose;
   const job = useQuery({ queryKey: [...qk.generation, "job", jobId], queryFn: () => api.generationJob(jobId), refetchInterval: (q) => (q.state.data?.job.status === "running" || q.state.data?.job.status === "queued" ? 2000 : false) });
   const live = job.data?.job.status === "running" || job.data?.job.status === "queued";
+  const statusRef = useRef<string | undefined>(undefined);
+  statusRef.current = job.data?.job.status;
 
-  useEffect(() => {
-    let stop = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const pull = async () => {
-      try {
-        const r = await api.generationLog(jobId, offset.current);
-        if (stop) return;
-        if (r.text) setText((t) => t + r.text);
-        offset.current = r.next;
-      } catch {
-        /* the next tick retries */
-      }
-      if (!stop) timer = setTimeout(pull, 2000);
-    };
-    void pull();
-    return () => {
-      stop = true;
-      clearTimeout(timer);
-    };
-  }, [jobId]);
+  // read in increments until the job is over and its log is read to the end (logtail.ts)
+  useEffect(() => tailLog({ read: (at) => api.generationLog(jobId, at), status: () => statusRef.current, onText: (t) => setText((x) => x + t), every: 2000 }), [jobId]);
 
   // focus in on open, back to the opener on close
   useEffect(() => {
