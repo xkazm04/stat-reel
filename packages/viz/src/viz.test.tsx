@@ -184,6 +184,15 @@ describe("slopegraphLayout", () => {
     expect(slopegraphLayout(rows12, { ...zone, height: 300 }).overflow).toBe(true);
   });
 
+  it("flags overflow when the names leave the slopes less than the minimum span", () => {
+    const name = `A ${"W".repeat(26)}`;
+    const rows = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, name, left: i + 1, right: 6 - i }));
+    const l = slopegraphLayout(rows, zone);
+    expect(l.fontSize).toBe(28);
+    expect(l.plot.rightX - l.plot.leftX).toBeLessThan(zone.width * 0.26);
+    expect(l.overflow).toBe(true);
+  });
+
   it("is deterministic", () => {
     const a = slopegraphLayout(rows12, { ...zone, titles });
     const b = slopegraphLayout(rows12, { ...zone, titles });

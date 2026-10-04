@@ -64,7 +64,8 @@ export type SlopegraphLayout = {
   /** vertical distance between adjacent label centres (the minimum over both axes) */
   spacing: number;
   minLabelGap: number;
-  /** true when the rows could not be fitted at minLabelGap inside the height */
+  /** true when the rows could not be fitted at minLabelGap inside the height, or the names leave the
+   * slopes less than the minimum span (26 % of the width) even at the smallest font */
   overflow: boolean;
   plot: { top: number; bottom: number; leftX: number; rightX: number };
   header: {
@@ -258,7 +259,7 @@ export function slopegraphLayout(rows: readonly SlopeRow[], opts: SlopegraphLayo
     subFontSize,
     spacing,
     minLabelGap,
-    overflow: spacing < minLabelGap - 1e-6 || outside,
+    overflow: spacing < minLabelGap - 1e-6 || outside || m.span < minSpan,
     plot: { top: plotTop, bottom: plotBottom, leftX, rightX },
     header: {
       titleY,
