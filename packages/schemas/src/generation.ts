@@ -43,6 +43,9 @@ export const GenerationJobSchema = z.object({
   started_at: z.string().nullable(),
   finished_at: z.string().nullable(),
   updated_at: z.string(),
+  /** CLI spend summed over every attempt; null = no result event ever reported (unmeasurable is not zero). */
+  cost_usd: z.number().nullable(),
+  turns: z.number().int().nullable(),
 });
 export type GenerationJob = z.infer<typeof GenerationJobSchema>;
 

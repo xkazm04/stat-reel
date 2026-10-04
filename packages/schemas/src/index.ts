@@ -330,3 +330,19 @@ export * from "./timing-plan";
 export * from "./topics";
 export * from "./generation";
 export * from "./pipeline";
+
+/** A row of the app DB `jobs` table (apps/server/src/db.ts), as GET /api/jobs returns it. */
+export const JobRowSchema = z.object({
+  id: z.string(),
+  kind: JobKind,
+  project_id: z.string().nullable(),
+  status: JobStatus,
+  progress: z.number(),
+  params_json: z.string(),
+  result_json: z.string().nullable(),
+  error: z.string().nullable(),
+  created_at: z.string(),
+  started_at: z.string().nullable(),
+  finished_at: z.string().nullable(),
+});
+export type JobRow = z.infer<typeof JobRowSchema>;

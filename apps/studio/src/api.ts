@@ -8,6 +8,7 @@ import type {
   Format,
   GenerationJob,
   HeatmapCell,
+  JobRow,
   Mode,
   PolicyResult,
   ProjectStatus,
@@ -20,19 +21,8 @@ import type {
 } from "@statreel/schemas";
 import type { Capability } from "./logic";
 
-export type Job = {
-  id: string;
-  kind: string;
-  project_id: string | null;
-  status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "refused";
-  progress: number;
-  params_json: string;
-  result_json: string | null;
-  error: string | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-};
+/** The `jobs` row as the API returns it: one definition, owned by @statreel/schemas. */
+export type Job = JobRow;
 
 export type Project = {
   id: string;
@@ -331,12 +321,9 @@ export type CaseIdea = {
 export type CasesResponse = { ideas: CaseIdea[]; decisions: CaseDecision[]; min_span_years: number };
 
 /** GET /api/generation/overview: the worker, the recent jobs and the derived stage of every accepted case (D.2, D.11). */
-/** The CLI spend ledger of a job row (summed over attempts); null/absent = never reported, which is not zero. */
-export type GenerationJobSpend = { cost_usd?: number | null; turns?: number | null };
-
 export type GenerationOverview = {
   worker: { online: boolean; pid: number | null; heartbeat_at: string | null; queued: number; running: number };
-  jobs: (GenerationJob & GenerationJobSpend & { queue_position?: number })[];
+  jobs: (GenerationJob & { queue_position?: number })[];
   cases: Record<
     string,
     {
@@ -441,7 +428,7 @@ export const api = {
     request<Omit<BoardItem, "image_url"> & { restored_ids?: string[] }>("DELETE", `/api/board/${enc(id)}/decision`),
   /** Generation queue (ADR 010): one call for every badge, plus the log, retry, cancel and manual enqueue. */
   generationOverview: () => request<GenerationOverview>("GET", "/api/generation/overview"),
-  generationJob: (id: string) => request<{ job: GenerationJob & GenerationJobSpend; stage: string | null; log_tail: string[] }>("GET", `/api/generation/jobs/${enc(id)}`),
+  generationJob: (id: string) => request<{ job: GenerationJob; stage: string | null; log_tail: string[] }>("GET", `/api/generation/jobs/${enc(id)}`),
   retryGeneration: (id: string) => request<{ job: GenerationJob }>("POST", `/api/generation/jobs/${enc(id)}/retry`),
   cancelGeneration: (id: string) => request<{ job: GenerationJob }>("POST", `/api/generation/jobs/${enc(id)}/cancel`),
   /** The manual "Generate video" button: runs the same data gate (409 `{gate}` when it fails). */
