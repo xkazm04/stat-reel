@@ -87,7 +87,8 @@ export function HeatmapTopics() {
             <Loading what="the topic heatmap" />
           </Card>
         ) : !rows.length ? (
-          <Card className="tp-card">
+          // the empty copy names "Show all topics", so the toggle stays on screen with no rows
+          <Card className="tp-card" title="Videos per topic" actions={<ShowAll all={all} setAll={setAll} />}>
             <div className="empty" data-testid="topics-empty">
               <b>No videos yet</b>
               A row appears for a topic once a case in it is accepted on the Board; cells fill as videos finish.{" "}
@@ -109,10 +110,7 @@ export function HeatmapTopics() {
               tag={`${rows.length} topic${rows.length === 1 ? "" : "s"} · ${totalVideos} video${totalVideos === 1 ? "" : "s"}`}
               pad="none"
               actions={
-                <label className="tp-toggle">
-              <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} data-testid="topics-show-all" />
-              Show all topics
-                </label>
+                <ShowAll all={all} setAll={setAll} />
               }
               footer={
                 <>
@@ -184,6 +182,16 @@ export function HeatmapTopics() {
         )}
       </div>
     </main>
+  );
+}
+
+/** "Show all topics": the whole controlled list, rows without a video included. */
+function ShowAll({ all, setAll }: { all: boolean; setAll: (v: boolean) => void }) {
+  return (
+    <label className="tp-toggle">
+      <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} data-testid="topics-show-all" />
+      Show all topics
+    </label>
   );
 }
 
