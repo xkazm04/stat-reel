@@ -4,8 +4,10 @@ import {
   ageLabel,
   bucketOf,
   cellAria,
+  cellTarget,
   clampPos,
   emptyCellLabel,
+  gridColCount,
   newTabLabel,
   nextPos,
   sortTopics,
@@ -37,7 +39,23 @@ describe("topic heatmap helpers", () => {
   });
   it("cellAria names topic, ordinal, date and age", () => {
     const v = { n: 2, id: "vd-1", title: "t", created_at: "2026-10-03T10:00:00Z", age_days: 3, bucket: "fresh" as const, case_id: null, project_id: null, url: null };
-    expect(cellAria("Energy", v, 3)).toBe("Energy, video 2 of 3, created 3 Oct 2026, 3 days ago");
+    expect(cellAria("Energy", v, 3)).toBe("Energy, video 2 of 3, t, created 3 Oct 2026, 3 days ago");
+  });
+  it("cellAria reads the video title; a blank title adds nothing", () => {
+    const v = { n: 1, id: "vd-1", title: "Solar race", created_at: "2026-10-03T10:00:00Z", age_days: 0, bucket: "fresh" as const, case_id: null, project_id: null, url: null };
+    expect(cellAria("Energy", v, 1)).toBe("Energy, video 1 of 1, Solar race, created 3 Oct 2026, today");
+    expect(cellAria("Energy", { ...v, title: "  " }, 1)).toBe("Energy, video 1 of 1, created 3 Oct 2026, today");
+  });
+  it("cellTarget: file, then project, then case, else none", () => {
+    const all = { url: "/files/a.mp4", project_id: "p1", case_id: "c1" };
+    expect(cellTarget(all)).toEqual({ kind: "file", url: "/files/a.mp4" });
+    expect(cellTarget({ ...all, url: null })).toEqual({ kind: "project", projectId: "p1" });
+    expect(cellTarget({ url: null, project_id: null, case_id: "c1" })).toEqual({ kind: "case" });
+    expect(cellTarget({ url: null, project_id: null, case_id: null })).toEqual({ kind: "none" });
+  });
+  it("gridColCount counts the overflow column only when it is drawn", () => {
+    expect(gridColCount(5, 0)).toBe(6);
+    expect(gridColCount(24, 6)).toBe(26);
   });
   it("topicSummary counts topics, videos and accepted cases from the data", () => {
     const v = { n: 1 } as TopicVideoCell;

@@ -19,8 +19,10 @@ import { relTime } from "../logic";
 import {
   ageLabel,
   cellAria,
+  cellTarget,
   clampPos,
   emptyCellLabel,
+  gridColCount,
   type GridPos,
   newTabLabel,
   nextPos,
@@ -134,7 +136,7 @@ export function HeatmapTopics() {
                 role="grid"
                 aria-label="Videos per topic, by order of creation"
                 aria-rowcount={rows.length + 1}
-                aria-colcount={n + 1}
+                aria-colcount={gridColCount(n, cols.earlier)}
                 aria-describedby="tp-summary"
                 onKeyDown={onKeyDown}
                 onFocus={onFocus}
@@ -273,21 +275,25 @@ function VideoCell({
     title: v.title,
   };
   const label = <span className="num">{ageLabel(v.age_days)}</span>;
-  if (v.url)
+  // link order (cellTarget): served file, then Studio project, then Board case
+  const target = cellTarget(v);
+  if (target.kind === "file")
     return (
-      <a {...common} aria-label={newTabLabel(common["aria-label"])} href={v.url} target="_blank" rel="noreferrer">
+      <a {...common} aria-label={newTabLabel(common["aria-label"])} href={target.url} target="_blank" rel="noreferrer">
         {label}
       </a>
     );
-  if (v.case_id)
+  if (target.kind === "project")
+    return (
+      <Link {...common} to="/studio/$projectId" params={{ projectId: target.projectId }}>
+        {label}
+      </Link>
+    );
+  if (target.kind === "case")
     return (
       <Link {...common} to="/board" search={{ tab: "cases" } as never}>
         {label}
       </Link>
     );
-  return (
-    <span {...common}>
-      {label}
-    </span>
-  );
+  return <span {...common}>{label}</span>;
 }

@@ -39,11 +39,33 @@ export function sortTopics<T extends { last_at: string | null; label: string }>(
 
 const DAY_FMT = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-/** "Energy, video 2 of 3, created 3 Oct 2026, 3 days ago" */
+/** "Energy, video 2 of 3, Solar race, created 3 Oct 2026, 3 days ago" (the title is read, not only a hover tooltip). */
 export function cellAria(topic: string, v: TopicVideoCell, total: number): string {
   const when = v.age_days < 1 ? "today" : v.age_days === 1 ? "1 day ago" : `${v.age_days} days ago`;
-  return `${topic}, video ${v.n} of ${total}, created ${DAY_FMT.format(new Date(v.created_at))}, ${when}`;
+  const title = v.title.trim() ? `, ${v.title.trim()}` : "";
+  return `${topic}, video ${v.n} of ${total}${title}, created ${DAY_FMT.format(new Date(v.created_at))}, ${when}`;
 }
+
+export type CellTarget =
+  | { kind: "file"; url: string }
+  | { kind: "project"; projectId: string }
+  | { kind: "case" }
+  | { kind: "none" };
+
+/**
+ * Where a video cell leads, in order: the served file (`url`, new tab), else its Studio project
+ * (`project_id`), else the Board case (`case_id`). The project outranks the case because it is the
+ * video itself; the case only explains where it came from.
+ */
+export function cellTarget(v: Pick<TopicVideoCell, "url" | "project_id" | "case_id">): CellTarget {
+  if (v.url) return { kind: "file", url: v.url };
+  if (v.project_id) return { kind: "project", projectId: v.project_id };
+  if (v.case_id) return { kind: "case" };
+  return { kind: "none" };
+}
+
+/** aria-colcount: the topic column, the "+N earlier" overflow column when shown, and the ordinals. */
+export const gridColCount = (ordinals: number, earlier: number): number => 1 + (earlier > 0 ? 1 : 0) + ordinals;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 

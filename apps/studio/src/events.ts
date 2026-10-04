@@ -99,6 +99,8 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
     }
   } else if (e.type === "cases.decided") {
     void qc.invalidateQueries({ queryKey: qk.cases });
+    // an accepted case adds its topic row (and its count) to the topic heatmap
+    void qc.invalidateQueries({ queryKey: ["heatmap-topics"] });
   } else if (e.type === "heatmap.updated") {
     void qc.invalidateQueries({ queryKey: qk.heatmap });
     void qc.invalidateQueries({ queryKey: ["heatmap-topics"] });
