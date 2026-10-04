@@ -58,6 +58,14 @@ export function nextFullHour(now: Date): Date {
   return d;
 }
 
+/**
+ * The move form's starting value. A missed slot starts at the next full hour: its own time has
+ * passed, so sending it back unchanged would only be marked missed again at the next tick.
+ */
+export function moveDefault(s: { status: string; publish_at: string }, now: Date): string {
+  return toLocalInput(s.status === "missed" ? nextFullHour(now) : new Date(s.publish_at));
+}
+
 export type SlotStatusKey = SlotStatus;
 /** Every slot status as shape + label (the label is literal text, never colour-only). */
 export const SLOT_META: Record<SlotStatusKey, { label: string; hint: string }> = {

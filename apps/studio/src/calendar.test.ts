@@ -13,6 +13,7 @@ import {
   fromLocalInput,
   latestSlotPerProject,
   milestoneOf,
+  moveDefault,
   nextFullHour,
   relWhen,
   slotStatus,
@@ -166,6 +167,20 @@ describe("mapScheduleError", () => {
   });
   it("never prefixes a raw Server label", () => {
     expect(mapScheduleError("boom").message).toBe("boom");
+  });
+});
+
+describe("moveDefault", () => {
+  const now = new Date(2026, 8, 30, 12, 20);
+  it("a missed slot starts at the next full hour, not at the time it already missed", () => {
+    const missed = { status: "missed", publish_at: new Date(2026, 8, 30, 9, 0).toISOString() };
+    expect(moveDefault(missed, now)).toBe("2026-09-30T13:00");
+    // that default passes the validation door without a "has passed" warning
+    expect(checkSchedule({ when: moveDefault(missed, now), channelId: "ch", now, slots: [] }).warnings).toEqual([]);
+  });
+  it("any other slot starts at its own time", () => {
+    const at = new Date(2026, 9, 1, 9, 30);
+    expect(moveDefault({ status: "scheduled", publish_at: at.toISOString() }, now)).toBe("2026-10-01T09:30");
   });
 });
 

@@ -35,6 +35,7 @@ import {
   isUpcoming,
   latestSlotPerProject,
   mapScheduleError,
+  moveDefault,
   needsDecision,
   nextFullHour,
   relWhen,
@@ -692,7 +693,7 @@ function SlotRow({
   const st = slotStatus(s.status);
   const drift = slotDrift(s);
   const missedAt = (s as { missed_at?: string | null }).missed_at ?? null;
-  const [when, setWhen] = useState(() => toLocalInput(new Date(s.publish_at)));
+  const [when, setWhen] = useState(() => moveDefault(s, new Date()));
   const [issue, setIssue] = useState<FieldIssue | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const inputId = `mv-${s.id}`;
