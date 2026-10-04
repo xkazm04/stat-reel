@@ -72,7 +72,7 @@ export type BadgeInput = {
   jobs: ReadonlyMap<string, JobRow>;
   workerOnline: boolean;
   now: number;
-  /** pending variants of the case on the board (the "3 visuals ready" count) */
+  /** pending variants of the case on the board (the "3 visuals ready" count); undefined = unknown, said without a number */
   pendingVariants?: number;
 };
 
@@ -105,8 +105,9 @@ export function badgeForCase(i: BadgeInput): Badge | null {
       return jobBadge(visual, i.workerOnline, i.now) ?? { kind: "queued", label: "Visuals not started", actions: [] };
     case "visuals_ready": {
       if (entry.accepted_item_id) return withCost({ kind: "ready", label: "Design accepted", actions: ["generate", "variants"] }, visual);
-      const n = i.pendingVariants ?? 3;
-      return withCost({ kind: "ready", label: `${n} visual${n === 1 ? "" : "s"} ready`, actions: ["variants"] }, visual);
+      // the count comes from the board on the client; unknown (not loaded, or a cache older than the job) is not invented
+      const n = i.pendingVariants;
+      return withCost({ kind: "ready", label: n ? `${n} visual${n === 1 ? "" : "s"} ready` : "Visuals ready", actions: ["variants"] }, visual);
     }
     case "data_blocked":
       return { kind: "blocked", label: "Data blocked", detail: entry.gate?.reason, actions: ["sources", "generate"] };

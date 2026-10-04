@@ -40,7 +40,10 @@ describe("badgeForCase (D.11)", () => {
   });
 
   it("visuals ready counts the pending variants; an accepted design offers Generate video", () => {
-    expect(badge({ stage: "visuals_ready" }, [job({ status: "done" })])).toMatchObject({ kind: "ready", label: "3 visuals ready", actions: ["variants"] });
+    // an unknown pending count (board not loaded, or a stale cache saying 0) is not a number to invent
+    expect(badge({ stage: "visuals_ready" }, [job({ status: "done" })])).toMatchObject({ kind: "ready", label: "Visuals ready", actions: ["variants"] });
+    expect(badge({ stage: "visuals_ready" }, [job({ status: "done" })])?.label).not.toMatch(/\d/);
+    expect(badge({ stage: "visuals_ready" }, [], { n: 3 })?.label).toBe("3 visuals ready");
     expect(badge({ stage: "visuals_ready" }, [], { n: 1 })?.label).toBe("1 visual ready");
     expect(badge({ stage: "visuals_ready", accepted_item_id: "bd-00000001" }, [])).toMatchObject({ label: "Design accepted", actions: ["generate", "variants"] });
   });
