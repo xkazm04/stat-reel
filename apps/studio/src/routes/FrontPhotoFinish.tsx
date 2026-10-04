@@ -1295,17 +1295,19 @@ function LaneScene({
             </div>
           ) : (
             <div className="pf-l4">
-              <div className="pf-tabs" role="tablist" aria-label="Sport">
+              {/* a group of pressed buttons, like the heatmap layer's sport switch: each press navigates, so
+                  there is no tab panel or arrow-key roving for a tablist to promise */}
+              <fieldset className="pf-tabs">
+                <legend className="sr-only">Sport</legend>
                 {SPORTS.map((sp) => {
                   const c = cellOf(cells, uc.id, sp, mode);
                   return (
                     <button
                       type="button"
                       key={sp}
-                      role="tab"
                       className="pf-tab"
                       data-status={c?.status ?? "none"}
-                      aria-selected={sp === sport}
+                      aria-pressed={sp === sport}
                       onClick={() => go({ format: uc.id, sport: sp, mode })}
                     >
                       {sp}
@@ -1314,7 +1316,7 @@ function LaneScene({
                     </button>
                   );
                 })}
-              </div>
+              </fieldset>
               {cell ? (
                 <>
                   <div className="pf-l4__head">
