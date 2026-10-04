@@ -43,8 +43,17 @@ export function installProcessHandlers(shutdown: () => Promise<void>, opts: { pr
   const proc = opts.proc ?? process;
   const exit = opts.exit ?? ((c: number) => process.exit(c));
   const log = opts.log ?? ((m: string) => console.error(m));
+  // the graceful stop can take ~12 s (job abort wait + server grace); a second signal is the owner saying "now".
+  // Rows still running are left as a crash leaves them, and the next start's resume() re-queues them.
+  let stopping = false;
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     proc.on(sig, () => {
+      if (stopping) {
+        log(`[shutdown] second ${sig}: exiting now without waiting for jobs`);
+        exit(1);
+        return;
+      }
+      stopping = true;
       log(`[shutdown] ${sig}`);
       void shutdown().finally(() => exit(0));
     });

@@ -40,4 +40,16 @@ describe("shutdown", () => {
     (handlers.get("SIGTERM") as () => void)();
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
   });
+  it("a second SIGINT/SIGTERM while the graceful stop is still running exits at once (non-zero)", async () => {
+    const handlers = new Map<string, () => void>();
+    const exit = vi.fn();
+    const shutdown = vi.fn(() => new Promise<void>(() => {})); // a stop that hangs (a handler ignoring its signal)
+    installProcessHandlers(shutdown, { proc: { on: ((e: string, f: never) => { handlers.set(e, f); return process; }) as never }, exit, log: () => {} });
+    handlers.get("SIGINT")?.();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(exit).not.toHaveBeenCalled();
+    handlers.get("SIGINT")?.();
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(shutdown).toHaveBeenCalledTimes(1);
+  });
 });
