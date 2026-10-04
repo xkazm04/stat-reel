@@ -42,3 +42,10 @@ test("a report that walked zero files is an instrument failure, never a clean co
   assert.match(instrumentProblem({ diagnostics: [] }), /walked 0 files/);
   assert.equal(instrumentProblem({ summary: { changed: 0, unchanged: 418 }, diagnostics: [] }), null);
 });
+
+test("no root package script runs a Biome --write over a directory (repo law: HEAD is not Biome-clean)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const offenders = Object.entries(pkg.scripts).filter(([, cmd]) => /\bbiome\b/.test(cmd) && /--write\b/.test(cmd));
+  assert.deepEqual(offenders, []);
+});
