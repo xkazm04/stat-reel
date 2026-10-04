@@ -4,7 +4,8 @@
  * the gate did not allow it), when it last moved, and the one status line. No React, no DOM.
  */
 import { type JobLike, nextAction, STAGES, stageIndex } from "./logic";
-import { bucketCounts, jobFlag, projectState } from "./projectState";
+import { bucketCounts, JOB_LABEL, jobFlag, projectState } from "./projectState";
+import { pct } from "./display";
 
 type JobRow = JobLike & { created_at: string; finished_at?: string | null; started_at?: string | null };
 export type LaneProject = { id: string; status: string; created_at: string; jobs?: JobRow[] };
@@ -79,3 +80,7 @@ export function sayLine(ordered: LaneProject[]): { lead: string; parts: { id: st
     parts,
   };
 }
+
+/** The list view's Job cell: the running job in the owner's words (logic.ts JOB_LABEL) and its progress. */
+export const jobCell = (job: { kind: string }, progress: number | null | undefined): string =>
+  `${JOB_LABEL[job.kind as keyof typeof JOB_LABEL] ?? "A job"} ${pct(progress)}`;

@@ -19,7 +19,7 @@ import { MODE_LABEL, nextAction, relTime, STAGE_LABEL, STAGES } from "../logic";
 import { activeJob, fmtNum, formatLabel, pad2, pct, rundownOrder } from "../display";
 import type { ProjectsSearch } from "../router";
 import { modeWord } from "../projectState";
-import { byUpdated, GATE_POS, laneState, sayLine, sheetCounts } from "../rundown";
+import { byUpdated, GATE_POS, jobCell, laneState, sayLine, sheetCounts } from "../rundown";
 
 export function ProjectsPage() {
   const search = useSearch({ from: "/projects" }) as ProjectsSearch;
@@ -124,7 +124,7 @@ export function ProjectsPage() {
                       <td>{formatLabel(p.format)}</td>
                       <td>{MODE_LABEL[p.mode as Mode] ?? p.mode}</td>
                       <td className="mono">
-                        {job ? `${job.kind} ${pct(live.get(job.id)?.progress ?? job.progress)}` : "—"}
+                        {job ? jobCell(job, live.get(job.id)?.progress ?? job.progress) : "—"}
                       </td>
                       <td className="num">
                         {pubs.length

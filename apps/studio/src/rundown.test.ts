@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byUpdated, GATE_POS, lastUpdated, laneState, sayLine, sheetCounts } from "./rundown";
+import { byUpdated, GATE_POS, jobCell, lastUpdated, laneState, sayLine, sheetCounts } from "./rundown";
 
 const job = (kind: string, status: string, created_at: string, error: string | null = null) => ({
   kind,
@@ -39,5 +39,11 @@ describe("race sheet", () => {
     expect(s.parts[0]).toEqual({ id: "p1", text: "is one step from the line: publish private" });
     expect(s.parts[1]?.id).toBe("p2");
     expect(sayLine([]).lead).toBe("No project yet.");
+  });
+  it("names the running job in the owner's words in the list view, never the raw kind token", () => {
+    expect(jobCell({ kind: "llm" }, 0.42)).toBe("Co-pilot draft 42 %");
+    expect(jobCell({ kind: "gen_render" }, null)).toBe("Design render 0 %");
+    // a kind the table does not know yet reads as a job, not as its token
+    expect(jobCell({ kind: "mystery" }, 1)).toBe("A job 100 %");
   });
 });
