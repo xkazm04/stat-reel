@@ -667,7 +667,7 @@ function SlotRow({
   const qc = useQueryClient();
   const st = slotStatus(s.status);
   const drift = slotDrift(s);
-  const missedAt = (s as { missed_at?: string | null }).missed_at ?? null;
+  const missedAt = s.missed_at;
   const [when, setWhen] = useState(() => moveDefault(s, new Date()));
   const [issue, setIssue] = useState<FieldIssue | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
