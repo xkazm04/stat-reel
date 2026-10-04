@@ -7,13 +7,15 @@
  *   WRITE_FIXTURES=1 npx vitest run apps/server/src/generation/sample-fixtures.test.ts
  *
  * visual_options: three variants of the same data that differ in the entity colour set (the only look
- * the props schema carries). generate_video: one props file with `data_provenance: "real"`, because a
- * video requires real data; the figures are the invented sample ones, so this is a TEST DOUBLE that is
- * only ever rendered inside the e2e data folder, never a real video.
+ * the props schema carries). Invented figures, `data_provenance: "sample"`.
+ * generate_video: `data_provenance: "real"` built from a snapshot of REAL warehouse rows (fixture-rows.ts:
+ * F1 driver seasons, F1DB), so the fixture passes the finalize fact verification (facts.ts) and no longer
+ * claims "real" over invented figures. Every ref, figure and series value is a warehouse row.
  */
 import { buildSampleDataRace } from "@statreel/compositions/fixture";
-import { renderTimingMd } from "@statreel/compositions/timing";
-import { type DataRacePropsInput, sha256Hex } from "@statreel/schemas";
+import { computeTimingPlan, renderTimingMd } from "@statreel/compositions/timing";
+import { type DataRacePropsInput, planSha256, sha256Hex } from "@statreel/schemas";
+import { F1_DRIVERS, F1_SEASONS, seasonFactKey } from "./fixture-rows";
 
 export type FixtureFile = { path: string; content: string };
 
@@ -62,6 +64,85 @@ function build() {
 
 const recolour = (entities: Entity[], key: keyof typeof PALETTES): Entity[] => entities.map((e, i) => ({ ...e, color: PALETTES[key][i] as string }));
 
+const POINTS = "points_current_system";
+
+/** The real-data video: ten drivers, season points re-scored to the current system, one period per season. */
+export function realVideoProps(): { props: DataRacePropsInput; plan: ReturnType<typeof computeTimingPlan> } {
+  const periods = F1_SEASONS.map(String);
+  const values = Object.fromEntries(F1_DRIVERS.map((d) => [d.id, d.points]));
+  const at = (season: number) => F1_SEASONS.indexOf(season);
+  const driver = (id: string) => F1_DRIVERS.find((d) => d.id === id) as (typeof F1_DRIVERS)[number];
+  // season rows the cards cite: [driver, season, title]
+  const CARDS = [
+    ["michael-schumacher", 2004, "Schumacher's 13-win season"],
+    ["jenson-button", 2009, "Button's 6-win season"],
+    ["sebastian-vettel", 2013, "Vettel's 13-win season"],
+    ["nico-rosberg", 2016, "Rosberg's best season"],
+    ["max-verstappen", 2023, "Verstappen's 19-win season"],
+  ] as const;
+  const plan = computeTimingPlan({
+    periods,
+    entities: F1_DRIVERS.map((d) => d.id),
+    values,
+    events: CARDS.map(([id, season, title]) => ({ id: `${id}-${season}`, period: at(season), label: title, dwell: 24, spread: 1.2 })),
+    opts: { unit: "season", timelineFrames: 960, rankSmooth: 1, orderLabel: "ORDER: 3-SEASON AVG" },
+  });
+  const cell = (id: string, season: number, col: "points" | "wins") => driver(id)[col][at(season)] as number;
+  const winnerId = plan.orders[plan.orders.length - 1]?.[0] ?? "max-verstappen";
+  const w = driver(winnerId);
+  const wLast = w.points.findLastIndex((v) => v !== null);
+  const wSeason = F1_SEASONS[wLast] as number;
+  const colors = PALETTES["photo-finish"];
+  const props: DataRacePropsInput = {
+    data_provenance: "real",
+    title: "F1 points per season, 2000-2024",
+    hook: "Which season scored the most points?",
+    unit_label: "Points, current scoring system",
+    value_format: { decimals: 0, prefix: "", suffix: "" },
+    source_line: "F1DB (CC-BY-4.0), re-scored to the current points system",
+    periods,
+    entities: F1_DRIVERS.map((d, i) => {
+      const peak = d.points.reduce<number>((best, v, k) => ((v ?? -1) > (d.points[best] ?? -1) ? k : best), 0);
+      return {
+        id: d.id, name: d.name, aliases: [], color: colors[i] as string, logo: { kind: "wordmark" as const },
+        values: d.points, value_ref: `${seasonFactKey(d.id, F1_SEASONS[peak] as number)}#${POINTS}`,
+      };
+    }),
+    missing_logos: F1_DRIVERS.map((d) => d.id),
+    events: CARDS.map(([id, season, title]) => {
+      const pe = plan.events.find((x) => x.id === `${id}-${season}`);
+      const key = seasonFactKey(id, season);
+      return {
+        id: `${id}-${season}`, entity_id: id, title, date_label: String(season),
+        facts: [
+          { text: `${cell(id, season, "wins")} wins in ${season}`, ref: `${key}#wins` },
+          { text: `${cell(id, season, "points")} points`, ref: `${key}#${POINTS}` },
+        ],
+        start_frame: pe?.frame ?? 0,
+      };
+    }),
+    spotlight: {
+      facts: [
+        { label: `Points in ${wSeason}`, value_text: `${w.points[wLast]}`, ref: `${seasonFactKey(w.id, wSeason)}#${POINTS}` },
+        { label: `Wins in ${wSeason}`, value_text: `${w.wins[wLast]}`, ref: `${seasonFactKey(w.id, wSeason)}#wins` },
+      ],
+    },
+    timing_plan_sha256: planSha256(plan),
+  };
+  return { props, plan };
+}
+
+/** The warehouse facts of the snapshot (`<fact_key>#<column>` -> value): a `FactResolver` for tests without a warehouse. */
+export async function snapshotFacts(refs: string[]): Promise<Map<string, number | string>> {
+  const out = new Map<string, number | string>();
+  for (const d of F1_DRIVERS)
+    F1_SEASONS.forEach((season, i) => {
+      for (const [col, v] of [[POINTS, d.points[i]], ["wins", d.wins[i]]] as const)
+        if (v !== null && v !== undefined && refs.includes(`${seasonFactKey(d.id, season)}#${col}`)) out.set(`${seasonFactKey(d.id, season)}#${col}`, v);
+    });
+  return out;
+}
+
 /** Fixture files per job type, relative to `e2e/fixtures/generation/<type>/`. */
 export function sampleGenerationFixtures(): Record<"visual_options" | "generate_video", FixtureFile[]> {
   const { sample, entities, files: logoFiles, ledger } = build();
@@ -80,12 +161,12 @@ export function sampleGenerationFixtures(): Record<"visual_options" | "generate_
       { path: `out/variants/v${v.n}.md`, content: `# ${v.name}\n\n${v.note}\n` },
     ]),
   ];
+  const real = realVideoProps();
   const video: FixtureFile[] = [
-    ...common,
-    {
-      path: "out/props.json",
-      content: json({ ...sample.props, entities: recolour(entities, "photo-finish"), data_provenance: "real", source_line: "E2E fixture, fake mode: invented figures, not real data" }),
-    },
+    { path: "out/timing-plan.json", content: json(real.plan) },
+    { path: "out/TIMING.md", content: renderTimingMd(real.plan, { title: "f1-points-per-season" }) },
+    { path: "out/assets.json", content: json([]) },
+    { path: "out/props.json", content: json(real.props) },
   ];
   return { visual_options: visual, generate_video: video };
 }

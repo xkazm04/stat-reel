@@ -55,7 +55,7 @@ export async function createServer() {
   relay.start();
   // renders requested by the worker share the render lane (one render at a time)
   runner.register("gen_render", makeGenRenderHandler({ dataRoot: genData }), { lane: "render" });
-  const finalizer = new GenerationFinalizer({ db, board, dataRoot: genData, boardRoot: paths.board, bus });
+  const finalizer = new GenerationFinalizer({ db, board, dataRoot: genData, boardRoot: paths.board, bus, facts: (refs) => wh.facts(refs) });
   const scheduler = setInterval(() => calendar.tick(), 30_000);
   scheduler.unref();
   const app = buildApp({ generationGuard: queueGuard(queue), db, calendar, board, styles, cases, bus, runner, projects, heatmap, llm, tools, pipeline, generation: { db, queue, bus, runner, dataRoot: genData, finalizer, gate: makeGate(db), mcp: makeGenerationMcpTools({ queue, assets, dataRoot: genData }) } });

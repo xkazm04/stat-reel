@@ -17,6 +17,7 @@ import { paths as appPaths } from "../config";
 import type { Db } from "../db";
 import type { EventBus } from "../events";
 import { resolveTopic, TopicService } from "../topics";
+import { type FactResolver, verifyRealFacts } from "./facts";
 import { jobPaths, type JobPaths } from "./paths";
 import { dataProvenanceOf, readPlan, styleNameOf, validateDataRaceOutputs } from "./validate-data-race";
 
@@ -30,7 +31,9 @@ export class FinalizeError extends Error {
 }
 
 export type FinalizeBody = { outputs: string[]; result?: Record<string, unknown> };
-export type FinalizerDeps = { db: Db; board: BoardService; dataRoot: string; boardRoot: string; bus?: EventBus; fontsManifest?: string };
+export type FinalizerDeps = { db: Db; board: BoardService; dataRoot: string; boardRoot: string; bus?: EventBus; fontsManifest?: string;
+  /** `wh.facts`: resolves fact refs against the warehouse. Without it a "real" video is refused (fail closed). */
+  facts?: FactResolver };
 
 /** A render result path must be a file inside the job's own folder (the body comes over HTTP). */
 export function insideJob(p: JobPaths, file: unknown, what: string): string {
@@ -51,9 +54,27 @@ export class GenerationFinalizer {
     const p = jobPaths(job.id, this.d.dataRoot);
     const v = validateDataRaceOutputs(job.type, p);
     if (!v.ok) throw new FinalizeError(`validation failed: ${v.errors.slice(0, 5).join("; ")}`);
+    if (job.type === "generate_video") await this.verifyFacts(p);
     this.promoteLogos(p);
     if (job.type === "visual_options") return this.visualOptions(job, p, body);
     return this.video(job, p, body);
+  }
+
+  /**
+   * The data gate (DESIGN data gate): a video with data_provenance "real" is accepted only when every fact ref
+   * resolves in the warehouse and every shown figure matches its fact. No resolver = no verification = refused.
+   */
+  private async verifyFacts(p: JobPaths): Promise<void> {
+    const props = JSON.parse(readFileSync(path.join(p.out, "props.json"), "utf8")) as unknown;
+    if (dataProvenanceOf(props) !== "real") return; // the validator already refused anything else for a video
+    if (!this.d.facts) throw new FinalizeError("fact verification unavailable: no fact resolver (warehouse) is configured, so a video with real data cannot be verified and is refused", 503);
+    let problems: string[];
+    try {
+      problems = await verifyRealFacts(props, this.d.facts);
+    } catch (e) {
+      throw new FinalizeError(`fact verification unavailable: the warehouse could not resolve facts (${e instanceof Error ? e.message : String(e)})`, 503);
+    }
+    if (problems.length) throw new FinalizeError(`fact verification failed: ${problems.slice(0, 5).join("; ")}${problems.length > 5 ? `; and ${problems.length - 5} more` : ""}`);
   }
 
   /**
