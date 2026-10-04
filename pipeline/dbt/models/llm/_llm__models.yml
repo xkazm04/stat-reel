@@ -20,7 +20,7 @@ models:
       - {name: starts, description: "Grand Prix starts, excluding non-starts (DNQ/DNPQ/DNS/DNP) and the Indianapolis 500."}
       - {name: wins, description: "Wins among those starts (shared wins count for each driver)."}
       - {name: podiums, description: "Top-3 finishes among those starts."}
-      - {name: titles, description: "World Drivers' Championships."}
+      - {name: titles, description: "World Drivers' Championships won (leading a season still in progress is not a title)."}
       - {name: points_awarded, description: "Career points as historically awarded (all rounds, era rules). RAW metric."}
       - {name: points_current_system, description: "Career points re-scored under the current system (no fastest-lap point, no sprints)."}
       - {name: points_per_start_current_system, description: "ADJUSTED metric - points_current_system / starts (0-25)."}
@@ -49,7 +49,7 @@ models:
       - {name: points_current_system, description: "Points re-scored under the current system."}
       - {name: season_share, description: "points_current_system / (25 x races held that season, Indianapolis excluded)."}
       - {name: season_races, description: "Races held that season (Indianapolis excluded)."}
-      - {name: championship_position, description: "Final Drivers' Championship position (null if unclassified)."}
+      - {name: championship_position, description: "Drivers' Championship position at season end; for the season still in progress (f1_data_as_of.latest_season) the CURRENT position, not a final one. Null if unclassified."}
       - {name: attribution, description: "Attribution string that must accompany any use."}
   - name: f1_race_results
     description: >-

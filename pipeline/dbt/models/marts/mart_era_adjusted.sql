@@ -12,7 +12,7 @@ career as (
         sum(starts)                                                    as starts,
         sum(wins)                                                      as wins,
         sum(podiums)                                                   as podiums,
-        count(*) filter (where championship_position = 1)              as titles,
+        count(*) filter (where championship_won)                       as titles,
         sum(points_awarded)                                            as points_awarded,
         sum(points_current_system)                                     as points_current_system,
         max(season_share) filter (where starts * 2 >= season_races)    as peak_season_share

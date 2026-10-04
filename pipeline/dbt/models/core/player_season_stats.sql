@@ -20,6 +20,7 @@ agg as (
 select
     agg.*,
     st.championship_position,
+    coalesce(st.championship_won, false)                                                     as championship_won,
     s.races_held_excl_indianapolis                                                           as season_races,
     agg.points_current_system / nullif(25.0 * s.races_held_excl_indianapolis, 0)             as season_share
 from agg

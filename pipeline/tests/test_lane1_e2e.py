@@ -150,6 +150,19 @@ def test_adjusted_rank_only_ranks_eligible_drivers(replay_run):
     assert ranks == list(range(1, len(ranks) + 1))
 
 
+def test_titles_count_championships_won_not_the_leader_of_a_season_in_progress(replay_run):
+    """Far-side oracle: f1db's own championshipWon flag. The fixture's 2026 season is in progress, so its
+    leader holds championship_position 1 and has won nothing yet."""
+    con = replay_run["con"]
+    standings = (FIXTURE / "f1db-seasons-driver-standings.csv").as_posix()
+    won = dict(duckdb.connect().execute(
+        f"select driverId, count(*) filter (where championshipWon) from read_csv('{standings}') group by 1").fetchall())
+    got = dict(con.execute("select player_id, titles from marts.mart_era_adjusted").fetchall())
+    assert {d: (t, won.get(d, 0)) for d, t in got.items() if t != won.get(d, 0)} == {}
+    leader = con.execute("select player_id from core.player_season_stats where season = 2026 and championship_position = 1").fetchall()
+    assert leader and not won.get(leader[0][0]), "fixture has a mid-season leader with no title"
+
+
 def test_lineage_marks_every_model_legal_from_f1db(replay_run):
     con = replay_run["con"]
     rows = dict(con.execute("select model, license_class from meta.model_lineage").fetchall())
