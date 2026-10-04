@@ -9,12 +9,13 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { api, qk } from "../api";
+import { api, qk, serverError } from "../api";
 import { formatSpend } from "./jobs";
 import { tailLog } from "./logtail";
 
 export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => void }) {
   const [text, setText] = useState("");
+  const [readError, setReadError] = useState<unknown | null>(null);
   const pre = useRef<HTMLPreElement>(null);
   const root = useRef<HTMLElement>(null);
   const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
@@ -26,7 +27,7 @@ export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => vo
   statusRef.current = job.data?.job.status;
 
   // read in increments until the job is over and its log is read to the end (logtail.ts)
-  useEffect(() => tailLog({ read: (at) => api.generationLog(jobId, at), status: () => statusRef.current, onText: (t) => setText((x) => x + t), every: 2000 }), [jobId]);
+  useEffect(() => tailLog({ read: (at) => api.generationLog(jobId, at), status: () => statusRef.current, onText: (t) => setText((x) => x + t), onError: setReadError, every: 2000 }), [jobId]);
 
   // focus in on open, back to the opener on close
   useEffect(() => {
@@ -73,6 +74,11 @@ export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => vo
         </button>
       </header>
       {j?.error ? <p className="jlog__err">{j.error}</p> : null}
+      {readError ? (
+        <p className="jlog__err" role="alert" data-testid="job-log-read-error">
+          Could not read the log: {serverError(readError)}. Retrying every 2 s.
+        </p>
+      ) : null}
       <pre className="jlog__body mono" ref={pre}>
         {text || "No log lines yet."}
       </pre>

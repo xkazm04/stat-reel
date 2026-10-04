@@ -52,4 +52,24 @@ describe("tailLog", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(f.read.mock.calls.length).toBe(n);
   });
+
+  it("a failed read is reported, keeps retrying, and the report clears on the next good read", async () => {
+    let n = 0;
+    const read = vi.fn(async (offset: number) => {
+      n++;
+      if (n <= 2) throw new Error("GET log: 404");
+      return { text: "", next: offset };
+    });
+    const seen: (string | null)[] = [];
+    const stop = tailLog({
+      read,
+      status: () => "running",
+      onText: () => {},
+      onError: (e) => seen.push(e === null ? null : String((e as Error).message)),
+      every: 2000,
+    });
+    await vi.advanceTimersByTimeAsync(4_500);
+    expect(seen).toEqual(["GET log: 404", "GET log: 404", null]);
+    stop();
+  });
 });

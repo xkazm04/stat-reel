@@ -14,11 +14,14 @@ export function tailLog(o: {
   /** the job's status as known now (undefined while it loads) */
   status: () => string | undefined;
   onText: (text: string) => void;
+  /** a failed read (the loop keeps retrying), then null on the next good read: a failure must not read as an empty log */
+  onError?: (e: unknown | null) => void;
   every: number;
 }): () => void {
   let stop = false;
   let offset = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let failing = false;
   const pull = async () => {
     // sampled BEFORE the read: a job that ended during it still gets one more read for its last lines
     const live = jobLive(o.status());
@@ -29,8 +32,13 @@ export function tailLog(o: {
       if (r.text) o.onText(r.text);
       offset = r.next;
       more = live || r.text.length > 0;
-    } catch {
-      /* the next tick retries */
+      if (failing) o.onError?.(null);
+      failing = false;
+    } catch (e) {
+      if (stop) return;
+      // the next tick retries; say so meanwhile
+      failing = true;
+      o.onError?.(e);
     }
     if (!stop && more) timer = setTimeout(pull, o.every);
   };
