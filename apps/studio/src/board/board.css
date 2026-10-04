@@ -579,6 +579,10 @@
 .bd-wall__bar .bd-hint {
   margin-left: auto;
 }
+.bd-wall__bar .bd-gate__err {
+  flex-basis: 100%;
+  margin: 0;
+}
 .bd-wall__body {
   min-height: 200px;
 }

@@ -7,7 +7,7 @@
  * decide, Esc closes back to the tile. Best at: seeing the whole loop and comparing languages.
  */
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BoardItem } from "../api";
+import { type BoardItem, serverError } from "../api";
 import { Arrow } from "../components/glyphs";
 import type { VariantProps } from "./BoardPage";
 import {
@@ -171,6 +171,11 @@ export function WallVariant({ items, all, names }: VariantProps) {
             </b>
           ) : null}
         </span>
+        {decide.isError ? (
+          <p className="bd-gate__err" role="alert" data-testid="wall-error">
+            Not recorded: <span className="mono">{serverError(decide.error)}</span>
+          </p>
+        ) : null}
       </div>
 
       {/* biome-ignore lint/a11y/noStaticElementInteractions: arrow keys move the roving focus between tile buttons */}
