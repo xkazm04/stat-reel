@@ -98,6 +98,13 @@ describe("BurnedCaptions", () => {
     expect(hi.map((e) => text(e))).toEqual(["won"]);
   });
 
+  it("paints no plate for a cue with no visible text (the sidecar writers drop the same cue)", () => {
+    const blank: Cue[] = [{ start_s: 0, end_s: 2, lines: [" "], words: [W("", 0, 1)] }];
+    expect(BurnedCaptions({ cues: blank, t: 0.5, format: "vertical", theme: videoTheme })).toBeNull();
+    const empty: Cue[] = [{ start_s: 0, end_s: 2, lines: ["", ""], words: [] }];
+    expect(BurnedCaptions({ cues: empty, t: 0.5, format: "landscape", theme: videoTheme })).toBeNull();
+  });
+
   it("highlights nothing in a pause between words", () => {
     const hi = elements(render(0.9)).filter((e) => e.props.style?.color === videoTheme.captionActive);
     expect(hi).toHaveLength(0);

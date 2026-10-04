@@ -42,7 +42,8 @@ export type BurnedCaptionsProps = { cues: Cue[]; t: number; format: Format; them
  */
 export function BurnedCaptions({ cues, t, format, theme }: BurnedCaptionsProps): ReactElement | null {
   const cue = activeCueAt(cues, t);
-  if (!cue) return null;
+  // no visible text, no plate: an empty translucent sheet is the one cue the sidecars drop and the burn-in kept
+  if (!cue || cue.lines.every((l) => l.trim() === "")) return null;
   const box = captionBox(format);
   const s = CAPTION_STYLE[format];
   const active = activeWordIndex(cue, t);
