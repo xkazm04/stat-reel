@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { videoTheme } from "./index";
+import { fontFamilies, type VideoTheme, videoTheme } from "./index";
 
 /** WCAG relative luminance and contrast ratio for #rrggbb. */
 const lum = (hex: string): number => {
@@ -37,13 +37,27 @@ const token = (name: string): string => {
 };
 
 describe("videoTheme is the Photo Finish palette (ADR 009)", () => {
-  it("reuses the studio token values", () => {
-    expect(videoTheme.background).toBe(token("--color-bg"));
-    expect(videoTheme.surface).toBe(token("--color-surface"));
-    expect(videoTheme.ink).toBe(token("--color-text"));
-    expect(videoTheme.accent).toBe(token("--color-signal"));
-    expect(videoTheme.accentInk).toBe(token("--color-brand"));
-    expect(videoTheme.grid).toBe(token("--color-line"));
+  // Every colour key and the studio token it copies. Typed over keyof VideoTheme, so a new key does
+  // not compile until it names its source; captionBox is the token's rgb at the plate's alpha.
+  const SOURCE: Record<Exclude<keyof VideoTheme, "fonts">, string> = {
+    background: "--color-bg",
+    surface: "--color-surface",
+    grid: "--color-line",
+    ink: "--color-text",
+    inkDim: "--color-text-muted",
+    inkFaint: "--color-text-dim",
+    accent: "--color-signal",
+    accentInk: "--color-brand",
+    captionBox: "--color-bg-raised",
+    captionInk: "--color-text",
+    captionActive: "--color-brand",
+  };
+  const opaque = (c: string): string => (c.startsWith("#") ? c.toLowerCase() : over(c.replace(/,\s*[\d.]+\s*\)$/, ")"), "#000000"));
+
+  it("reuses the studio token values (every colour key)", () => {
+    expect(Object.keys(videoTheme).filter((k) => k !== "fonts").sort()).toEqual(Object.keys(SOURCE).sort());
+    for (const [k, t] of Object.entries(SOURCE)) expect(opaque(videoTheme[k as keyof typeof SOURCE]), `${k} = ${t}`).toBe(token(t));
+    expect(videoTheme.fonts).toBe(fontFamilies);
   });
 
   it("every text colour reaches 4.5:1 on the video background", () => {
