@@ -8,8 +8,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type BoardItem, type CaseIdea, qk, serverError } from "../api";
 import { Empty, Failure, Loading } from "../components/ui";
-import { type ArchiveReason, archiveReason, isSuperseded, reArchiveReason, restoreLabel } from "./archived";
+import { type ArchiveReason, archiveReason, decisionWords, isSuperseded, reArchiveReason, restoreLabel } from "./archived";
 import { caseOf, ratioOf, styleOf } from "./board";
+import { DOMAIN_LABEL } from "./library";
 import { CaseChip, Shot, shotAlt, useFlash } from "./shared";
 import { showUndo } from "./undo";
 
@@ -116,7 +117,7 @@ export function ArchivedView({ names }: { names: ReadonlyMap<string, string> }) 
                       <p className="bd-dim">Hidden when a sibling variant was accepted; it was never decided.</p>
                     ) : it.decision ? (
                       <p className="bd-dim">
-                        Decision kept: <span className="mono">{it.decision}</span>
+                        Decision kept: <b>{decisionWords("item", it.decision)}</b>
                         {it.note ? <> · “{it.note}”</> : null}
                       </p>
                     ) : null}
@@ -156,14 +157,14 @@ export function ArchivedView({ names }: { names: ReadonlyMap<string, string> }) 
                   <div className="bd-rl__body">
                     <h3 className="bd-rl__title">{c.title}</h3>
                     <p className="bd-rl__meta">
-                      <span>{c.domain}</span>
+                      <span>{DOMAIN_LABEL[c.domain] ?? c.domain}</span>
                       <span className="num">{c.span_years} years</span>
                     </p>
                     <p className="bd-dim">{c.pitch}</p>
                     <Reason reason={reason} />
                     {c.decision ? (
                       <p className="bd-dim">
-                        Decision kept: <span className="mono">{c.decision}</span>
+                        Decision kept: <b>{decisionWords("idea", c.decision)}</b>
                         {c.note ? <> · “{c.note}”</> : null}
                       </p>
                     ) : null}

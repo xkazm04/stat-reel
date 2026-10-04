@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { archiveReason, isSuperseded, reArchiveReason, restoreLabel, restoresTo } from "./archived";
+import { archiveReason, decisionWords, isSuperseded, reArchiveReason, restoreLabel, restoresTo } from "./archived";
 
 describe("restoresTo (mirrors the server's statusBeforeArchive)", () => {
   it.each([
@@ -58,5 +58,19 @@ describe("labels", () => {
   it("re-archives with its own reason, else a stated one", () => {
     expect(reArchiveReason({ text: "off-brief", legacy: false })).toBe("off-brief");
     expect(reArchiveReason({ text: null, legacy: false })).toMatch(/restore undone/);
+  });
+});
+
+describe("decisionWords (the kept decision in the owner's words, as everywhere else on the Board)", () => {
+  it("a design decision reads like the grid's state mark", () => {
+    expect(decisionWords("item", "reject_style")).toBe("Rejected · style");
+    expect(decisionWords("item", "accept")).toBe("Accepted");
+  });
+  it("an idea decision reads like the case dialog's buttons", () => {
+    expect(decisionWords("idea", "reject_not_interesting")).toBe("Rejected · not interesting");
+    expect(decisionWords("idea", "accept")).toBe("Accepted");
+  });
+  it("never shows a raw enum: an unknown value falls back to its words, no underscores", () => {
+    expect(decisionWords("item", "reject_something_new")).toBe("reject something new");
   });
 });

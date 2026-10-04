@@ -3,6 +3,8 @@
  * design or idea shows as its reason, and the state a Restore returns it to. The server owns the rule
  * (apps/server board.ts statusBeforeArchive); this mirrors it only to LABEL the button before the click.
  */
+import { DECISION_META, isDecision } from "./board";
+import { CASE_DECISION_META } from "./library";
 
 export type RestoredStatus = "pending" | "accepted" | "rejected";
 
@@ -46,4 +48,16 @@ export function restoreLabel(decision: string | null): string {
 /** What the undo of a restore archives it with again: its own reason, else a stated one (a reason is required). */
 export function reArchiveReason(reason: ArchiveReason): string {
   return reason.text ?? "re-archived: restore undone";
+}
+
+/**
+ * The kept decision in the words the rest of the Board uses ("Rejected · style", "Rejected · not interesting",
+ * "Accepted"), never the stored enum; an unknown value is spelled out without underscores.
+ */
+export function decisionWords(kind: "item" | "idea", decision: string): string {
+  if (decision === "accept") return "Accepted";
+  if (kind === "item" && isDecision(decision)) return DECISION_META[decision].done;
+  const meta = kind === "idea" ? (CASE_DECISION_META as Record<string, { label: string } | undefined>)[decision] : undefined;
+  if (meta) return `Rejected · ${meta.label.toLowerCase()}`;
+  return decision.replace(/_/g, " ");
 }
