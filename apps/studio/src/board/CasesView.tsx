@@ -29,6 +29,7 @@ import {
   visibleCaseRows,
 } from "./library";
 import { JobBadge } from "./JobBadge";
+import { plainPress } from "./keys";
 import { acceptOutcome } from "./outcome";
 import { useBoard } from "./shared";
 import { showUndo } from "./undo";
@@ -350,7 +351,7 @@ function IdeaDialog({
       onGo(next.id);
     } else {
       const d = caseDecisionForKey(e.key);
-      if (d && !decide.isPending) {
+      if (d && plainPress(e) && !decide.isPending) {
         e.preventDefault();
         send(d);
       }

@@ -30,3 +30,11 @@ describe("board mutations", () => {
     expect(silent).toEqual([]);
   });
 });
+
+describe("decision keys", () => {
+  it("every single-letter decision handler goes through plainPress (no auto-repeat, no modifier)", () => {
+    const handlers = sources(".tsx").filter(([, src]) => /\b(decisionForKey|caseDecisionForKey)\(/.test(src));
+    expect(handlers.map(([f]) => f).sort()).toEqual(["CasesView.tsx", "WallVariant.tsx", "shared.tsx"]);
+    expect(handlers.filter(([, src]) => !src.includes("plainPress(")).map(([f]) => f)).toEqual([]);
+  });
+});

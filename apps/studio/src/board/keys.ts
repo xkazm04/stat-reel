@@ -16,6 +16,14 @@ export const KEY_BLOCKERS = '[data-keys-block], dialog[open]:not(.bd-lb), [aria-
 export const overlayOpen = (root: { querySelector(selector: string): unknown } = document): boolean =>
   root.querySelector(KEY_BLOCKERS) !== null;
 
+/**
+ * A deliberate single press: no modifier (browser and OS shortcuts) and not an auto-repeat. Every
+ * single-letter DECISION key goes through it, so a held key decides one item, never the next ones the
+ * view advances to while the key is still down.
+ */
+export const plainPress = (e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; repeat: boolean }): boolean =>
+  !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat;
+
 /** One guard for every Board shortcut (decide, J/K, Z): the owner is typing, or an overlay is open. */
 export const keysSuppressed = (t: EventTarget | null, root?: { querySelector(selector: string): unknown }): boolean =>
   typing(t) || overlayOpen(root);

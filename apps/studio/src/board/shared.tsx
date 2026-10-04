@@ -31,7 +31,7 @@ import {
   stateLabel,
   styleOf,
 } from "./board";
-import { keysSuppressed } from "./keys";
+import { keysSuppressed, plainPress } from "./keys";
 import { acceptOutcome } from "./outcome";
 import { showUndo } from "./undo";
 
@@ -518,7 +518,7 @@ export function Gate({
   useEffect(() => {
     if (!keys) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || keysSuppressed(e.target)) return;
+      if (!plainPress(e) || keysSuppressed(e.target)) return;
       const d = decisionForKey(e.key);
       if (!d) return;
       e.preventDefault();

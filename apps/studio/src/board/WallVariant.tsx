@@ -24,7 +24,7 @@ import {
   styleOf,
 } from "./board";
 import { GenMark, ItemJob } from "./JobBadge";
-import { typing } from "./keys";
+import { plainPress, typing } from "./keys";
 import {
   boxesOf,
   CaseChip,
@@ -102,7 +102,7 @@ export function WallVariant({ items, all, names }: VariantProps) {
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const d = decisionForKey(e.key);
     const tile = (e.target as HTMLElement).closest<HTMLElement>(".bd-tile");
-    if (d && tile && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !typing(e.target)) {
+    if (d && tile && plainPress(e) && !typing(e.target)) {
       // A / S / C / B on a focused tile: decide without opening the lightbox
       e.preventDefault();
       const it = order.find((i) => tiles.current.get(i.id) === tile);
