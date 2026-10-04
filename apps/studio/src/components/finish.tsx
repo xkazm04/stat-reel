@@ -13,6 +13,28 @@ const css = (o: Record<string, string | number>): CSSProperties => o as CSSPrope
 
 // ------------------------------------------------------------------ mode switch
 
+type KeyLike = { key: string; preventDefault: () => void; currentTarget: { querySelector: (s: string) => unknown } | null };
+
+/**
+ * Arrow keys flip the mode and move focus to the newly checked radio (the radiogroup's roving stop).
+ * The group is read while the listener runs: React resets `currentTarget` to null once the listener
+ * returns, so reading it inside the frame callback threw and focus stayed on the unchecked radio.
+ */
+export function modeKeyDown(
+  mode: Mode,
+  onChange: (m: Mode) => void,
+  raf: (cb: () => void) => unknown = (cb) => window.requestAnimationFrame(cb),
+) {
+  return (e: KeyLike) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const group = e.currentTarget;
+    const next: Mode = mode === "monetized" ? "non_commercial" : "monetized";
+    onChange(next);
+    raf(() => (group?.querySelector(`[data-mode="${next}"]`) as HTMLElement | null)?.focus());
+  };
+}
+
 /**
  * The mode switch: the control that moves the line (a sliding key with the clay hairline at its
  * edge). `testid` adds mode-<m> test ids (use on one switch per page only).
@@ -38,15 +60,7 @@ export function ModeSwitch({
         data-mode={mode}
         role="radiogroup"
         aria-labelledby={id}
-        onKeyDown={(e) => {
-          if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
-          e.preventDefault();
-          const next: Mode = mode === "monetized" ? "non_commercial" : "monetized";
-          onChange(next);
-          window.requestAnimationFrame(() =>
-            (e.currentTarget.querySelector(`[data-mode="${next}"]`) as HTMLElement | null)?.focus(),
-          );
-        }}
+        onKeyDown={modeKeyDown(mode, onChange)}
       >
         <span className="pf-seg__label" id={id}>
           {label}
