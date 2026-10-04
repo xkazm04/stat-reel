@@ -50,6 +50,19 @@ describe("loudness", () => {
     expect(await probeDurationS(out)).toBeCloseTo(3, 1);
   }, 60_000);
 
+  it("a cancelled job stops ffmpeg: the caller's signal aborts with its own reason", async () => {
+    const reason = new Error("cancelled by owner");
+    // already cancelled: nothing runs
+    await expect(measureLoudness(sine, { signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
+    await expect(probeDurationS(sine, { signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
+    // cancelled mid-run: the two-pass normalisation stops instead of writing its output
+    const ac = new AbortController();
+    const out = join(root, "cancelled.wav");
+    const run = normalizeTo({ input: quiet, output: out, signal: ac.signal });
+    setTimeout(() => ac.abort(reason), 20);
+    await expect(run).rejects.toBe(reason);
+  }, 30_000);
+
   it("fails loudly on a missing file", async () => {
     await expect(measureLoudness(join(root, "nope.wav"))).rejects.toThrow(/ffmpeg/);
     await expect(probeDurationS(join(root, "nope.wav"))).rejects.toThrow(/ffprobe/);

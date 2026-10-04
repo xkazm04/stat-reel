@@ -14,10 +14,20 @@ export interface Loudness {
 const ffmpegBin = () => process.env.FFMPEG_PATH || "ffmpeg";
 const ffprobeBin = () => process.env.FFPROBE_PATH || "ffprobe";
 
-function run(bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+/** Lets the job's cancel reach ffmpeg (DESIGN 6.3): an aborted run rejects with the signal's reason. */
+export interface CancelOptions {
+  signal?: AbortSignal | undefined;
+}
+
+type RunResult = { stdout: string; stderr: string };
+
+function run(bin: string, signal: AbortSignal | undefined, args: string[]): Promise<RunResult> {
   return new Promise((resolve, reject) => {
-    execFile(bin, args, { maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
-      if (err) {
+    if (signal?.aborted) return reject(signal.reason);
+    const opts = { maxBuffer: 64 * 1024 * 1024, windowsHide: true, ...(signal ? { signal } : {}) };
+    execFile(bin, args, opts, (err, stdout, stderr) => {
+      if (signal?.aborted) reject(signal.reason);
+      else if (err) {
         const tail = String(stderr).trim().split(/\r?\n/).slice(-6).join("\n");
         reject(new Error(`${bin} failed (${err.message.split(/\r?\n/)[0]}): ${tail}`));
       } else resolve({ stdout: String(stdout), stderr: String(stderr) });
@@ -46,8 +56,8 @@ export function parseEbur128Summary(stderr: string): Loudness {
 }
 
 /** EBU R128 integrated loudness, true peak (ebur128 peak=true) and loudness range. */
-export async function measureLoudness(file: string): Promise<Loudness> {
-  const { stderr } = await run(ffmpegBin(), [
+export async function measureLoudness(file: string, opts: CancelOptions = {}): Promise<Loudness> {
+  const { stderr } = await run(ffmpegBin(), opts.signal, [
     "-hide_banner",
     "-nostats",
     "-nostdin",
@@ -65,15 +75,16 @@ export async function measureLoudness(file: string): Promise<Loudness> {
 }
 
 /** Container duration in seconds (ffprobe). */
-export async function probeDurationS(file: string): Promise<number> {
-  const { stdout } = await run(ffprobeBin(), ["-v", "error", "-show_entries", "format=duration", "-of", "json", file]);
+export async function probeDurationS(file: string, opts: CancelOptions = {}): Promise<number> {
+  const args = ["-v", "error", "-show_entries", "format=duration", "-of", "json", file];
+  const { stdout } = await run(ffprobeBin(), opts.signal, args);
   const d = Number((JSON.parse(stdout) as { format?: { duration?: string } }).format?.duration);
   if (!Number.isFinite(d)) throw new Error(`ffprobe: no duration for ${file}`);
   return d;
 }
 
-async function probeSampleRate(file: string): Promise<number | undefined> {
-  const { stdout } = await run(ffprobeBin(), [
+async function probeSampleRate(file: string, signal?: AbortSignal): Promise<number | undefined> {
+  const { stdout } = await run(ffprobeBin(), signal, [
     "-v",
     "error",
     "-select_streams",
@@ -104,7 +115,7 @@ function parseLoudnormJson(stderr: string): LoudnormStats {
   return JSON.parse(stderr.slice(start, end + 1)) as LoudnormStats;
 }
 
-export interface NormalizeOptions {
+export interface NormalizeOptions extends CancelOptions {
   input: string;
   output: string;
   targetLufs?: number;
@@ -128,7 +139,7 @@ export async function normalizeTo(opts: NormalizeOptions): Promise<NormalizeResu
   const TP = opts.truePeak ?? -2;
   const base = ["-hide_banner", "-nostats", "-nostdin", "-y", "-i", opts.input, "-map", "0:a:0"];
 
-  const pass1 = await run(ffmpegBin(), [
+  const pass1 = await run(ffmpegBin(), opts.signal, [
     ...base,
     "-af",
     `loudnorm=I=${I}:TP=${TP}:LRA=${opts.lra ?? 11}:print_format=json`,
@@ -161,8 +172,8 @@ export async function normalizeTo(opts: NormalizeOptions): Promise<NormalizeResu
     "print_format=json",
   ].join(":");
   // loudnorm upsamples to 192 kHz internally; keep the input rate
-  const sr = await probeSampleRate(opts.input);
-  const pass2 = await run(ffmpegBin(), [
+  const sr = await probeSampleRate(opts.input, opts.signal);
+  const pass2 = await run(ffmpegBin(), opts.signal, [
     ...base,
     "-af",
     filter,
@@ -171,6 +182,6 @@ export async function normalizeTo(opts: NormalizeOptions): Promise<NormalizeResu
     opts.output,
   ]);
   const normalizationType = parseLoudnormJson(pass2.stderr).normalization_type ?? "unknown";
-  const after = await measureLoudness(opts.output);
+  const after = await measureLoudness(opts.output, opts);
   return { before, after, normalizationType };
 }
