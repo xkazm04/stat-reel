@@ -167,6 +167,21 @@ describe("lineRaceLayout", () => {
   });
 });
 
+describe("y tick labels", () => {
+  it("never repeat: a sub-unit step shows the decimals it needs, whatever valueDecimals says", () => {
+    const small = [{ id: "a", label: "A", points: [{ t: 0, v: 0 }, { t: 1, v: 2 }] }];
+    const at = (yDomain: readonly [number, number], valueDecimals = 0) =>
+      lineRaceLayout({ series: small, t: 1, xDomain: [0, 1], yDomain, width: 1000, height: 900, valueDecimals })
+        .yTicks.map((k) => k.label);
+    // one precision per axis, so the labels share a column width
+    expect(at([0, 2])).toEqual(["0.0", "0.5", "1.0", "1.5", "2.0"]);
+    expect(at([0, 1])).toEqual(["0.00", "0.25", "0.50", "0.75", "1.00"]);
+    expect(at([0, 300])).toEqual(["0", "100", "200", "300"]);
+    expect(at([0, 300], 1)).toEqual(["0.0", "100.0", "200.0", "300.0"]);
+    for (const d of [[0, 2], [0, 0.3], [0, 7], [0, 1]] as const) expect(new Set(at(d)).size).toBe(at(d).length);
+  });
+});
+
 describe("LineRace", () => {
   const el = (t: number) => LineRace({ ...base, t, theme, growOnly: true });
   it("renders the same tree for the same inputs", () => {

@@ -102,6 +102,13 @@ export function fallbackColor(id: string): string {
   return `hsl(${h % 360} 62% 64%)`;
 }
 
+/** Decimal places a tick step needs to print exactly (0.25 -> 2, 5 -> 0); capped at 6. */
+const decimalsOf = (step: number): number => {
+  let d = 0;
+  while (d < 6 && Math.abs(Math.round(step * 10 ** d) - step * 10 ** d) > 1e-6) d++;
+  return d;
+};
+
 const cleanPoints = (pts: readonly RacePoint[]): RacePoint[] =>
   pts.filter((p) => Number.isFinite(p.t) && Number.isFinite(p.v)).sort((a, b) => a.t - b.t);
 
@@ -212,10 +219,13 @@ export function lineRaceLayout(opts: LineRaceOptions): LineRaceLayout {
   });
   const overflow = vis.length > 1 && (vis.length - 1) * minLabelGap > plot.bottom - plot.top + 1e-6;
 
-  const yTicks = niceTicks(lo, hi, opts.tickCount ?? 4).map((value) => ({
+  // a sub-unit step (0.5, 0.25) needs its own decimals, or rounding to valueDecimals repeats labels ("1", "1")
+  const tickValues = niceTicks(lo, hi, opts.tickCount ?? 4);
+  const tickDecimals = Math.max(valueDecimals, decimalsOf((tickValues[1] ?? 0) - (tickValues[0] ?? 0)));
+  const yTicks = tickValues.map((value) => ({
     value,
     y: sy(value),
-    label: formatFixed(value, valueDecimals),
+    label: formatFixed(value, tickDecimals),
   }));
 
   return {
