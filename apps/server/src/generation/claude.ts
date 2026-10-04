@@ -71,7 +71,7 @@ export function buildClaudeArgs(i: ClaudeArgsInput): string[] {
 }
 
 export function writeJobMcpConfig(p: JobPaths, apiBase: string): string {
-  writeFileSync(p.mcpJson, JSON.stringify({ mcpServers: { statreel: { type: "http", url: `${apiBase}/mcp` } } }, null, 2));
+  writeFileSync(p.mcpJson, JSON.stringify({ mcpServers: { statreel: { type: "http", url: `${apiBase}/mcp/generation` } } }, null, 2));
   return p.mcpJson;
 }
 

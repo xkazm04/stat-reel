@@ -13,7 +13,7 @@ import type { EventBus } from "./events";
 import type { HeatmapService } from "./heatmap-service";
 import type { JobRunner } from "./jobs";
 import type { LlmService } from "./llm-service";
-import { handleMcp } from "./mcp";
+import { buildGenerationMcpServer, buildMcpServer, handleMcp } from "./mcp";
 import type { Pipeline } from "./pipeline";
 import type { ProjectService } from "./projects";
 import type { Tools } from "./tools";
@@ -287,9 +287,17 @@ export function buildApp(d: AppDeps) {
   );
 
   // ---- MCP (streamable HTTP, stateless)
+  // Two catalogs, one per agent (least privilege): /mcp = co-pilot, /mcp/generation = generation worker.
   app.all("/mcp", async (c) => {
     const body = c.req.method === "POST" ? await c.req.json().catch(() => undefined) : undefined;
-    await handleMcp(d.tools, c.env.incoming, c.env.outgoing, body, d.generation?.mcp);
+    await handleMcp(buildMcpServer(d.tools), c.env.incoming, c.env.outgoing, body);
+    return new Response(null, { headers: { "x-hono-already-sent": "1" } });
+  });
+  app.all("/mcp/generation", async (c) => {
+    const gen = d.generation?.mcp;
+    if (!gen) return c.json({ error: "generation is not enabled" }, 404);
+    const body = c.req.method === "POST" ? await c.req.json().catch(() => undefined) : undefined;
+    await handleMcp(buildGenerationMcpServer(d.tools, gen), c.env.incoming, c.env.outgoing, body);
     return new Response(null, { headers: { "x-hono-already-sent": "1" } });
   });
 

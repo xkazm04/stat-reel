@@ -132,7 +132,7 @@ describe("prompt rendering and logs", () => {
       const p = jobPaths("gj-0123abcd", dir);
       require_mkdir(p.dir);
       writeJobMcpConfig(p, "http://127.0.0.1:8794");
-      expect(JSON.parse(readFileSync(p.mcpJson, "utf8")).mcpServers.statreel.url).toBe("http://127.0.0.1:8794/mcp");
+      expect(JSON.parse(readFileSync(p.mcpJson, "utf8")).mcpServers.statreel.url).toBe("http://127.0.0.1:8794/mcp/generation");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
