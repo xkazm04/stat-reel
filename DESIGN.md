@@ -102,6 +102,13 @@ flowchart LR
 
 ---
 
+**Pass-2 hardening (2026-10-04):**
+- **Env validation:** the env is validated once at boot (zod, `config.ts`). An unknown `LLM_MODE`/`AUDIO_MODE`/`PUBLISH_MODE` value, a NaN port or a malformed number stops the server with one readable error, so a typo can never fall into a paid or public mode. Defaults are unchanged.
+- **Errors:** `app.onError` maps named errors (QueueConflict/StalePropsError/ArchivedError 409, Refusal 422, FinalizeError, Zod 400) and unknown errors (logged 500) to JSON `{error}`. `/api`, `/events` and `/mcp` 404s are JSON.
+- **SSE:** clients are unsubscribed on a failed write, and `job.progress` is throttled to about 4/s per job (the last value is always delivered).
+- **Retention:** `llm_events` and `generation_job_events` of terminal sessions/jobs are pruned daily with the same retention.
+- **Generation worker shutdown:** the worker shuts down like the server. SIGINT/SIGTERM abort the running job, kill the CLI tree, re-queue it without burning an attempt and release the lease, within a hard 6 s bound.
+
 ## 4. Repository layout
 
 ```
@@ -209,6 +216,13 @@ Raw snapshots are immutable. A `current` pointer per source selects the snapshot
 - **Capability tests** (declared in `pipeline/capabilities.yaml`, evaluated in Python after `dbt build` — ADR 002; dbt tests keep schema integrity) per sport × kind: row counts, coverage years, null ratios, coordinate ranges. Results → `meta.capabilities(sport, kind, source_id, license_class, coverage_from, coverage_to, rows, status, detail, evaluated_at)`.
 - Curated **read-only views** for the LLM in schema `llm` with column comments (dbt `persist_docs` → DuckDB comments) — the only schema the MCP `query` tool can read. Every row carries a stable `fact_key` (for binding on-screen figures to facts) and the `attribution` string; adjusted metrics carry a plain-language `method`.
 
+**Fact-key contract (2026-10-04):**
+- Every `llm.*` `fact_key` is tested `unique` + `not_null`, and a singular test keeps keys disjoint across views. A pytest guard keeps that test's view list complete.
+- `Warehouse.facts` resolves views in name order and raises `FactKeyCollisionError` when a key resolves in two views.
+- Final standings reconcile to official championship points on real data (singular test, non-drop seasons).
+- `llm.f1_data_as_of` names the latest resulted race and the F1DB release the warehouse was built from (from the snapshot manifest, offline). `describe_views` lists `*_data_as_of` first, and a live test pins its size under the tool-result cap.
+- The ethics guard (`test_ethics_guard.py`) also flags subprocess network tools and DuckDB/dbt remote reads (http(s) URLs in read_*/from strings, httpfs) outside `client.py`.
+
 ### 5.5 Models (Python batch jobs writing DuckDB tables)
 
 - Era adjustment (league scoring rate, penalties excluded, per 90; F1 points normalized to current points system).
@@ -287,6 +301,12 @@ labelled empty state (ADR 005's real-data-only rule).
 - **Board** (§6.1): designs are full 30–90 s runs, judged by one mid-run cut-out plus harness-measured
   longevity (the `board` skill).
 
+**DataRace (2026-10-04):**
+- **Text fit:** text is measured with real advance widths generated from the OFL fonts (`scripts/font-metrics.mjs` -> `packages/viz/src/font-metrics.generated.ts`, drift-tested). Every text slot fits its schema-max string at >= 28 px by layout: a 232 px two-line name column, a two-line source line, fitted titles and fact lines.
+- **Far plane and clock:** the far plane tints toward the current leader (<= 14 %, capped so all theme text stays >= 4.5:1) and cross-fades on a lead change. The date clock rolls between periods.
+- **Motion budget:** lead fade, rank chips and clock roll share one budget of 2 motion cues per frame.
+- **Gridlines:** ticks come from viz `niceTicks` and fade in and out over 12 frames.
+
 ### 6.3 Render pipeline
 
 - `bundle()` once per code version (cached by git SHA); `selectComposition` + `renderMedia({codec: "h264", crf: 18, pixelFormat: "yuv420p", audioCodec: "aac"})`.
@@ -362,6 +382,13 @@ labelled empty state (ADR 005's real-data-only rule).
 - Read-only time-series views for the format (2026-10-04): `llm.f1_driver_race_cumulative`, `llm.f1_season_standings_by_round` (race + sprint points, reconciled to official standings outside dropped-score seasons), `llm.f1_race_winners`.
 - System prompt pack per use case in `packages/llm/prompts/` (hook formulas, narration length targets: ~150–165 wpm; 60 s ≈ 150–165 words).
 
+**MCP catalogs (2026-10-04):**
+- Two endpoints serve two catalogs (least privilege): `/mcp` is the co-pilot's tools, and `/mcp/generation` is the generation worker's (fetch_asset, get_generation_context, compute_timing_plan, validate_generation_output, plus describe_views/query). Both use the server name `statreel`.
+- Replay recomputes `is_error` from the live handler result (`isFailedToolResult`, shared with mcp.ts) and throws `ReplayRegressionError` when a call that succeeded in the recording now fails.
+- A run that stored props or a script is never classed as a refusal.
+- The tool-call cap is named for what it counts.
+- `llm_sessions` record cost and turns.
+
 ### 6.7 Publishing & metrics
 
 | Platform | API | Constraints (verified 2026-09-29) | v1 behaviour |
@@ -373,6 +400,12 @@ labelled empty state (ADR 005's real-data-only rule).
 - OAuth: tokens in OS keychain. Google supports loopback redirect (`http://127.0.0.1:<port>`). **Open question:** TikTok/Meta redirect URI rules for local apps (may require HTTPS / registered domain) — investigate at M5; fallback = local HTTPS with mkcert.
 - **Start platform audits in week 1** (owner task) — they gate public publishing.
 - Metrics job (daily, and on demand): `metrics_daily(publication_id, date, views, watch_time_s, avg_view_duration_s, likes, comments, shares, subs_delta)`; normalized across platforms; unavailable fields null. YouTube statistics are lifetime snapshots: a publication's total is its latest snapshot and per-day values are deltas (never a sum of snapshots); group totals carry `measured`/`unmeasured` counts and `lower_bound` when any member is unmeasured.
+
+**Publish job (2026-10-04):**
+- The publish job publishes the render its calendar slot pinned (`scheduleId` -> `schedule.render_id`).
+- It persists the resumable upload session as `upload-session.json` beside the render, and resumes it after a crash with `expectedSha256` from the manifest.
+- The AI disclosure line is built from `manifest.disclosure`: no "narration" claim for the no-narration format.
+- Metrics groups that mix measured and unmeasured publications render as lower bounds ("at least N views · M of K measured").
 
 ### 6.8 Provenance manifest & publish gate
 
@@ -451,6 +484,12 @@ Measured-evidence rules (2026-10-04): resolution (1080×1920 or 1920×1080), 30 
 
 ---
 
+**Evidence provenance (2026-10-04):**
+- `manifest.fonts` is MEASURED: the shipped fonts the browser's `[statreel-fonts]` report says loaded.
+- `captions.burned_in` is DERIVED: true only when the render was handed cues.
+- `disclosure.on_frame` is ATTESTED: no render probe yet. A `[statreel-disclosure]` probe is the next slice.
+- Generated videos (ADR 010) with `data_provenance: "real"` are refused at finalize unless every fact ref resolves in the warehouse and every shown figure matches its fact. `sample:` refs are refused under "real", and a missing resolver fails closed.
+
 ## 7. Lane 3 — Feasibility heatmap (long-term monitor)
 
 - **Inputs:** use-case `requires` (kinds, min seasons, formats) × `meta.capabilities` × implementation status (composition exists + its e2e passes) × registry flags (`needs_review`).
@@ -506,6 +545,10 @@ Measured-evidence rules (2026-10-04): resolution (1080×1920 or 1920×1080), 30 
 DuckDB `warehouse.duckdb`: schemas `staging_*`, `core`, `marts`, `llm` (views), `meta` (`capabilities`, `model_lineage`, `ingest_runs`, `source_snapshots`).
 
 ---
+
+- `case_ideas.archive_reason`, `board_items.archive_reason`: archiving never overwrites the owner's note.
+- Restore (`POST /api/board/:id/restore`, `/api/cases/:id/restore`) derives the pre-archive state from the surviving decision. Decisions on archived rows are refused (409).
+- `generation_jobs.cost_usd/turns`: summed across attempts, failed and cancelled runs included. `videos.cost_usd`.
 
 ## 10. Milestones
 
