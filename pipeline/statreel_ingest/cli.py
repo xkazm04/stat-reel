@@ -6,8 +6,8 @@ import argparse
 import sys
 
 from .client import EthicalClient, MissingContact
-from .config import Paths, owner_contact
-from .registry import Registry, UnknownSource
+from .config import TERMS_MAX_AGE_DAYS, Paths, owner_contact
+from .registry import Registry, UnknownSource, lint_registry
 from .snapshot import SchemaDrift
 from .throttle import BackedOff
 
@@ -16,6 +16,9 @@ INGESTERS = {"f1db": "statreel_ingest.sources.f1db"}
 
 def cmd_ingest(args: argparse.Namespace, paths: Paths) -> int:
     registry = Registry.load(paths.registry)
+    # the registry lint's per-source findings (stale terms) are said before the run, not only in tests
+    for finding in lint_registry([registry.get(args.source)], max_age_days=TERMS_MAX_AGE_DAYS):
+        print(f"warning: registry {finding.code}: {finding.message}", file=sys.stderr)
     if args.source not in INGESTERS:
         registry.require_fetchable(args.source)  # a registered-but-unimplemented source still says why
         print(f"no ingester for {args.source} yet (implemented: {', '.join(INGESTERS)})", file=sys.stderr)
