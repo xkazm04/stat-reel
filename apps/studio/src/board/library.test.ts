@@ -10,7 +10,7 @@ const item = (id: string, over: Partial<BoardItem> = {}): BoardItem => ({
   created_at: "2026-10-01T00:00:00Z", ...over,
 });
 const style = (id: string, status: StyleEntry["status"], over: Partial<StyleEntry> = {}): StyleEntry => ({
-  id, name: id, notes: null, verdict: "open", status, owner_note: null, hero_item_id: null, accepts: 0, style_rejects: 0,
+  id, name: id, notes: null, verdict: "open", status, owner_note: null, hero_item_id: null, accepts: 0, style_rejects: 0, reject_style: 0, reject_both: 0,
   pending: 0, total: 0, item_ids: [], cases: [], updated_at: null, ...over,
 });
 const uc = (id: string, over: Partial<UseCase> = {}) =>
@@ -21,7 +21,7 @@ const idea = (id: string, over: Partial<CaseIdea> = {}): CaseIdea => ({
   timeline: { unit: "year", from: 1960, to: 2020, years_from: 1960, years_to: 2020 }, span_years: 60, chart_ideas: ["streamgraph"],
   kind: "observed", method: null, data_guess: null, feasibility: null, topic: null,
   requires: [], sources: [{ name: "MusicBrainz", url: "https://musicbrainz.org", license: "CC0" }], evidence: [], data_status: "new-source",
-  source: null, status: "pending", decision: null, note: null, decided_at: null, created_at: "2026-10-01T00:00:00Z", ...over,
+  source: null, status: "pending", decision: null, note: null, archive_reason: null, decided_at: null, created_at: "2026-10-01T00:00:00Z", ...over,
 });
 
 describe("Case triage keys", () => {

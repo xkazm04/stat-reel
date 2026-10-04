@@ -168,7 +168,8 @@ export type NewCaseIdea = {
 export type CaseIdea = Omit<NewCaseIdea, "source"> & {
   id: string; span_years: number; source: Record<string, unknown> | null;
   status: "pending" | "accepted" | "rejected" | "archived" | string; decision: CaseDecision | null; note: string | null;
-  decided_at: string | null; created_at: string;
+  /** why the owner archived the idea; null while it is not archived */
+  archive_reason: string | null; decided_at: string | null; created_at: string;
 };
 
 const parse = <T>(s: string | null, d: T): T => (s ? (JSON.parse(s) as T) : d);
@@ -180,7 +181,7 @@ const hydrate = (r: typeof caseIdeas.$inferSelect): CaseIdea => ({
   data_status: r.data_status as DataStatus, source: parse(r.source_json, null), status: r.status,
   kind: (r.kind as CaseKind | null) ?? "observed", method: r.method, data_guess: r.data_guess,
   feasibility: (r.feasibility as NewCaseIdea["feasibility"]) ?? null, topic: r.topic ?? null,
-  decision: r.decision as CaseDecision | null, note: r.note, decided_at: r.decided_at, created_at: r.created_at,
+  decision: r.decision as CaseDecision | null, note: r.note, archive_reason: r.archive_reason ?? null, decided_at: r.decided_at, created_at: r.created_at,
 });
 
 export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
@@ -233,7 +234,7 @@ export class CaseIdeas {
       span_years: c.timeline.years_to - c.timeline.years_from, chart_ideas_json: JSON.stringify(c.chart_ideas ?? []),
       requires_json: JSON.stringify(c.requires ?? []), sources_json: JSON.stringify(c.sources ?? []), evidence_json: JSON.stringify(c.evidence ?? []),
       topic: c.topic ?? null, kind: c.kind ?? "observed", method: c.method?.trim() || null, data_guess: c.data_guess?.trim() || null, feasibility: c.feasibility ?? null,
-      data_status: c.data_status, source_json: c.source ? JSON.stringify(c.source) : null, status: "pending", decision: null, note: null,
+      data_status: c.data_status, source_json: c.source ? JSON.stringify(c.source) : null, status: "pending", decision: null, note: null, archive_reason: null,
       decided_at: null, created_at: now(),
     };
     this.db.insert(caseIdeas).values(row).run();
@@ -279,15 +280,15 @@ export class CaseIdeas {
   }
 
   /**
-   * Archiving never overwrites the owner's decision note (the ledger survives the edit). There is no
-   * archive_reason column, so the reason lands in `note` only when the idea has none.
+   * Archiving never touches the owner's decision note (the ledger survives the edit); the triage reason always
+   * lands in its own `archive_reason` column, which the brainstorming loop reads as a signal.
    */
   archive(ids: string[], reason: string): number {
     let n = 0;
     for (const id of ids) {
       const cur = this.get(id);
       if (!cur) continue;
-      this.db.update(caseIdeas).set({ status: "archived", note: cur.note ?? reason }).where(eq(caseIdeas.id, id)).run();
+      this.db.update(caseIdeas).set({ status: "archived", archive_reason: reason }).where(eq(caseIdeas.id, id)).run();
       n++;
     }
     return n;

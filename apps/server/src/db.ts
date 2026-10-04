@@ -200,6 +200,8 @@ export const caseIdeas = sqliteTable("case_ideas", {
   created_at: text("created_at").notNull(),
   /** topics.key (ADR 011); null until chosen or implied by an unambiguous domain */
   topic: text("topic"),
+  /** why the owner archived the idea (triage signal for the brainstorming loop); null until archived. Added by addColumn. */
+  archive_reason: text("archive_reason"),
 });
 /** The controlled list of broad domains a video belongs to (ADR 011); DDL and seed live in topics-migrate.ts. */
 export const topics = sqliteTable("topics", {
@@ -356,6 +358,7 @@ export function openDb(file: string): Db {
   addColumn("board_items", "case_idea_id", "text");
   addColumn("case_ideas", "beats_json", "text not null default '[]'");
   for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
+  addColumn("case_ideas", "archive_reason", "text");
   migrateTopics(sqlite); // topics + videos tables, seed, topic columns, backfills (ADR 011); idempotent
   return drizzle(sqlite) as Db;
 }

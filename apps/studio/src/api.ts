@@ -323,6 +323,8 @@ export type CaseIdea = {
   status: "pending" | "accepted" | "rejected" | string;
   decision: CaseDecision | null;
   note: string | null;
+  /** why the owner archived the idea; null while it is not archived */
+  archive_reason: string | null;
   decided_at: string | null;
   created_at: string;
 };

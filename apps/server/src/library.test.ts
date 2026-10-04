@@ -216,13 +216,21 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(cases.list({ status: "all" }).map((x) => x.id)).toContain(z.id);
   });
 
-  it("keeps the owner's decision note when archiving; stores the reason only when there is none", () => {
+  it("archiving keeps the decision note and always records the reason in archive_reason", () => {
     const { cases } = setup();
     const a = cases.decide(cases.create(idea).id, "reject_short", "only five years");
     const b = cases.create({ ...idea, title: "undecided" });
     cases.archive([a.id, b.id], "duplicate run");
-    expect(cases.get(a.id)).toMatchObject({ status: "archived", decision: "reject_short", note: "only five years" });
-    expect(cases.get(b.id)).toMatchObject({ status: "archived", note: "duplicate run" });
+    expect(cases.get(a.id)).toMatchObject({ status: "archived", decision: "reject_short", note: "only five years", archive_reason: "duplicate run" });
+    expect(cases.get(b.id)).toMatchObject({ status: "archived", note: null, archive_reason: "duplicate run" });
+  });
+
+  it("has no archive_reason before archiving and returns it from list", () => {
+    const { cases } = setup();
+    const a = cases.create(idea);
+    expect(cases.get(a.id)?.archive_reason).toBeNull();
+    cases.archive([a.id], "off brief");
+    expect(cases.list({ status: "archived" }).find((x) => x.id === a.id)?.archive_reason).toBe("off brief");
   });
 
   it("refuses to decide an archived idea", () => {
