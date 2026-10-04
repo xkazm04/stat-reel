@@ -9,6 +9,7 @@ import {
   JOB_EVENTS,
   keepConnected,
   reopenDelay,
+  STABLE_OPEN_MS,
   watchConnection,
 } from "./events";
 
@@ -171,6 +172,7 @@ function keeper() {
         pending = null;
       };
     },
+    () => now,
   );
   const advance = (ms: number) => {
     now += ms;
@@ -205,7 +207,7 @@ describe("keepConnected", () => {
     expect(k.inv).toHaveBeenCalledWith({ refetchType: "active" });
   });
 
-  it("backs off while the API stays down and starts over after an open", () => {
+  it("backs off while the API stays down and starts over only after a stable connection", () => {
     const k = keeper();
     k.giveUp(k.made[0] as FakeEventSource);
     k.advance(1_000);
@@ -213,9 +215,17 @@ describe("keepConnected", () => {
     k.advance(2_000);
     k.giveUp(k.made[2] as FakeEventSource);
     expect(k.delays).toEqual([1_000, 2_000, 4_000]);
+    // an open that dies at once (a draining or half-up API) is still a failure: no reset
     k.advance(4_000);
     (k.made[3] as FakeEventSource).fire("open");
+    k.advance(500);
     k.giveUp(k.made[3] as FakeEventSource);
+    expect(k.delays.at(-1)).toBe(8_000);
+    // a connection that lived past STABLE_OPEN_MS earns the base delay again
+    k.advance(8_000);
+    (k.made[4] as FakeEventSource).fire("open");
+    k.advance(STABLE_OPEN_MS);
+    k.giveUp(k.made[4] as FakeEventSource);
     expect(k.delays.at(-1)).toBe(1_000);
     expect(reopenDelay(10)).toBe(30_000);
   });

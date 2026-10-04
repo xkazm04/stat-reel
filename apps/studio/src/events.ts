@@ -149,6 +149,8 @@ export function watchConnection(
 
 /** Delay before re-opening a stream the browser gave up on: 1 s, 2 s, 4 s ... capped at 30 s. */
 export const reopenDelay = (attempt: number): number => Math.min(30_000, 1_000 * 2 ** attempt);
+/** A stream must stay open this long before the backoff starts over (an open that dies at once is a failure). */
+export const STABLE_OPEN_MS = 10_000;
 
 type Schedule = (fn: () => void, ms: number) => () => void;
 const timer: Schedule = (fn, ms) => {
@@ -161,7 +163,7 @@ const timer: Schedule = (fn, ms) => {
  * gives up for good (CLOSED) when a reconnect is answered with a non-200 or a non-SSE body - which is what
  * the Vite dev proxy returns (500 text/plain) while the API restarts. A CLOSED stream is therefore
  * replaced after `reopenDelay`, and the replacement's first open refetches the active queries (the gap
- * lost events). `attach` wires the listeners of each stream and returns their detach. Returns the stop.
+ * lost events). The backoff starts over only after a stream stayed open STABLE_OPEN_MS. `attach` wires the listeners of each stream and returns their detach. Returns the stop.
  */
 export function keepConnected(
   create: () => EventSource,
@@ -169,8 +171,10 @@ export function keepConnected(
   setState: (s: ConnectionState) => void,
   attach: (es: EventSource) => () => void,
   schedule: Schedule = timer,
+  now: () => number = Date.now,
 ): () => void {
   let attempt = 0;
+  let openedAt: number | null = null;
   let stopped = false;
   let close: (() => void) | null = null;
   let cancel: (() => void) | null = null;
@@ -190,8 +194,11 @@ export function keepConnected(
       qc,
       (s) => {
         setState(s);
-        if (s === "open") attempt = 0;
+        if (s === "open") openedAt = now();
         if (s !== "closed" || stopped) return;
+        // reconnect-storm-hygiene: only a connection that LIVED earns the base delay again
+        if (openedAt !== null && now() - openedAt >= STABLE_OPEN_MS) attempt = 0;
+        openedAt = null;
         close?.();
         cancel = schedule(() => {
           setState("connecting");
