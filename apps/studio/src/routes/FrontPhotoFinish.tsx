@@ -20,7 +20,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ProjectDetail, ProjectWithJobs } from "../api";
+import { type ProjectDetail, type ProjectWithJobs, serverError } from "../api";
 import { Defer } from "../components/arrive";
 import { useCreateProject } from "../components/createProject";
 import { DnsList, FinishPicture, LaneBar, ModeSwitch, SourceChip } from "../components/finish";
@@ -1345,7 +1345,11 @@ function LaneScene({
                       >
                         {create.isPending ? "Creating" : "Create project"} <Arrow />
                       </button>
-                      {create.isError ? <p className="pf-l4__err">Could not create the project: {String(create.error)}</p> : null}
+                      {create.isError ? (
+                        <p className="pf-l4__err" role="alert">
+                          Could not create the project: {serverError(create.error)}
+                        </p>
+                      ) : null}
                       <p>
                         Creating a project opens it in the studio, where the co-pilot drafts it. The gate still judges
                         every render.
