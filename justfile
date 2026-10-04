@@ -28,9 +28,9 @@ transform:
 capabilities:
     {{uv}} python -m statreel_ingest capabilities
 
-# recompute the feasibility heatmap (server must be running)
+# recompute the feasibility heatmap (server must be running; honours STATREEL_PORT like the server)
 heatmap:
-    node -e "fetch('http://127.0.0.1:8787/api/heatmap/recompute',{method:'POST'}).then(r=>r.json()).then(j=>{const t={};j.cells.forEach(c=>t[c.mode+':'+c.status]=(t[c.mode+':'+c.status]||0)+1);console.log(t)})"
+    node -e "const port=process.env.STATREEL_PORT||'8787';fetch('http://127.0.0.1:'+port+'/api/heatmap/recompute',{method:'POST'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(j=>{const t={};j.cells.forEach(c=>t[c.mode+':'+c.status]=(t[c.mode+':'+c.status]||0)+1);console.log(t)}).catch(e=>{console.error('heatmap: no recompute from 127.0.0.1:'+port+' ('+(e.cause?.code||e.message)+') - start the server with pnpm dev, or set STATREEL_PORT to the port it runs on');process.exit(1)})"
 
 # publish-gate policy tests
 policy-test:
