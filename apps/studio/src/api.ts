@@ -237,6 +237,8 @@ export type BoardItem = {
   status: BoardStatus | string;
   decision: BoardDecision | null;
   note: string | null;
+  /** why the item was archived (triage, or "superseded by <id>"); null while live, and for rows archived before the column existed */
+  archive_reason: string | null;
   decided_at: string | null;
   created_at: string;
 };
@@ -426,6 +428,12 @@ export const api = {
   /** Undo the owner's decision on an item: back to pending, its archived siblings restored (409 while a generation job runs for it). */
   undoBoardDecision: (id: string) =>
     request<Omit<BoardItem, "image_url"> & { restored_ids?: string[] }>("DELETE", `/api/board/${enc(id)}/decision`),
+  /** Archived designs, with their reason (the Archived tab; the default list hides them). */
+  boardArchived: () => request<BoardResponse>("GET", "/api/board?status=archived"),
+  /** Archive items with a reason (the Archived tab's undo of a restore). */
+  archiveBoard: (ids: string[], reason: string) => request<{ archived: number }>("POST", "/api/board/archive", { ids, reason }),
+  /** Back to the state the item left (decision kept; a superseded sibling returns to pending). 409 when it is not archived. */
+  restoreBoardItem: (id: string) => request<BoardItem>("POST", `/api/board/${enc(id)}/restore`),
   /** Generation queue (ADR 010): one call for every badge, plus the log, retry, cancel and manual enqueue. */
   generationOverview: () => request<GenerationOverview>("GET", "/api/generation/overview"),
   generationJob: (id: string) => request<{ job: GenerationJob; stage: string | null; log_tail: string[] }>("GET", `/api/generation/jobs/${enc(id)}`),
@@ -450,6 +458,11 @@ export const api = {
     request<{ idea: CaseIdea; job?: GenerationJob; existing?: boolean }>("POST", `/api/cases/${enc(id)}/decision`, { decision, note: note?.trim() || undefined }),
   /** Undo the owner's decision on a case idea: back to pending (409 while a generation job runs for it). */
   undoCaseDecision: (id: string) => request<CaseIdea>("DELETE", `/api/cases/${enc(id)}/decision`),
+  /** Archived case ideas, with their reason. */
+  casesArchived: () => request<CasesResponse>("GET", "/api/cases?status=archived"),
+  archiveCases: (ids: string[], reason: string) => request<{ archived: number }>("POST", "/api/cases/archive", { ids, reason }),
+  /** Back to the state the idea left (decision kept). 409 when it is not archived. */
+  restoreCase: (id: string) => request<CaseIdea>("POST", `/api/cases/${enc(id)}/restore`),
   /** The controlled topic list (active topics). */
   topics: () => request<{ topics: Topic[] }>("GET", "/api/topics"),
   /** Pick (or with null clear) the topic of a case idea. */
@@ -470,6 +483,9 @@ export const qk = {
   metrics: ["metrics"] as const,
   calendar: ["calendar"] as const,
   board: ["board"] as const,
+  /** under the board / cases prefixes, so every invalidation of those refreshes the archive too */
+  boardArchived: ["board", "archived"] as const,
+  casesArchived: ["cases", "archived"] as const,
   styles: ["styles"] as const,
   cases: ["cases"] as const,
   generation: ["generation"] as const,

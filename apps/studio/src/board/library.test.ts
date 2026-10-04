@@ -6,7 +6,7 @@ import { atRiskCount, atRiskWords, caseDecisionForKey, caseRows, DEFAULT_STYLE_F
 const item = (id: string, over: Partial<BoardItem> = {}): BoardItem => ({
   id, image: `items/${id}.png`, image_url: `/files/board/items/${id}.png`, video: null, video_url: null, duration_s: null,
   width: 1080, height: 1920, title: id, summary: null, use_case_id: "career-wins-race", proposed_case: null,
-  style: { id: "ink", name: "Ink" }, source: null, status: "pending", decision: null, note: null, decided_at: null,
+  style: { id: "ink", name: "Ink" }, source: null, status: "pending", decision: null, note: null, archive_reason: null, decided_at: null,
   created_at: "2026-10-01T00:00:00Z", ...over,
 });
 const style = (id: string, status: StyleEntry["status"], over: Partial<StyleEntry> = {}): StyleEntry => ({
@@ -44,6 +44,7 @@ describe("Board tabs", () => {
     expect(parseTab(undefined)).toBe("designs");
     expect(parseTab("styles")).toBe("styles");
     expect(parseTab("cases")).toBe("cases");
+    expect(parseTab("archived")).toBe("archived");
     expect(parseTab("nope")).toBe("designs");
   });
 });
@@ -94,6 +95,7 @@ describe("Style gallery", () => {
     expect(tabCount("cases", {})).toBeNull();
     expect(tabCount("designs", { pendingDesigns: 0 })).toBeNull();
     expect(tabCount("styles", { atRiskStyles: null })).toBeNull();
+    expect(tabCount("archived", { pendingDesigns: 9, inboxCases: 9, atRiskStyles: 9 })).toBeNull();
   });
 
   it("puts the hero first and skips items that are gone", () => {

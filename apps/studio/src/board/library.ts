@@ -7,13 +7,14 @@ import { DOMAIN_TOPIC, type Topic, type UseCase } from "@statreel/schemas";
 import type { BoardItem, CaseDecision, CaseIdea, StyleEntry, StyleStatus } from "../api";
 import { slug } from "./board";
 
-export type Tab = "designs" | "styles" | "cases";
+export type Tab = "designs" | "styles" | "cases" | "archived";
 export const TABS: readonly { tab: Tab; name: string; sub: string }[] = [
   { tab: "designs", name: "Designs", sub: "videos behind your gate" },
   { tab: "styles", name: "Styles", sub: "accepted looks, lock or retire" },
   { tab: "cases", name: "Use cases", sub: "stories worth a decade" },
+  { tab: "archived", name: "Archived", sub: "hidden, with the reason" },
 ];
-export const parseTab = (v: unknown): Tab => (v === "styles" || v === "cases" ? v : "designs");
+export const parseTab = (v: unknown): Tab => (v === "styles" || v === "cases" || v === "archived" ? v : "designs");
 
 // ---------------------------------------------------------------- styles
 
@@ -76,6 +77,7 @@ export const atRiskCount = (styles: readonly { at_risk?: true }[]): number => st
  * Styles: styles at risk of flipping to rejected.
  */
 export function tabCount(tab: Tab, c: { pendingDesigns?: number | null; inboxCases?: number | null; atRiskStyles?: number | null }): { n: number; word: string } | null {
+  if (tab === "archived") return null; // hidden items are not work waiting for the owner
   const pick = tab === "designs" ? { n: c.pendingDesigns, word: "pending" } : tab === "cases" ? { n: c.inboxCases, word: "to decide" } : { n: c.atRiskStyles, word: "at risk" };
   return typeof pick.n === "number" && pick.n > 0 ? { n: pick.n, word: pick.word } : null;
 }

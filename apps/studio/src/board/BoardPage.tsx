@@ -11,9 +11,9 @@
  *   3 Matrix      rows = styles, columns = use cases; feedback on an axis shows as a pattern
  * TODO(prototype, 2026-10-14): owner picks a variant; consolidate and delete the switcher + losers.
  *
- * Tabs (ADR 008, `?tab=designs|styles|cases`): Designs is the gate above; Styles the gallery of
+ * Tabs (ADR 008, `?tab=designs|styles|cases|archived`): Designs is the gate above; Styles the gallery of
  * accepted looks (lock / retire); Use cases the stories judged without art style, with the
- * case-loop inbox.
+ * case-loop inbox; Archived the hidden designs and ideas with their reason and a Restore.
  */
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -46,6 +46,7 @@ import "./board.css";
 
 /** Each tab and prototype variant is its own chunk: only the one on screen is fetched. */
 const CasesView = lazy(() => import("./CasesView").then((m) => ({ default: m.CasesView })));
+const ArchivedView = lazy(() => import("./ArchivedView").then((m) => ({ default: m.ArchivedView })));
 const StylesView = lazy(() => import("./StylesView").then((m) => ({ default: m.StylesView })));
 const WallVariant = lazy(() => import("./WallVariant").then((m) => ({ default: m.WallVariant })));
 const LightTableVariant = lazy(() => import("./LightTableVariant").then((m) => ({ default: m.LightTableVariant })));
@@ -204,6 +205,10 @@ export function BoardPage() {
       ) : tab === "cases" ? (
         <Suspense fallback={tabFallback}>
           <CasesView />
+        </Suspense>
+      ) : tab === "archived" ? (
+        <Suspense fallback={tabFallback}>
+          <ArchivedView names={names} />
         </Suspense>
       ) : board.isError ? (
         <Failure error={board.error} what="The board" />

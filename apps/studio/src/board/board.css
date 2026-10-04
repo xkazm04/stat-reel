@@ -2232,3 +2232,16 @@ html.bd-modal-open {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Archived tab (entity-lifecycle: archive-restore-semantics): reuses the rejected-lane cards (.bd-rl). */
+.bd-arch {
+  display: grid;
+  gap: 24px;
+}
+.bd-arch__h {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  font-size: 18px;
+}
