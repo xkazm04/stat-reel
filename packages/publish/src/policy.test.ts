@@ -80,6 +80,23 @@ describe.skipIf(!opaAvailable)("evaluatePolicy (real opa)", () => {
     expect(r.deny.some((d) => d.includes("not in the shipped-font allow-list"))).toBe(true);
   });
 
+  it("denies AI audio whose manifest says the disclosure is not on the frame", async () => {
+    expect(manifest.audio.length).toBeGreaterThan(0);
+    const m = structuredClone(manifest);
+    m.disclosure.on_frame = false;
+    const r = await evaluatePolicy(m, target);
+    expect(r.allow).toBe(false);
+    expect(r.deny).toContain("AI audio used but disclosure not placed on the frame");
+  });
+
+  it("denies a render that burned no captions", async () => {
+    const m = structuredClone(manifest);
+    m.captions.burned_in = false;
+    const r = await evaluatePolicy(m, target);
+    expect(r.allow).toBe(false);
+    expect(r.deny).toContain("captions not burned in");
+  });
+
   it("denies AI audio when the target carries no ai_disclosure", async () => {
     const r = await evaluatePolicy(manifest, { ...target, ai_disclosure: false });
     expect(r.deny).toContain("manifest declares AI audio but target.ai_disclosure is not set");

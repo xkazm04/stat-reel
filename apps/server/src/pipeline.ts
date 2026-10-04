@@ -33,7 +33,7 @@ import type { ProjectService } from "./projects";
 import type { PipelineApi } from "./tools";
 import { createSourceHasher, findReusableRender, gcBundles, propsSha256, type SourceHasher } from "./bundle-support";
 import { referencedAudioFiles, manifestBuildInfo } from "./manifest-support";
-import { parseFontsReport, renderTimeoutMs, runWorker, staleCutoffMs, sweepJobFiles, sweepPartialRuns } from "./render-support";
+import { captionsBurnedIn, type FontsReport, fontsUsedByRender, loadedFontFamilies, parseFontsReport, renderTimeoutMs, runWorker, staleCutoffMs, sweepJobFiles, sweepPartialRuns } from "./render-support";
 import type { Warehouse } from "./warehouse";
 
 const execFileP = promisify(execFile);
@@ -319,7 +319,7 @@ export class Pipeline implements PipelineApi {
       width: v.width, height: v.height, fps: num! / (den || 1), duration_s: round(Number(probe.format.duration), 2),
       video_codec: v.codec_name, audio_codec: a?.codec_name ?? "none", black_frames_s: black,
     };
-    const manifest = await this.buildManifest({ projectId: p.projectId, video, props, propsVersion: propsRow!.version, checks, maxCpsValue: maxCps(cues) });
+    const manifest = await this.buildManifest({ projectId: p.projectId, video, props, propsVersion: propsRow!.version, checks, maxCpsValue: maxCps(cues), fonts, fontFamilies: loadedFontFamilies(rendered.fontLogs), burnedIn: captionsBurnedIn(cues) });
     writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
     signal.throwIfAborted();
@@ -356,7 +356,9 @@ export class Pipeline implements PipelineApi {
     return { render_id: id, reused: prev.id, video: fileUrl(prev.path), checks: JSON.parse(prev.checks_json), policy: verdict, note: `reused render ${prev.id}` };
   }
 
-  private async buildManifest(o: { projectId: string; video: string; props: EraAdjustedProps; propsVersion: number; checks: ProvenanceManifest["checks"]; maxCpsValue: number }): Promise<ProvenanceManifest> {
+  private async buildManifest(o: { projectId: string; video: string; props: EraAdjustedProps; propsVersion: number; checks: ProvenanceManifest["checks"]; maxCpsValue: number;
+    /** the render's font report (render-support parseFontsReport); absent = unmeasured */ fonts?: FontsReport; fontFamilies?: string[]; burnedIn?: boolean;
+    /** ATTESTED: no render step reports whether the on-frame disclosure drew (see buildManifest) */ onFrameDisclosure?: boolean }): Promise<ProvenanceManifest> {
     const info = manifestBuildInfo(compositionId(o.props), repoRoot);
     const { views, models } = info;
     const lineage = await this.wh.lineage(views);
@@ -386,11 +388,16 @@ export class Pipeline implements PipelineApi {
       build: { git_sha: gitSha(), composition: info.composition, props_sha256: propsSha256(o.props), renderer: info.renderer, source_sha256: await this.hasher.hash() },
       data: { models, license_class: lineage.license_class, sources, facts_cited: [...new Set(facts)] },
       audio,
-      fonts: fontManifest.fonts.map((f) => ({ family: f.family, license: f.license, sha256: f.sha256 })),
-      captions: { burned_in: true, sidecar: ["captions.srt", "captions.vtt"], max_cps: round(o.maxCpsValue, 2) },
+      // MEASURED when the render reported its fonts (only the families it loaded); else the shipped list, ATTESTED
+      fonts: fontsUsedByRender(fontManifest.fonts, o.fonts ?? { measured: false, fallbacks: 0 }, o.fontFamilies ?? []).map((f) => ({ family: f.family, license: f.license, sha256: f.sha256 })),
+      // DERIVED from the render input (cues handed to BurnedCaptions); a render with no cues burned nothing
+      captions: { burned_in: o.burnedIn ?? true, sidecar: ["captions.srt", "captions.vtt"], max_cps: round(o.maxCpsValue, 2) },
       checks: o.checks,
       llm: session ? { engine: session.engine, session_id: session.external_session_id } : null,
-      disclosure: { ai_voice: audio.some((x) => x.kind === "tts"), ai_music: audio.some((x) => x.kind === "music"), on_frame: true },
+      disclosure: { ai_voice: audio.some((x) => x.kind === "tts"), ai_music: audio.some((x) => x.kind === "music"),
+        // ATTESTED, not measured: EraAdjustedFrame draws data-disclosure unconditionally and no render step reports it
+        // back. Callers that can probe it pass onFrameDisclosure; the gate denies a false value.
+        on_frame: o.onFrameDisclosure ?? true },
     };
   }
 

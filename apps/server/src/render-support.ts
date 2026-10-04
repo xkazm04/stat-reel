@@ -209,3 +209,36 @@ export function parseFontsReport(logs: unknown): FontsReport {
   }
   return { measured, fallbacks };
 }
+
+/** Families every browser page reported loaded (a family any page lost is not listed); empty without a parsable report. */
+export function loadedFontFamilies(logs: unknown): string[] {
+  const loaded = new Set<string>();
+  const lost = new Set<string>();
+  for (const raw of Array.isArray(logs) ? logs : []) {
+    if (typeof raw !== "string" || !raw.startsWith(FONTS_REPORT_PREFIX)) continue;
+    try {
+      const r = JSON.parse(raw.slice(FONTS_REPORT_PREFIX.length)) as { check?: unknown };
+      if (!r.check || typeof r.check !== "object") continue;
+      for (const [family, ok] of Object.entries(r.check as Record<string, unknown>)) (ok === true ? loaded : lost).add(family);
+    } catch {
+      /* a mangled report is no report */
+    }
+  }
+  return [...loaded].filter((f) => !lost.has(f));
+}
+
+/**
+ * The fonts this render drew with, for manifest.fonts. MEASURED when the browser reported (only the families it
+ * loaded, so a family the render never used cannot ride along and a lying list cannot pass the allow-list);
+ * with no report the whole shipped list stays as ATTESTED evidence and the gate still denies the render through
+ * the missing checks.font_fallbacks.
+ */
+export function fontsUsedByRender<T extends { family: string }>(shipped: readonly T[], report: FontsReport, families: readonly string[]): T[] {
+  return report.measured ? shipped.filter((f) => families.includes(f.family)) : [...shipped];
+}
+
+/**
+ * manifest.captions.burned_in, DERIVED from the render input: the composition draws BurnedCaptions from
+ * props.timing.cues (no flag switches it off), so a render handed no cues burned nothing. Not a pixel probe.
+ */
+export const captionsBurnedIn = (cues: readonly unknown[]): boolean => cues.length > 0;

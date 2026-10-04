@@ -7,6 +7,7 @@ import { paths } from "./config";
 import { openDb } from "./db";
 import { EventBus } from "./events";
 import { JobRunner } from "./jobs";
+import { captionsBurnedIn, loadedFontFamilies, parseFontsReport } from "./render-support";
 
 // no keychain, no ElevenLabs, no ffmpeg: the pipeline is driven with fakes against fixture tmp dirs
 vi.mock("@napi-rs/keyring", () => ({ Entry: class { getPassword() { return "test"; } } }));
@@ -172,6 +173,38 @@ describe("provenance manifest (pipeline-honest-gate-inputs)", () => {
     const m2 = await build.call(pipeline, { projectId: "p1", video, props: { ...props, timing }, propsVersion: 2, checks: {}, maxCpsValue: 10 });
     expect(m2.audio).toEqual([]);
     expect(m2.disclosure.ai_voice).toBe(false);
+  });
+
+  it("measures captions and fonts from the render and the real gate denies when they (or the disclosure) are off", async () => {
+    const { root, pipeline } = setup();
+    const dir = path.join(root, "audio", "p1");
+    mkdirSync(dir, { recursive: true });
+    const used = Buffer.from("current take");
+    writeFileSync(path.join(dir, "k1.mp3"), used);
+    const sha = createHash("sha256").update(used).digest("hex");
+    const { db } = pipeline as unknown as { db: { $client: { prepare: (q: string) => { run: (...a: unknown[]) => void } } } };
+    db.$client.prepare("insert into assets (id, project_id, kind, provider, plan_tier, path, sha256, generated_at) values ('a1', 'p1', 'tts', 'elevenlabs', 'starter', '', ?, '2026-01-01T00:00:00Z')").run(sha);
+    const video = path.join(root, "video.mp4");
+    writeFileSync(video, "v");
+    (pipeline as unknown as { wh: unknown }).wh = { lineage: vi.fn(async () => ({ license_class: "legal", sources: [] })), rows: vi.fn(async () => []) };
+    const props = { ...propsRow.props, rows: [], timing: { ...timing, scenes: [{ scene_id: "a", start_s: 0, end_s: 5, voice_src: "http://127.0.0.1:8787/files/audio/p1/k1.mp3" }] } };
+    const build = (o: object) => (pipeline as unknown as { buildManifest: (o: object) => Promise<import("@statreel/schemas").ProvenanceManifest> }).buildManifest.call(pipeline, { projectId: "p1", video, props, propsVersion: 1, checks: {}, maxCpsValue: 10, ...o });
+
+    // the font report names the families the browser loaded: only those are recorded
+    const logs = [`[statreel-fonts]${JSON.stringify({ loaded: [], failed: [], check: { Inter: true, "JetBrains Mono": true }, fallbacks: 0 })}`];
+    const measured = await build({ fonts: parseFontsReport(logs), fontFamilies: loadedFontFamilies(logs), burnedIn: captionsBurnedIn([{}]) });
+    expect([...new Set(measured.fonts.map((f) => f.family))].sort()).toEqual(["Inter", "JetBrains Mono"]);
+    expect(measured.captions.burned_in).toBe(true);
+    expect((await build({ burnedIn: captionsBurnedIn([]) })).captions.burned_in).toBe(false);
+    expect((await build({ onFrameDisclosure: false })).disclosure.on_frame).toBe(false);
+
+    // the file mocks evaluatePolicy: this one goes to the real opa (skipped like packages/publish when there is no binary)
+    const { evaluatePolicy, defaultOpaBin } = await vi.importActual<typeof import("@statreel/publish")>("@statreel/publish");
+    if (process.env.OPA_BIN ? !existsSync(process.env.OPA_BIN) : process.platform === "win32" && !existsSync(defaultOpaBin())) return;
+    const off = await evaluatePolicy(await build({ onFrameDisclosure: false }), target);
+    expect(off.deny).toContain("AI audio used but disclosure not placed on the frame");
+    const bare = await evaluatePolicy(await build({ burnedIn: false }), target);
+    expect(bare.deny).toContain("captions not burned in");
   });
 });
 

@@ -41,6 +41,14 @@ checks_run := [
 	"description_missing_attribution",
 ]
 
+# Evidence provenance (pipeline.ts buildManifest, render-support.ts):
+#   MEASURED  checks.* from ffprobe/loudness/blackdetect and the browser font report; manifest.fonts is the set of
+#             families the render reported loaded.
+#   DERIVED   captions.burned_in is true iff the render was handed cues (BurnedCaptions draws them unconditionally).
+#   ATTESTED  disclosure.on_frame is asserted by the pipeline: EraAdjustedFrame always draws data-disclosure and no
+#             render step probes it back, so ai_audio_without_on_frame_disclosure fires on a pipeline that stops
+#             asserting it or on a hand-edited manifest.
+#
 # Numeric evidence the gate cannot pass without.
 required_evidence := [
 	"captions.max_cps",
