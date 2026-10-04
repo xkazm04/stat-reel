@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GenerationOverview } from "../api";
-import { badgeForCase, elapsed, errorWords, hasActiveJobs, type JobRow, type OverviewCase, stripState } from "./jobs";
+import { badgeForCase, canCancel, elapsed, errorWords, hasActiveJobs, type JobRow, type OverviewCase, stripState, WORKER_OFFLINE_RUNNING } from "./jobs";
 
 const job = (o: Partial<JobRow>): JobRow =>
   ({
@@ -21,7 +21,22 @@ describe("badgeForCase (D.11)", () => {
   it("running shows the clock and the current tool", () => {
     const b = badge({ stage: "visuals_running" }, [job({ status: "running", started_at: "2026-10-03T10:00:00.000Z", last_tool: "Write", progress_note: "writing variants" })]);
     expect(b).toMatchObject({ kind: "running", label: "Running · 03:12 · Write", detail: "writing variants" });
-    expect(b?.actions).toEqual(["log"]);
+    expect(b?.actions).toEqual(["cancel", "log"]);
+  });
+
+  it("queued and running offer Cancel; finished jobs do not", () => {
+    expect(badge({}, [job({})])?.actions).toEqual(["cancel", "log"]);
+    expect(badge({}, [job({ status: "failed" })])?.actions).not.toContain("cancel");
+    expect(badge({}, [job({ status: "cancelled" })])?.actions).not.toContain("cancel");
+    expect(canCancel(job({ status: "queued" }))).toBe(true);
+    expect(canCancel(job({ status: "running" }))).toBe(true);
+    expect(canCancel(job({ status: "done" }))).toBe(false);
+    expect(canCancel(undefined)).toBe(false);
+  });
+
+  it("a running job with the worker offline says so instead of showing live progress", () => {
+    const running = job({ status: "running", started_at: "2026-10-03T10:00:00.000Z", progress_note: "writing variants" });
+    expect(badge({ stage: "visuals_running" }, [running], { online: false })).toMatchObject({ kind: "running", detail: WORKER_OFFLINE_RUNNING, actions: ["cancel", "log"] });
   });
 
   it("visuals ready counts the pending variants; an accepted design offers Generate video", () => {
@@ -79,6 +94,12 @@ describe("queue strip and polling", () => {
   it("says so when the worker is offline", () => {
     expect(stripState(o({ worker: { online: false, pid: null, heartbeat_at: null, queued: 0, running: 0 } }))).toMatchObject({ text: "Generation worker offline", offline: true });
     expect(stripState(o({ worker: { online: false, pid: null, heartbeat_at: null, queued: 1, running: 0 } })).text).toBe("1 queued · waiting for the worker");
+  });
+  it("a running job with the worker offline reads as stalled, not Generating", () => {
+    const running = { job: job({ status: "running" }), title: "Search box wars" };
+    const s = stripState(o({ running, worker: { online: false, pid: null, heartbeat_at: null, queued: 1, running: 1 } }));
+    expect(s).toEqual({ text: `Search box wars: ${WORKER_OFFLINE_RUNNING} · 1 queued`, offline: true, active: true });
+    expect(s.text).not.toMatch(/Generating/);
   });
   it("polls only while a job is queued or running", () => {
     expect(hasActiveJobs(o({ jobs: [job({ status: "done" })] }))).toBe(false);

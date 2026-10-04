@@ -9,7 +9,7 @@ import type { GenerationOverview } from "../api";
 export type OverviewCase = GenerationOverview["cases"][string];
 export type JobRow = GenerationOverview["jobs"][number];
 export type BadgeKind = "queued" | "running" | "ready" | "done" | "failed" | "cancelled" | "blocked" | "waiting";
-export type BadgeAction = "retry" | "log" | "generate" | "sources" | "variants" | "video";
+export type BadgeAction = "retry" | "cancel" | "log" | "generate" | "sources" | "variants" | "video";
 export type Badge = {
   kind: BadgeKind;
   /** the visible words; every state has a shape and a label, colour is never the only signal */
@@ -31,6 +31,12 @@ export const ERROR_WORDS: Record<string, string> = {
   cancelled: "cancelled",
   budget: "budget reached",
 };
+/** Shown while a job is marked running but no worker holds the lease (ADR 010: the lease is reclaimed on restart). */
+export const WORKER_OFFLINE_RUNNING = "worker offline - resumes or fails when it restarts";
+
+/** Cancel is always available for a live job (ADR 010, caps off); finished jobs have nothing to cancel. */
+export const canCancel = (job: Pick<JobRow, "status"> | null | undefined): boolean => job?.status === "queued" || job?.status === "running";
+
 export const errorWords = (kind: string | null | undefined): string => (kind ? (ERROR_WORDS[kind] ?? kind) : "error");
 
 /** "03:12" (mm:ss), "1:02:03" past an hour; 0 before the job started. */
@@ -55,10 +61,10 @@ export type BadgeInput = {
 const jobBadge = (job: JobRow | undefined, workerOnline: boolean, now: number): Badge | null => {
   if (!job) return null;
   if (job.status === "queued") {
-    return { kind: "queued", label: `Queued${job.queue_position ? ` · #${job.queue_position}` : ""}`, detail: workerOnline ? undefined : "waiting for worker", actions: ["log"], jobId: job.id };
+    return { kind: "queued", label: `Queued${job.queue_position ? ` · #${job.queue_position}` : ""}`, detail: workerOnline ? undefined : "waiting for worker", actions: ["cancel", "log"], jobId: job.id };
   }
   if (job.status === "running") {
-    return { kind: "running", label: `Running · ${elapsed(job.started_at, now)}${job.last_tool ? ` · ${job.last_tool}` : ""}`, detail: job.progress_note ?? undefined, actions: ["log"], jobId: job.id };
+    return { kind: "running", label: `Running · ${elapsed(job.started_at, now)}${job.last_tool ? ` · ${job.last_tool}` : ""}`, detail: workerOnline ? (job.progress_note ?? undefined) : WORKER_OFFLINE_RUNNING, actions: ["cancel", "log"], jobId: job.id };
   }
   if (job.status === "failed") return { kind: "failed", label: `Failed · ${errorWords(job.error_kind)}`, detail: job.error ?? undefined, actions: ["retry", "log"], jobId: job.id };
   if (job.status === "cancelled") return { kind: "cancelled", label: "Cancelled", actions: ["retry"], jobId: job.id };
@@ -106,6 +112,10 @@ export function stripState(o: GenerationOverview | undefined): StripState {
   if (!o) return { text: "", offline: false, active: false };
   const queued = o.worker.queued;
   const offline = !o.worker.online;
+  if (o.running && offline) {
+    // a dead worker must not read as live progress: say it, keep the title so the owner knows which job is stuck
+    return { text: `${o.running.title}: ${WORKER_OFFLINE_RUNNING}${queued ? ` · ${queued} queued` : ""}`, offline, active: true };
+  }
   if (o.running) {
     return { text: `Generating: ${o.running.title}${queued ? ` · ${queued} queued` : ""}`, offline, active: true };
   }

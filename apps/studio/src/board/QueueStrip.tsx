@@ -3,7 +3,8 @@
  * when the lease heartbeat is stale. A details list shows the recent jobs with their log.
  */
 import { useState } from "react";
-import { elapsed, errorWords, stripState } from "./jobs";
+import { CancelJobButton } from "./JobBadge";
+import { canCancel, elapsed, errorWords, stripState } from "./jobs";
 import { LogDrawer } from "./LogDrawer";
 import { useOverview } from "./useGeneration";
 import "./jobs.css";
@@ -21,7 +22,10 @@ export function QueueStrip() {
         {s.offline ? "⊘" : s.active ? "◐" : "○"}
       </span>
       <b className="jq__text">{s.text}</b>
-      {s.offline && ov.data.worker.queued ? <span className="jq__hint">run `pnpm worker`</span> : null}
+      {s.offline && (ov.data.worker.queued || ov.data.running) ? <span className="jq__hint">run `pnpm worker`</span> : null}
+      {ov.data.running && canCancel(ov.data.running.job) ? (
+        <CancelJobButton jobId={ov.data.running.job.id} title={ov.data.running.title} testId="queue-cancel-running" />
+      ) : null}
       {recent.length ? (
         <details className="jq__jobs">
           <summary data-testid="queue-jobs">Jobs</summary>
@@ -36,6 +40,7 @@ export function QueueStrip() {
                   {j.status === "failed" ? ` · ${errorWords(j.error_kind)}` : ""}
                   {j.status === "queued" && j.queue_position ? ` · #${j.queue_position}` : ""}
                 </span>
+                {canCancel(j) ? <CancelJobButton jobId={j.id} title={titles.get(j.case_id) ?? j.case_id} testId={`queue-cancel-${j.id}`} /> : null}
                 <button type="button" className="bd-linkbtn" onClick={() => setLog(j.id)}>
                   Log
                 </button>

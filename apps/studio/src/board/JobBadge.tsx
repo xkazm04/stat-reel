@@ -2,11 +2,11 @@
  * JobBadge (SPEC D.11): the state of a case's background generation, on every case row, on generated
  * tiles and in the lightbox. Every state is a shape plus words, never colour alone: queued, running (clock
  * and current tool, with an indeterminate bar), "3 visuals ready", "Video ready", failed (Retry, View log),
- * data blocked (the gate's reason and a link to Sources) and cancelled (Retry).
+ * data blocked (the gate's reason and a link to Sources) cancelled (Retry); queued and running offer Cancel (confirmed).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type BoardItem, qk, serverError } from "../api";
 import { type Badge, type BadgeKind, badgeForCase } from "./jobs";
 import { LogDrawer } from "./LogDrawer";
@@ -22,6 +22,59 @@ function useBadgeActions() {
   const retry = useMutation({ mutationFn: (id: string) => api.retryGeneration(id), onSuccess: refresh });
   const generate = useMutation({ mutationFn: (v: { caseId: string; itemId: string }) => api.generateVideo(v.caseId, v.itemId), onSuccess: refresh });
   return { retry, generate };
+}
+
+/**
+ * Cancel for a queued or running job (ADR 010: always available while caps are off). Confirms in the same
+ * native <dialog> the calendar uses (`cal-confirm`, `confirm-yes`), then cancels and refreshes the generation
+ * queries. The dialog only mounts while open so a page never carries two `confirm-yes` buttons.
+ */
+export function CancelJobButton({ jobId, title, testId }: { jobId: string; title: string; testId: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDialogElement>(null);
+  const cancel = useMutation({
+    mutationFn: () => api.cancelGeneration(jobId),
+    onSettled: () => void qc.invalidateQueries({ queryKey: qk.generation }),
+  });
+  useEffect(() => {
+    const d = ref.current;
+    if (open && d && !d.open) d.showModal();
+  }, [open]);
+  return (
+    <>
+      <button type="button" className="bd-linkbtn" data-testid={testId} aria-label={`Cancel generation: ${title}`} disabled={cancel.isPending} onClick={() => setOpen(true)}>
+        Cancel
+      </button>
+      {cancel.isError ? (
+        <span className="jb__err" role="alert">
+          {serverError(cancel.error)}
+        </span>
+      ) : null}
+      {open ? (
+        <dialog ref={ref} className="cal-confirm" aria-label={`Cancel generation: ${title}`} onClose={() => setOpen(false)}>
+          <h2 className="cal-confirm__t">Cancel this generation?</h2>
+          <p className="cal-confirm__b">{title}: the job stops and nothing it has not finished is kept. You can retry it afterwards.</p>
+          <div className="cal-confirm__acts">
+            <button type="button" className="btn btn--sm" onClick={() => ref.current?.close()}>
+              Keep running
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              data-testid="confirm-yes"
+              onClick={() => {
+                ref.current?.close();
+                cancel.mutate();
+              }}
+            >
+              Cancel job
+            </button>
+          </div>
+        </dialog>
+      ) : null}
+    </>
+  );
 }
 
 export function JobBadge({ caseId, compact = false, pendingVariants }: { caseId: string; compact?: boolean; pendingVariants?: number }) {
@@ -57,6 +110,7 @@ export function JobBadge({ caseId, compact = false, pendingVariants }: { caseId:
               Retry
             </button>
           ) : null}
+          {has("cancel") && badge.jobId ? <CancelJobButton jobId={badge.jobId} title={entry.title} testId={`job-cancel-${caseId}`} /> : null}
           {has("log") && badge.jobId ? (
             <button type="button" className="bd-linkbtn" data-testid={`job-viewlog-${caseId}`} onClick={() => setLog(badge.jobId as string)}>
               View log

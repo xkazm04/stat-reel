@@ -1969,3 +1969,8 @@ button.tl-b {
   gap: 8px;
   justify-items: start;
 }
+
+/* gen-cancel-and-offline-badge: the Cancel confirm reuses .cal-confirm (calendar.css); the strip lays its Cancel beside the text. */
+.jq > .bd-linkbtn {
+  margin-left: 4px;
+}
