@@ -40,10 +40,15 @@ export function loadComposition(): Promise<CompositionInfo> {
         },
       };
     },
-    (err: unknown): CompositionInfo => ({
-      status: "missing",
-      reason: `@statreel/compositions failed to load: ${err instanceof Error ? err.message : String(err)}`,
-    }),
+    (err: unknown): CompositionInfo => {
+      // a failed chunk (dev server restarting, a broken build being fixed) is not final: the next
+      // mount tries again instead of reading this failure until a full reload
+      cached = null;
+      return {
+        status: "missing",
+        reason: `@statreel/compositions failed to load: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    },
   );
   return cached;
 }
