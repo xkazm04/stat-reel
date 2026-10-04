@@ -92,14 +92,17 @@ export type LineRaceLayout = {
   overflow: boolean;
 };
 
-/** Stable colour from the id: same id -> same hue on every frame and every render. */
+/**
+ * Stable colour from the id: same id -> same hue on every frame and every render. Lightness 32 %
+ * keeps every hue >= 3:1 against the light Photo Finish sheet (ADR 009); at 64 % yellows sat at 1.3:1.
+ */
 export function fallbackColor(id: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < id.length; i++) {
     h ^= id.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
-  return `hsl(${h % 360} 62% 64%)`;
+  return `hsl(${h % 360} 62% 32%)`;
 }
 
 /** Decimal places a tick step needs to print exactly (0.25 -> 2, 5 -> 0); capped at 6. */

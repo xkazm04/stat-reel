@@ -167,6 +167,36 @@ describe("lineRaceLayout", () => {
   });
 });
 
+describe("fallbackColor", () => {
+  /** WCAG relative luminance of an `hsl(h s% l%)` colour or a #rrggbb hex. */
+  const luminance = (css: string): number => {
+    let rgb: number[];
+    const m = /^hsl\((\d+(?:\.\d+)?) (\d+(?:\.\d+)?)% (\d+(?:\.\d+)?)%\)$/.exec(css);
+    if (m) {
+      const [h, s, l] = [Number(m[1]), Number(m[2]) / 100, Number(m[3]) / 100];
+      const k = (n: number) => (n + h / 30) % 12;
+      const a = s * Math.min(l, 1 - l);
+      rgb = [0, 8, 4].map((n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)));
+    } else rgb = [1, 3, 5].map((i) => Number.parseInt(css.slice(i, i + 2), 16) / 255);
+    const lin = rgb.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * (lin[0] as number) + 0.7152 * (lin[1] as number) + 0.0722 * (lin[2] as number);
+  };
+  const contrast = (a: string, b: string) => {
+    const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p) as [number, number];
+    return (x + 0.05) / (y + 0.05);
+  };
+  // videoTheme.background in packages/design-tokens/src/index.ts (the Photo Finish timing sheet, ADR 009);
+  // viz does not depend on design-tokens, so the one value is pinned here
+  const SHEET = "#eceff2";
+
+  it("every id's line reaches 3:1 against the video sheet (WCAG 1.4.11 non-text contrast)", () => {
+    expect(contrast("#ffffff", "#000000")).toBeCloseTo(21, 5);
+    const ids = Array.from({ length: 400 }, (_, i) => `driver-${i}`);
+    const worst = Math.min(...ids.map((id) => contrast(fallbackColor(id), SHEET)));
+    expect(worst).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe("y tick labels", () => {
   it("never repeat: a sub-unit step shows the decimals it needs, whatever valueDecimals says", () => {
     const small = [{ id: "a", label: "A", points: [{ t: 0, v: 0 }, { t: 1, v: 2 }] }];
