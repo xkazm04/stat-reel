@@ -17,7 +17,13 @@ export const retryClick =
 
 export function RetryButton({ onRetry, busy = false }: { onRetry: () => void; busy?: boolean }) {
   return (
-    <button type="button" className="btn btn--sm failure__retry" onClick={retryClick(onRetry)} disabled={busy} aria-busy={busy}>
+    <button
+      type="button"
+      className="btn btn--sm failure__retry"
+      onClick={retryClick(onRetry)}
+      disabled={busy}
+      aria-busy={busy}
+    >
       {busy ? "Retrying" : "Retry"}
     </button>
   );

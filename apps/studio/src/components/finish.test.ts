@@ -8,8 +8,19 @@ function press(key: string, mode: Mode) {
   const changed: Mode[] = [];
   const frames: (() => void)[] = [];
   const group = { querySelector: (sel: string) => ({ focus: () => focused.push(sel) }) };
-  const ev = { key, prevented: false, preventDefault() { ev.prevented = true; }, currentTarget: group as typeof group | null };
-  modeKeyDown(mode, (m) => changed.push(m), (cb) => frames.push(cb))(ev);
+  const ev = {
+    key,
+    prevented: false,
+    preventDefault() {
+      ev.prevented = true;
+    },
+    currentTarget: group as typeof group | null,
+  };
+  modeKeyDown(
+    mode,
+    (m) => changed.push(m),
+    (cb) => frames.push(cb),
+  )(ev);
   // react-dom executeDispatch: `event.currentTarget = null` once the listener has returned
   ev.currentTarget = null;
   for (const f of frames) f();
