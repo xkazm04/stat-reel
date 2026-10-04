@@ -12,9 +12,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { e2eModes } from "../scripts/e2e-preflight.mjs";
 
 const API = `http://127.0.0.1:${process.env.E2E_API_PORT ?? "8787"}`;
-test.skip(!!process.env.E2E_LIVE, "fake-mode generation test");
+// fake-mode only: a live worker would hand these jobs to the real Claude CLI
+test.skip(!!process.env.E2E_LIVE || e2eModes().GEN_MODE !== "fake", "fake-mode generation test");
 test.describe.configure({ mode: "serial" });
 
 const PNG_1X1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64");

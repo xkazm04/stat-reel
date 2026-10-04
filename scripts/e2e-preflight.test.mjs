@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
-import { audioFixturesMessage, chromeCandidates, portCollisionMessage, preflightProblems, pruneCandidates, warehouseMessage, warehousePath } from "./e2e-preflight.mjs";
+import { audioFixturesMessage, chromeCandidates, e2eModes, portCollisionMessage, preflightProblems, pruneCandidates, warehouseMessage, warehousePath } from "./e2e-preflight.mjs";
 
 const run = (ts) => [`app-${ts}.sqlite`, `app-${ts}.sqlite-shm`, `app-${ts}.sqlite-wal`];
 
@@ -69,4 +69,10 @@ test("live audio mode does not need replay fixtures; AUDIO_MODE unset means repl
 test("warehouse path honours STATREEL_WAREHOUSE like config.ts and defaults to data/warehouse.duckdb", () => {
   assert.equal(warehousePath({}, "/r"), path.resolve("/r", "data", "warehouse.duckdb"));
   assert.equal(warehousePath({ STATREEL_WAREHOUSE: "x/w.duckdb" }, "/r"), path.resolve("/r", "x/w.duckdb"));
+});
+
+test("e2e modes default to the no-spend side for every lane, generation included; explicit values pass through", () => {
+  assert.deepEqual(e2eModes({}), { LLM_MODE: "replay", AUDIO_MODE: "replay", PUBLISH_MODE: "dry", GEN_MODE: "fake", LLM_RECORD: "", AUDIO_RECORD: "" });
+  const live = { LLM_MODE: "live", AUDIO_MODE: "live", PUBLISH_MODE: "dry", GEN_MODE: "live", LLM_RECORD: "1", AUDIO_RECORD: "1" };
+  assert.deepEqual(e2eModes(live), live);
 });

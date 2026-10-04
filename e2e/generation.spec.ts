@@ -6,10 +6,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { e2eModes } from "../scripts/e2e-preflight.mjs";
 
 const API = `http://127.0.0.1:${process.env.E2E_API_PORT ?? "8787"}`;
 
-test.skip(!!process.env.E2E_LIVE, "fake-mode generation test");
+// fake-mode only: a live worker would hand these jobs to the real Claude CLI
+test.skip(!!process.env.E2E_LIVE || e2eModes().GEN_MODE !== "fake", "fake-mode generation test");
 
 test("generation: a visual_options job runs queued -> done in the worker process", async ({ request }) => {
   test.setTimeout(8 * 60_000);

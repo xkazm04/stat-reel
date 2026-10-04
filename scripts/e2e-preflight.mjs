@@ -48,6 +48,22 @@ export function audioFixturesMessage(dir) {
   return `e2e preflight: audio replay fixtures missing or empty at ${dir} - they are local-only by policy (the owner's "never commit audio" rule keeps them out of git) and are produced only by a recorded live run (AUDIO_RECORD, owner-gated ElevenLabs spend); restore them from the owner's machine, do not record one without approval`;
 }
 
+/**
+ * The mode env the e2e servers get. Unset means the no-spend side for EVERY lane: `pnpm e2e` sets these
+ * explicitly, but a bare `playwright test` (the IDE runner, one spec by hand) does not, and the server's own
+ * defaults are the live ones. GEN_MODE=live would hand the generation specs' jobs to the real Claude CLI.
+ */
+export function e2eModes(env = process.env) {
+  return {
+    LLM_MODE: env.LLM_MODE ?? "replay",
+    AUDIO_MODE: env.AUDIO_MODE ?? "replay",
+    PUBLISH_MODE: env.PUBLISH_MODE ?? "dry",
+    GEN_MODE: env.GEN_MODE ?? "fake",
+    LLM_RECORD: env.LLM_RECORD ?? "",
+    AUDIO_RECORD: env.AUDIO_RECORD ?? "",
+  };
+}
+
 /** Where Playwright's "chrome" channel would find an installed Chrome. */
 export function chromeCandidates(platform = process.platform, env = process.env) {
   if (platform === "win32") {
