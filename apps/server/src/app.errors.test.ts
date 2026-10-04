@@ -168,3 +168,23 @@ describe("job lists are cut in SQL, not in JS", () => {
     expect(list.mock.calls).toEqual([["p1", 5], ["p2", 5]]);
   });
 });
+
+describe("POST /api/projects reports through the shared error door", () => {
+  const appCreating = (err: unknown) =>
+    buildApp({ bus: new EventBus(), topics: {}, runner: { list: () => [] }, projects: { create: () => { throw err; } } } as unknown as AppDeps);
+  const create = (app: ReturnType<typeof appCreating>) =>
+    app.request("/api/projects", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+
+  it("a database failure is a logged 500, bad input stays 400", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const db = await create(appCreating(Object.assign(new Error("database is locked"), { name: "SqliteError" })));
+      expect([db.status, (await body(db)).error]).toEqual([500, "database error"]);
+      expect(spy).toHaveBeenCalled();
+      const bad = await create(appCreating(new Error("unknown use case x")));
+      expect([bad.status, (await body(bad)).error]).toEqual([400, "unknown use case x"]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

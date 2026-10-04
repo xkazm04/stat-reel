@@ -77,6 +77,12 @@ export function buildApp(d: AppDeps) {
     return c.json(body, status as 500);
   });
   app.notFound((c) => (/^\/(api|events|mcp)(\/|$)/.test(c.req.path) ? c.json({ error: "not found" }, 404) : c.text("404 Not Found", 404)));
+  // The inline catches of user-input routes: validation errors stay 400 (plain Error, ZodError, bad JSON);
+  // a failing database is a server bug, so it is 500 and logged.
+  const bad = (c: Context, e: unknown) => {
+    const { status, body } = mapError(e, 400);
+    return c.json(body, status as 400);
+  };
 
   // Reads revalidate instead of re-downloading: gzip, a strong ETag (a matching If-None-Match gets a
   // bodyless 304) and `no-cache`, so a screen always sees fresh data but unchanged JSON costs no bytes.
@@ -104,7 +110,7 @@ export function buildApp(d: AppDeps) {
   // ---- projects
   app.get("/api/projects", (c) => c.json({ projects: d.projects.list().map((p) => ({ ...p, jobs: d.runner.list(p.id, 5) })) }));
   app.post("/api/projects", async (c) => {
-    try { return c.json(d.projects.create(await c.req.json()), 201); } catch (e) { return c.json({ error: e instanceof Error ? e.message : String(e) }, 400); }
+    try { return c.json(d.projects.create(await c.req.json()), 201); } catch (e) { return bad(c, e); }
   });
   app.get("/api/projects/:id", (c) => {
     const id = c.req.param("id");
@@ -152,11 +158,6 @@ export function buildApp(d: AppDeps) {
   });
 
   // ---- calendar (channels + scheduling of composed videos; ADR 006)
-  // Validation errors stay 400 (plain Error, ZodError, bad JSON); a failing database is a server bug, so it is 500 and logged.
-  const bad = (c: Context, e: unknown) => {
-    const { status, body } = mapError(e, 400);
-    return c.json(body, status as 400);
-  };
   app.get("/api/calendar", (c) => {
     const titles = new Map(d.projects.list().map((p) => [p.id, p]));
     const slots = d.calendar.list({ from: c.req.query("from"), to: c.req.query("to") }).map((s) => ({ ...s, project: titles.get(s.project_id) ?? null }));
