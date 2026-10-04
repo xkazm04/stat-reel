@@ -76,7 +76,8 @@ function loadFonts(): void {
   const handle = delayRender("Loading OFL fonts from fonts/");
   const status = { loaded: [] as string[], failed: [] as string[] };
   window.__statreelFonts = status;
-  Promise.all(
+  // every face settles before anything is decided, so the report and the error list all failures
+  Promise.allSettled(
     FONT_FACES.map(async (f) => {
       const face = new FontFace(f.family, `url("${f.url}") format("woff2")`, {
         weight: f.weight,
@@ -89,11 +90,12 @@ function loadFonts(): void {
         status.loaded.push(`${f.family} ${f.weight}`);
       } catch (err) {
         status.failed.push(`${f.family} ${f.weight}`);
-        throw err;
+        // the browser's rejection ("A network error occurred.") names no font: say which face it was
+        throw new Error(`OFL font ${f.family} ${f.weight} (${f.file}) failed to load: ${err instanceof Error ? err.message : String(err)}`);
       }
     }),
   )
-    .then(() => {
+    .then((results) => {
       const check = Object.fromEntries(
         REQUIRED_FAMILIES.map((family) => [
           family,
@@ -105,7 +107,9 @@ function loadFonts(): void {
       // faces that failed to load plus required families the document does not report as loaded.
       const fallbacks = status.failed.length + Object.values(check).filter((ok) => !ok).length;
       console.log(`${FONTS_REPORT_PREFIX}${JSON.stringify({ ...status, check, fallbacks })}`);
-      continueRender(handle);
+      const errors = results.flatMap((r) => (r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : []));
+      if (errors.length) cancelRender(new Error(errors.join("; ")));
+      else continueRender(handle);
     })
     .catch((err: unknown) => cancelRender(err instanceof Error ? err : new Error(String(err))));
 }

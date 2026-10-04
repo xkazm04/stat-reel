@@ -6,7 +6,7 @@ import { videoTheme } from "@statreel/design-tokens";
 import { type EraAdjustedProps, EraAdjustedPropsSchema, sampleEraProps } from "@statreel/schemas";
 import { slopegraphLayout } from "@statreel/viz";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   audioCues,
   COMPOSITIONS,
@@ -162,6 +162,53 @@ describe("fonts", () => {
       expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(f.file.startsWith("fonts/")).toBe(true);
       expect(existsSync(path.join(repoRoot, f.file))).toBe(true);
+    }
+  });
+
+  it("a face that fails to load cancels the render naming its family, weight and file, after the report line", async () => {
+    const cancelled: Error[] = [];
+    const logs: string[] = [];
+    const added: { family: string; status: string }[] = [];
+    class FakeFace {
+      status = "unloaded";
+      constructor(
+        public family: string,
+        public source: string,
+      ) {}
+      async load() {
+        // the browser's own rejection names no font: this is what an operator saw before
+        if (this.family === "Inter") throw new DOMException("A network error occurred.", "NetworkError");
+        this.status = "loaded";
+        return this;
+      }
+    }
+    vi.resetModules();
+    vi.doMock("remotion", async (orig) => ({
+      ...(await orig<typeof import("remotion")>()),
+      delayRender: () => 1,
+      continueRender: () => {},
+      cancelRender: (e: Error) => {
+        cancelled.push(e);
+      },
+    }));
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("FontFace", FakeFace);
+    vi.stubGlobal("document", { fonts: { add: (f: FakeFace) => added.push(f), [Symbol.iterator]: () => added[Symbol.iterator]() } });
+    const log = vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+      logs.push(String(line));
+    });
+    try {
+      await import("./fonts");
+      await vi.waitFor(() => expect(cancelled).toHaveLength(1));
+      expect(cancelled[0]?.message).toContain("Inter 100 900 (fonts/inter/Inter-Variable.woff2)");
+      expect(cancelled[0]?.message).toContain("A network error occurred.");
+      const report = logs.find((l) => l.startsWith("[statreel-fonts]")) ?? "";
+      expect(JSON.parse(report.slice("[statreel-fonts]".length) || "{}")).toMatchObject({ failed: ["Inter 100 900"], check: { Inter: false } });
+    } finally {
+      log.mockRestore();
+      vi.unstubAllGlobals();
+      vi.doUnmock("remotion");
+      vi.resetModules();
     }
   });
 });
