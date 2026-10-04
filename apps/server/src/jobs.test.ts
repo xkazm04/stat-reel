@@ -305,5 +305,7 @@ describe("JobRunner", () => {
     const plan = (sql: string) => (db.$client.prepare(`explain query plan ${sql}`).all() as { detail: string }[]).map((r) => r.detail).join(" | ");
     expect(plan("select * from jobs where project_id = 'p' order by created_at desc")).toContain("jobs_project_created");
     expect(plan("select * from jobs where status = 'queued' and kind in ('a','b') order by created_at, rowid limit 1")).toContain("jobs_status_kind_created");
+    // GET /api/jobs: newest 50 across every project - without its own index this is a full scan + temp B-tree sort
+    expect(plan("select * from jobs order by created_at desc limit 50")).not.toContain("TEMP B-TREE");
   });
 });
