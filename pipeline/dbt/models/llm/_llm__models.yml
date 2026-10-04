@@ -89,7 +89,7 @@ models:
       - {name: season, description: "Championship year."}
       - {name: races_started, description: "Races in which the team had at least one starter (Indianapolis excluded)."}
       - {name: wins, description: "Race wins that season (Indianapolis excluded)."}
-      - {name: podium_finishes, description: "Top-3 finishes by the team's cars (one race can count twice)."}
+      - {name: podium_finishes, description: "Top-3 finishes by the team's cars (two cars on one podium count twice; a car shared between drivers counts once)."}
       - {name: points_awarded, description: "Drivers' Grand Prix points scored in the team's cars, as awarded (Indianapolis 500 included; Sprint points not included)."}
       - {name: attribution, description: "Attribution string that must accompany any use."}
   - name: f1_driver_bios

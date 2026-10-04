@@ -278,6 +278,23 @@ def test_constructor_seasons_and_bios(replay_run):
     assert con.execute("select count(*) from llm.f1_driver_bios where date_of_birth is not null").fetchone()[0] > 100
 
 
+def test_constructor_podium_finishes_match_the_far_side_oracle(replay_run):
+    """Podium finishes are CARS on the podium: two team cars count twice, a car shared between drivers once."""
+    con = replay_run["con"]
+    res, races = (FIXTURE / "f1db-races-race-results.csv").as_posix(), (FIXTURE / "f1db-races.csv").as_posix()
+    rows = duckdb.connect().execute(f"""
+        select r.constructorId, r.year, r.raceId, r.positionNumber, r.sharedCar from read_csv('{res}') r
+        join read_csv('{races}') g on g.id = r.raceId
+        where g.grandPrixId <> 'indianapolis' and r.positionNumber <= 3
+          and r.positionText not in ('DNQ', 'DNPQ', 'DNS', 'DNP')""").fetchall()
+    cars: dict[tuple, set] = defaultdict(set)
+    for team, season, race, pos, _ in rows:
+        cars[(team, season)].add((race, pos))
+    assert any(shared for *_, shared in rows), "fixture has a shared car on the podium"
+    got = {(t, s): n for t, s, n in con.execute("select team_id, season, podium_finishes from llm.f1_constructor_seasons").fetchall() if n}
+    assert got == {k: len(v) for k, v in cars.items()}
+
+
 # --------------------------------------------------------------------------- llm.f1_driver_race_cumulative
 
 
