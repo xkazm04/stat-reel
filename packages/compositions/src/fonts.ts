@@ -91,7 +91,9 @@ function loadFonts(): void {
       } catch (err) {
         status.failed.push(`${f.family} ${f.weight}`);
         // the browser's rejection ("A network error occurred.") names no font: say which face it was
-        throw new Error(`OFL font ${f.family} ${f.weight} (${f.file}) failed to load: ${err instanceof Error ? err.message : String(err)}`);
+        throw new Error(
+          `OFL font ${f.family} ${f.weight} (${f.file}) failed to load: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }),
   )
@@ -107,7 +109,9 @@ function loadFonts(): void {
       // faces that failed to load plus required families the document does not report as loaded.
       const fallbacks = status.failed.length + Object.values(check).filter((ok) => !ok).length;
       console.log(`${FONTS_REPORT_PREFIX}${JSON.stringify({ ...status, check, fallbacks })}`);
-      const errors = results.flatMap((r) => (r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : []));
+      const errors = results.flatMap((r) =>
+        r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : [],
+      );
       if (errors.length) cancelRender(new Error(errors.join("; ")));
       else continueRender(handle);
     })
