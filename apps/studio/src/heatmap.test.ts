@@ -1,6 +1,6 @@
 import type { HeatmapCell } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
-import { blockedBreakdown, blockedCause, blockedLegend, cellFixes, cellHint, focusKey, gridMove, insetFor, neighbours, parseFocus, snapshotAge, sportCounts } from "./heatmap";
+import { blockedBreakdown, blockedCause, blockedLegend, cellFixes, cellHint, focusKey, gridMove, neighbours, parseFocus, snapshotAge, sportCounts } from "./heatmap";
 
 const cell = (o: Partial<HeatmapCell> & Pick<HeatmapCell, "usecase" | "sport" | "status">): HeatmapCell => ({
   mode: "monetized",
@@ -135,11 +135,6 @@ describe("heatmap helpers", () => {
     expect(n.map((c) => `${c.usecase}|${c.sport}`)).toEqual(["era|F1", "dist|NBA"]);
   });
 
-  it("builds an inset clip for a rect inside a box", () => {
-    expect(insetFor({ top: 100, left: 50, right: 150, bottom: 140 }, { top: 56, left: 0, width: 1000, height: 700 })).toBe(
-      "inset(44.0px 850.0px 616.0px 50.0px)",
-    );
-  });
 });
 
 describe("text floor (shared.css --text-xs: nothing a user must read is smaller)", () => {

@@ -178,15 +178,3 @@ export function neighbours(
     .filter((c) => !(c.usecase === cell.usecase && c.sport === cell.sport))
     .slice(0, n);
 }
-
-/** Clip-path inset (px) that shows only `rect` inside a box at `box` (both in viewport px). */
-export function insetFor(
-  rect: { top: number; left: number; right: number; bottom: number },
-  box: { top: number; left: number; width: number; height: number },
-): string {
-  const t = Math.max(0, rect.top - box.top);
-  const l = Math.max(0, rect.left - box.left);
-  const r = Math.max(0, box.left + box.width - rect.right);
-  const b = Math.max(0, box.top + box.height - rect.bottom);
-  return `inset(${t.toFixed(1)}px ${r.toFixed(1)}px ${b.toFixed(1)}px ${l.toFixed(1)}px)`;
-}

@@ -3,13 +3,11 @@
  * recently each video was made. Bucket boundaries live in @statreel/schemas (RECENCY_BUCKETS) so the
  * server tags and the legend draws from one constant.
  */
-import { type BucketId, bucketForAge, type TopicHeatmap } from "@statreel/schemas";
+import type { TopicHeatmap } from "@statreel/schemas";
 import { gridMove } from "./heatmap";
 
 export type TopicRow = TopicHeatmap["topics"][number];
 export type TopicVideoCell = TopicRow["videos"][number];
-
-export const bucketOf = (ageDays: number): BucketId => bucketForAge(ageDays);
 
 /** Cell text: "today", "3d", "2w", "4mo", "1y" (mono, tabular; the colour is never the only signal). */
 export function ageLabel(ageDays: number): string {

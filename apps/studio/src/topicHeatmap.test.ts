@@ -2,7 +2,6 @@ import type { TopicVideoCell } from "./topicHeatmap";
 import { describe, expect, it } from "vitest";
 import {
   ageLabel,
-  bucketOf,
   cellAria,
   cellTarget,
   clampPos,
@@ -18,9 +17,6 @@ import {
 } from "./topicHeatmap";
 
 describe("topic heatmap helpers", () => {
-  it("bucketOf: boundaries at 7/8, 30/31 and 90/91 days", () => {
-    expect([0, 7, 8, 30, 31, 90, 91, 400].map(bucketOf)).toEqual(["fresh", "fresh", "recent", "recent", "cooling", "cooling", "cold", "cold"]);
-  });
   it("ageLabel", () => {
     expect([0, 1, 3, 14, 45, 120, 400].map(ageLabel)).toEqual(["today", "1d", "3d", "2w", "6w", "4mo", "1y"]);
   });

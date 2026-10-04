@@ -8,10 +8,10 @@
  * The grid is the Photo Finish finish sheet (ADR 009): four heats as columns, ten lanes as rows,
  * a bar per cell toward the line.
  */
-import type { CellStatus, HeatmapCell, Mode, Sport, UseCase } from "@statreel/schemas";
+import type { HeatmapCell, Mode, Sport, UseCase } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Outlet, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { api, errorText, qk } from "../api";
 import { Defer } from "../components/arrive";
 import { ViewSwitch } from "../components/HeatmapViews";
@@ -35,7 +35,6 @@ type GridProps = {
   trend: { at: string; go: Record<string, number> }[];
   cur: string;
   selected: string | null;
-  changed: Set<string>;
   onOpen: OpenCell;
   onFocusCell: (key: string) => void;
   register: (key: string, el: HTMLButtonElement | null) => void;
@@ -102,24 +101,6 @@ export function HeatmapFeasibility() {
     }
   }, [open, loaded, search.focus, usecases]);
 
-  // A/1 flip: cells whose status changed since the last render in this mode
-  const prev = useRef<Map<string, CellStatus>>(new Map());
-  const changed = useMemo(() => {
-    const out = new Set<string>();
-    for (const c of cells) {
-      if (c.mode !== mode) continue;
-      const k = focusKey(c.usecase, c.sport);
-      const was = prev.current.get(k);
-      if (was && was !== c.status) out.add(k);
-    }
-    return out;
-  }, [cells, mode]);
-  useEffect(() => {
-    const m = new Map<string, CellStatus>();
-    for (const c of cells) if (c.mode === mode) m.set(focusKey(c.usecase, c.sport), c.status);
-    prev.current = m;
-  });
-
   const onOpen: OpenCell = (uc, sport, el) => {
     setCur(focusKey(uc.id, sport));
     setLayerOrigin(focusKey(uc.id, sport), el);
@@ -172,7 +153,6 @@ export function HeatmapFeasibility() {
     trend,
     cur: current,
     selected,
-    changed,
     onOpen,
     onFocusCell: setCur,
     register,
