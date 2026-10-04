@@ -105,8 +105,17 @@ export const DataRaceEntitySchema = z
     /** unique per entity (rule 3) */
     color: HexColor,
     logo: DataRaceLogoSchema,
-    /** one value per period; null = not in the data yet (the row waits at the bottom, hidden) */
-    values: z.array(z.number().finite().nullable()).min(2).max(DATA_RACE_LIMITS.maxPeriods, tooMany("values (one per period)", DATA_RACE_LIMITS.maxPeriods)),
+    /** one value per period, >= 0 (a bar's length); null = not in the data yet (the row waits at the bottom, hidden) */
+    values: z
+      .array(
+        z
+          .number()
+          .finite()
+          // the bar is value / axis max of a fixed width: below zero it would draw as a 6 px stub beside a negative label
+          .refine((v) => v >= 0, (v) => ({ message: `value ${v} is below 0: a bar race draws lengths, so race a quantity that is >= 0` }))
+          .nullable(),
+      )
+      .min(2).max(DATA_RACE_LIMITS.maxPeriods, tooMany("values (one per period)", DATA_RACE_LIMITS.maxPeriods)),
     /** fact ref of the series, `<row fact_key>#<column>` */
     value_ref: DataRaceFactRef,
   })

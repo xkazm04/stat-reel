@@ -363,6 +363,14 @@ describe("rule 0: cross-field refinements (path + observed value)", () => {
     expect(codes(run((p) => set(p, "axis_max", 74)))).not.toContain("schema");
     expect(codes(run((p) => set(p, "axis_max", 100)))).not.toContain("schema");
   });
+  it("rejects a negative value (a bar has no length below zero; the composition would draw a 6 px stub)", () => {
+    const r = run((p) => {
+      (ent(p, 2) as { values: unknown[] }).values[4] = -3.5;
+      return undefined;
+    });
+    expect(issues(r, "entities.2.values.4").join()).toMatch(/-3\.5 is below 0/);
+    expect(codes(run((p) => set(ent(p, 2), "values", (ent(p, 2).values as number[]).map((v, i) => (i === 4 ? 0 : v)))))).not.toContain("schema");
+  });
   it("accepts exactly the cap", () => {
     const r = run((p) => {
       p.periods = Array.from({ length: DATA_RACE_LIMITS.maxPeriods }, (_, i) => `P${i}`);
