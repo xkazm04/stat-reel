@@ -30,10 +30,15 @@ export type Mode = "live" | "replay";
  * (llm/audio live, publish dry). Empty numeric values count as unset; an explicit empty mode is an error.
  */
 const mode = <const T extends readonly [string, ...string[]]>(key: string, values: T, fallback: T[number]) =>
-  z.enum(values as unknown as [T[number], ...T[number][]], { errorMap: () => ({ message: `${key} must be one of ${values.join(" | ")}` }) }).default(fallback);
+  z
+    .enum(values as unknown as [T[number], ...T[number][]], {
+      errorMap: () => ({ message: `${key} must be one of ${values.join(" | ")}` }),
+    })
+    .default(fallback);
 const num = (key: string, opts: { int?: boolean; min: number; max?: number }) =>
   z.preprocess(
-    (v) => (v === undefined || v === "" ? undefined : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN),
+    (v) =>
+      v === undefined || v === "" ? undefined : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN,
     (() => {
       let n = z.number({ invalid_type_error: `${key} must be a number` });
       if (opts.int) n = n.int(`${key} must be an integer`);
@@ -59,12 +64,18 @@ export type ParsedEnv = z.infer<typeof EnvSchema>;
 export function parseEnv(env: Record<string, string | undefined> = process.env): ParsedEnv {
   const r = EnvSchema.safeParse(env);
   if (r.success) return r.data;
-  const lines = r.error.issues.map((i) => `  ${i.message}${i.path.length ? ` (got ${JSON.stringify(env[String(i.path[0])])})` : ""}`);
+  const lines = r.error.issues.map(
+    (i) => `  ${i.message}${i.path.length ? ` (got ${JSON.stringify(env[String(i.path[0])])})` : ""}`,
+  );
   throw new Error(["invalid environment:", ...lines].join("\n"));
 }
 
 const env = parseEnv();
-export const modes: { llm: Mode; audio: Mode; publish: "live" | "dry" } = { llm: env.LLM_MODE, audio: env.AUDIO_MODE, publish: env.PUBLISH_MODE };
+export const modes: { llm: Mode; audio: Mode; publish: "live" | "dry" } = {
+  llm: env.LLM_MODE,
+  audio: env.AUDIO_MODE,
+  publish: env.PUBLISH_MODE,
+};
 
 /** Node used for the render worker: x64 on Windows-on-ARM (ADR 004), else the current one. */
 export function renderNode(): string {
