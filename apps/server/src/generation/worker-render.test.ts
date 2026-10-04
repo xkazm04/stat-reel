@@ -37,12 +37,21 @@ const down = () => Object.assign(new TypeError("fetch failed"), { cause: { code:
 function worker(cb: ServerCallbacks, logs: string[] = []) {
   acquireLease(db, LEASE);
   return new GenerationWorker({
-    db, queue, config: GenerationConfigSchema.parse({ mode: "fake" }), callbacks: cb, dataRoot: dir,
+    db,
+    queue,
+    config: GenerationConfigSchema.parse({ mode: "fake" }),
+    callbacks: cb,
+    dataRoot: dir,
     engine: { name: "t", run: async () => ({}) },
     validator: { validate: async () => ({ ok: true, errors: [], outputs: ["out/props.json"] }) },
     renderStep: makeRenderStep(cb, { pollMs: 5 }),
-    health: async () => true, kill: async () => {}, heartbeatMs: 1000, cancelPollMs: 1000, lease: LEASE,
-    callbackRetries: { tries: 6, baseMs: 5 }, log: (m) => logs.push(m),
+    health: async () => true,
+    kill: async () => {},
+    heartbeatMs: 1000,
+    cancelPollMs: 1000,
+    lease: LEASE,
+    callbackRetries: { tries: 6, baseMs: 5 },
+    log: (m) => logs.push(m),
   });
 }
 const enqueueVideo = () => queue.enqueue({ type: "generate_video", case_id: CASE_A }).job;
@@ -52,7 +61,10 @@ describe("render step in the worker", () => {
     let refusals = 0;
     let finalized = 0;
     const cb: ServerCallbacks = {
-      finalize: async () => { finalized++; return {}; },
+      finalize: async () => {
+        finalized++;
+        return {};
+      },
       render: async () => {
         if (refusals++ < 2) throw down(); // server restarting
         return { render_job_id: "r1" };
@@ -74,7 +86,9 @@ describe("render step in the worker", () => {
   it("a failed render is error_kind render, even when it is not a GenerationError", async () => {
     const cb: ServerCallbacks = {
       finalize: async () => ({}),
-      render: async () => { throw new Error("POST /render -> 500: boom"); }, // HTTP error: real, not retried
+      render: async () => {
+        throw new Error("POST /render -> 500: boom");
+      }, // HTTP error: real, not retried
       renderStatus: async () => ({ status: "succeeded" }),
     };
     const job = enqueueVideo();

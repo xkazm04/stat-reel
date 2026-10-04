@@ -243,13 +243,13 @@ describe("publish job render pin + resumable upload (publish-job-render-pin-and-
     });
     expect((await publish(runner, {})).status).toBe("failed");
     expect(JSON.parse(readFileSync(path.join(dir, "upload-session.json"), "utf8"))).toMatchObject({ sessionUri: "https://upload.example/session-1", sha256: sha });
-    expect(ytUpload.mock.calls[0]![1]).toMatchObject({ resumeSessionUri: undefined, expectedSha256: sha });
+    expect(ytUpload.mock.calls[0]?.[1]).toMatchObject({ resumeSessionUri: undefined, expectedSha256: sha });
 
     // second run: the saved session is passed back and the file is cleaned up after success
     ytUpload.mockResolvedValueOnce({ id: "vid1", privacyStatus: "private", mode: "dry" });
     const ok = await publish(runner, {});
     expect(ok.status).toBe("succeeded");
-    expect(ytUpload.mock.calls[1]![1]).toMatchObject({ resumeSessionUri: "https://upload.example/session-1", expectedSha256: sha });
+    expect(ytUpload.mock.calls[1]?.[1]).toMatchObject({ resumeSessionUri: "https://upload.example/session-1", expectedSha256: sha });
     expect(existsSync(path.join(dir, "upload-session.json"))).toBe(false);
   });
 
@@ -259,7 +259,7 @@ describe("publish job render pin + resumable upload (publish-job-render-pin-and-
     writeFileSync(path.join(dir, "upload-session.json"), JSON.stringify({ sessionUri: "https://upload.example/old", sha256: "deadbeef" }));
     ytUpload.mockResolvedValueOnce({ id: "vid1", privacyStatus: "private", mode: "dry" });
     expect((await publish(runner, {})).status).toBe("succeeded");
-    expect(ytUpload.mock.calls[0]![1].resumeSessionUri).toBeUndefined();
+    expect(ytUpload.mock.calls[0]?.[1].resumeSessionUri).toBeUndefined();
   });
 
   it("publishes the render the slot pinned, not a newer one; without a slot it takes the latest", async () => {
@@ -269,9 +269,9 @@ describe("publish job render pin + resumable upload (publish-job-render-pin-and-
     addSlot(pipeline, "r-old");
     ytUpload.mockResolvedValue({ id: "vid1", privacyStatus: "private", mode: "dry" });
     expect((await publish(runner, { scheduleId: "sl1" })).status).toBe("succeeded");
-    expect(ytUpload.mock.calls[0]![0].file).toContain("r-old");
+    expect(ytUpload.mock.calls[0]?.[0].file).toContain("r-old");
     expect((await publish(runner, {})).status).toBe("succeeded");
-    expect(ytUpload.mock.calls[1]![0].file).toContain("r-new");
+    expect(ytUpload.mock.calls[1]?.[0].file).toContain("r-new");
   });
 
   it("fails with a named error when the pinned render no longer exists", async () => {
@@ -309,7 +309,7 @@ describe("publish description disclosure (publish-disclosure-from-manifest)", ()
     ytUpload.mockResolvedValueOnce({ id: "vid1", privacyStatus: "private", mode: "dry" });
     runner.enqueue("publish", { projectId: "p1" }, "p1");
     await runner.idle();
-    const req = ytUpload.mock.calls[0]![0] as { description: string; containsSyntheticMedia: boolean };
+    const req = ytUpload.mock.calls[0]?.[0] as { description: string; containsSyntheticMedia: boolean };
     expect(req.containsSyntheticMedia).toBe(synthetic);
     if (line) expect(req.description).toContain(line);
     expect(req.description).not.toContain("Narration and music");

@@ -1,10 +1,10 @@
 {
   "rules": {
     "assist/source/organizeImports": 82,
-    "format": 232,
+    "format": 231,
     "lint/a11y/noAriaHiddenOnFocusable": 1,
     "lint/a11y/noStaticElementInteractions": 1,
-    "lint/a11y/noSvgWithoutTitle": 7,
+    "lint/a11y/noSvgWithoutTitle": 4,
     "lint/a11y/useFocusableInteractive": 22,
     "lint/a11y/useKeyWithClickEvents": 1,
     "lint/a11y/useSemanticElements": 46,
@@ -18,7 +18,7 @@
     "lint/correctness/noUnusedPrivateClassMembers": 2,
     "lint/correctness/noUnusedVariables": 2,
     "lint/style/noDescendingSpecificity": 79,
-    "lint/style/noNonNullAssertion": 141,
+    "lint/style/noNonNullAssertion": 142,
     "lint/style/useConst": 11,
     "lint/style/useExponentiationOperator": 4,
     "lint/suspicious/noAssignInExpressions": 2,

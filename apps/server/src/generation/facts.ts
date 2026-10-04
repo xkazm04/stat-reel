@@ -26,9 +26,10 @@ export function textFigureProblems(who: string, text: string, ref: string, fact:
   for (const token of text.match(FIGURE) ?? []) {
     if (isYear(token)) continue;
     const shown = parseDisplayed(token);
-    const ok = typeof fact === "number" || /^-?\d+(\.\d+)?$/.test(String(fact))
-      ? matchesDisplayed(Number(fact), shown, text)
-      : String(fact).includes(token.replace(/,/g, ""));
+    const ok =
+      typeof fact === "number" || /^-?\d+(\.\d+)?$/.test(String(fact))
+        ? matchesDisplayed(Number(fact), shown, text)
+        : String(fact).includes(token.replace(/,/g, ""));
     if (!ok) problems.push(`${who}: '${token}' in "${text}" != fact ${ref} = ${String(fact)}`);
   }
   return problems;
@@ -50,7 +51,8 @@ export async function verifyRealFacts(props: unknown, resolve: FactResolver): Pr
   ];
   const problems: string[] = [];
   const real = refs.filter((r) => !isSampleRef(r));
-  for (const r of new Set(refs.filter(isSampleRef))) problems.push(`${r}: the sample: namespace is invented data and is refused under data_provenance "real"`);
+  for (const r of new Set(refs.filter(isSampleRef)))
+    problems.push(`${r}: the sample: namespace is invented data and is refused under data_provenance "real"`);
   const facts = real.length ? await resolve([...new Set(real)]) : new Map<string, number | string>();
   const need = (who: string, ref: string): number | string | undefined => {
     if (isSampleRef(ref)) return undefined;

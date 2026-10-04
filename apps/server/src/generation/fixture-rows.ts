@@ -5,8 +5,10 @@
  * `fixture-rows.test.ts` re-checks every figure against the live warehouse when data/warehouse.duckdb exists.
  * Taken 2026-10-04 with a read-only connection; refresh only by re-running that query.
  */
+// biome-ignore format: a data table reads one row per line
 export const F1_SEASONS: number[] = [2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024];
 export type F1Driver = { id: string; name: string; points: (number | null)[]; wins: (number | null)[] };
+// biome-ignore format: a data table reads one row per line
 export const F1_DRIVERS: F1Driver[] = [
   {
     id: "michael-schumacher", name: "Michael Schumacher",

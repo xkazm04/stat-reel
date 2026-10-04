@@ -8,8 +8,8 @@ import { paths as appPaths } from "../config";
 import { type Db, openDb } from "../db";
 import { FinalizeError, GenerationFinalizer } from "./finalize";
 import { jobPaths } from "./paths";
-import { snapshotFacts } from "./sample-fixtures";
 import { GenerationQueue } from "./queue";
+import { snapshotFacts } from "./sample-fixtures";
 import { CASE_A, insertCase } from "./testing";
 
 let dir: string;
