@@ -10,6 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { api, CASE_DECISIONS, type CaseDecision, type CaseIdea, type CasesResponse, qk, serverError } from "../api";
+import { Card } from "../components/Card";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useHeatmap } from "../data";
 import {
@@ -130,17 +131,12 @@ export function CasesView() {
         <code className="mono">node .claude/skills/board/scripts/board.mjs cases --id cs-002</code>.
       </p>
 
-      <section className="bd-lib__group" aria-labelledby="cs-inbox">
-        <header className="bd-lib__gh">
-          <h2 id="cs-inbox">
-            Ideas inbox <span className="num">{inbox(ideas).length}</span>
-          </h2>
-          <p>
+      <Card className="bd-lib__group" title="Ideas inbox" titleId="cs-inbox" tag={inbox(ideas).length}>
+        <p className="bd-lib__hint">
             Enter opens an idea · in the idea <kbd>A</kbd> accept <kbd>N</kbd> not interesting <kbd>S</kbd> too short{" "}
             <kbd>I</kbd> no insight <kbd>D</kbd> no data <kbd>U</kbd> duplicate · <kbd>←</kbd>
             <kbd>→</kbd> step · <kbd>Esc</kbd> back
           </p>
-        </header>
         {ideas.length ? (
           <div className="bd-cs__filters">
             <Seg label="Domain" value={domain} set={setDomain} opts={domains.map((d) => [d, DOMAIN_LABEL[d as CaseIdea["domain"]] ?? d])} />
@@ -157,7 +153,7 @@ export function CasesView() {
             Run the case loop to brainstorm use cases across domains, without art style.
           </Empty>
         )}
-      </section>
+      </Card>
 
       <CaseList id="cs-acc" title="Accepted" hint="Loops build designs on these." rows={accepted} onOpen={setOpen} />
       <CaseList id="cs-wait" title="Waiting on designs" hint="Registry formats and design proposals with no verdict yet." rows={waiting} onOpen={setOpen} />
@@ -242,13 +238,8 @@ function CaseList({
   if (!rows.length) return null;
   const order = rows.filter((r) => r.idea).map((r) => r.key);
   return (
-    <section className="bd-lib__group" aria-labelledby={id}>
-      <header className="bd-lib__gh">
-        <h2 id={id}>
-          {title} <span className="num">{rows.length}</span>
-        </h2>
-        <p>{hint}</p>
-      </header>
+    <Card className="bd-lib__group" title={title} titleId={id} tag={rows.length}>
+      <p className="bd-lib__hint">{hint}</p>
       <ul className="bd-caselist">
         {rows.map((r) => (
           <li key={r.key} className={`bd-caserow bd-caserow--${r.verdict}`}>
@@ -282,7 +273,7 @@ function CaseList({
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }
 

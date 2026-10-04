@@ -7,6 +7,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { api, type BoardItem, qk, type StyleEntry, type StylePatch, serverError } from "../api";
+import { Card } from "../components/Card";
 import { Empty, Failure, Loading } from "../components/ui";
 import { atRiskCount, atRiskWords, DEFAULT_STYLE_FILTER, filterStyles, groupStyles, rejectSplitWords, type StyleFilter, styleItems } from "./library";
 import { Shot, shotAlt, useBoard } from "./shared";
@@ -84,13 +85,8 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
         </Empty>
       ) : null}
       {groups.map((g) => (
-        <section key={g.status} className={`bd-lib__group bd-lib__group--${g.status}`} aria-labelledby={`sg-${g.status}`}>
-          <header className="bd-lib__gh">
-            <h2 id={`sg-${g.status}`}>
-              {g.title} <span className="num">{g.styles.length}</span>
-            </h2>
-            <p>{g.hint}</p>
-          </header>
+        <Card key={g.status} className={`bd-lib__group bd-lib__group--${g.status}`} title={g.title} titleId={`sg-${g.status}`} tag={g.styles.length}>
+          <p className="bd-lib__hint">{g.hint}</p>
           <div className="bd-lib__grid">
             {g.styles.map((s) => (
               <StyleCard
@@ -103,7 +99,7 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
               />
             ))}
           </div>
-        </section>
+        </Card>
       ))}
     </div>
   );

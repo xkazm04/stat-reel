@@ -134,7 +134,7 @@ export function BoardPage() {
   const V = variant === 2 ? LightTableVariant : variant === 3 ? MatrixVariant : WallVariant;
 
   return (
-    <main id="main" className={`page bd-page bd-page--v${variant}`}>
+    <main id="main" className={`page page--cards bd-page bd-page--v${variant}`}>
       <header className="page__head bd-head">
         <div>
           <p className="eyebrow">
