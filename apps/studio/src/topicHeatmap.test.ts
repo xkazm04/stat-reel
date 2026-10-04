@@ -1,5 +1,5 @@
-import type { TopicVideoCell } from "./topicHeatmap";
 import { describe, expect, it } from "vitest";
+import type { TopicVideoCell } from "./topicHeatmap";
 import {
   ageLabel,
   cellAria,
@@ -50,11 +50,31 @@ describe("topic heatmap helpers", () => {
     expect(sortTopics(rows).map((r) => r.label)).toEqual(["Golf", "Energy", "Athletics", "Boxing"]);
   });
   it("cellAria names topic, ordinal, date and age", () => {
-    const v = { n: 2, id: "vd-1", title: "t", created_at: "2026-10-03T10:00:00Z", age_days: 3, bucket: "fresh" as const, case_id: null, project_id: null, url: null };
+    const v = {
+      n: 2,
+      id: "vd-1",
+      title: "t",
+      created_at: "2026-10-03T10:00:00Z",
+      age_days: 3,
+      bucket: "fresh" as const,
+      case_id: null,
+      project_id: null,
+      url: null,
+    };
     expect(cellAria("Energy", v, 3)).toBe("Energy, video 2 of 3, t, created 3 Oct 2026, 3 days ago");
   });
   it("cellAria reads the video title; a blank title adds nothing", () => {
-    const v = { n: 1, id: "vd-1", title: "Solar race", created_at: "2026-10-03T10:00:00Z", age_days: 0, bucket: "fresh" as const, case_id: null, project_id: null, url: null };
+    const v = {
+      n: 1,
+      id: "vd-1",
+      title: "Solar race",
+      created_at: "2026-10-03T10:00:00Z",
+      age_days: 0,
+      bucket: "fresh" as const,
+      case_id: null,
+      project_id: null,
+      url: null,
+    };
     expect(cellAria("Energy", v, 1)).toBe("Energy, video 1 of 1, Solar race, created 3 Oct 2026, today");
     expect(cellAria("Energy", { ...v, title: "  " }, 1)).toBe("Energy, video 1 of 1, created 3 Oct 2026, today");
   });
@@ -71,9 +91,13 @@ describe("topic heatmap helpers", () => {
   });
   it("topicSummary counts topics, videos and accepted cases from the data", () => {
     const v = { n: 1 } as TopicVideoCell;
-    expect(topicSummary([{ videos: [], accepted_cases: 2 }, { videos: [], accepted_cases: 3 }, { videos: [], accepted_cases: 1 }])).toBe(
-      "3 topics, 0 videos, 6 accepted cases",
-    );
+    expect(
+      topicSummary([
+        { videos: [], accepted_cases: 2 },
+        { videos: [], accepted_cases: 3 },
+        { videos: [], accepted_cases: 1 },
+      ]),
+    ).toBe("3 topics, 0 videos, 6 accepted cases");
     expect(topicSummary([{ videos: [v], accepted_cases: 1 }])).toBe("1 topic, 1 video, 1 accepted case");
   });
   it("announces new-tab links and labels empty cells", () => {

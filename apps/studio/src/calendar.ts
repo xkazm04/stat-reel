@@ -83,7 +83,10 @@ export const isUpcoming = (s: string): boolean => s === "scheduled" || s === "pu
 export type { SlotDrift };
 export const slotDrift = (s: { drift?: SlotDrift | null }): SlotDrift | null => s.drift ?? null;
 export const DRIFT_META: Record<SlotDrift, { label: string; hint: string }> = {
-  superseded_render: { label: "RE-RENDERED", hint: "the project was re-rendered after this slot was set; it will not fire until you reschedule it onto the new render" },
+  superseded_render: {
+    label: "RE-RENDERED",
+    hint: "the project was re-rendered after this slot was set; it will not fire until you reschedule it onto the new render",
+  },
   gate_denied: { label: "GATE DENIED", hint: "the publish gate no longer allows this render; it will not fire" },
 };
 /** A slot the owner has to act on: missed, or held back by drift. */
@@ -92,7 +95,11 @@ export const needsDecision = (s: { status: string; drift?: SlotDrift | null }): 
 
 export type SlotGroupKey = "attention" | "upcoming" | "history";
 export type SlotGroup<T> = { key: SlotGroupKey; label: string; slots: T[] };
-const GROUP_LABEL: Record<SlotGroupKey, string> = { attention: "Needs your decision", upcoming: "Upcoming", history: "History" };
+const GROUP_LABEL: Record<SlotGroupKey, string> = {
+  attention: "Needs your decision",
+  upcoming: "Upcoming",
+  history: "History",
+};
 
 /**
  * The "Every slot" list as its groups: the slots the owner must decide on, the upcoming ones, and
@@ -217,13 +224,23 @@ export function checkSchedule(input: {
   if (!at) return { at: null, error: { field: "when", message: "Pick a date and time." }, warnings: [], min };
   const warnings: FieldIssue[] = [];
   if (new Date(at).getTime() < input.now.getTime() - 60_000)
-    warnings.push({ field: "when", message: `That time has passed (earliest ${min.replace("T", " ")}). The server publishes a slot up to an hour late at its next tick; older ones are marked missed.` });
+    warnings.push({
+      field: "when",
+      message: `That time has passed (earliest ${min.replace("T", " ")}). The server publishes a slot up to an hour late at its next tick; older ones are marked missed.`,
+    });
   const minute = Math.floor(new Date(at).getTime() / 60_000);
   const clash = input.slots.find(
-    (s) => s.id !== input.ignoreSlotId && s.channel_id === input.channelId && (s.status === "scheduled" || s.status === "publishing")
-      && Math.floor(new Date(s.publish_at).getTime() / 60_000) === minute,
+    (s) =>
+      s.id !== input.ignoreSlotId &&
+      s.channel_id === input.channelId &&
+      (s.status === "scheduled" || s.status === "publishing") &&
+      Math.floor(new Date(s.publish_at).getTime() / 60_000) === minute,
   );
-  if (clash) warnings.push({ field: "when", message: `Another video is already set for this channel at ${timeLabel(clash.publish_at)}.` });
+  if (clash)
+    warnings.push({
+      field: "when",
+      message: `Another video is already set for this channel at ${timeLabel(clash.publish_at)}.`,
+    });
   return { at, error: null, warnings, min };
 }
 
@@ -232,17 +249,31 @@ export function checkSchedule(input: {
  * Unknown texts stay on the form, still without a raw "Server" label.
  */
 export function mapScheduleError(text: string): FieldIssue {
-  if (/not wired yet/i.test(text)) return { field: "channel", message: `${text.replace(/ \(.*\)$/, "")}; pick a wired channel.` };
-  if (/unknown channel/i.test(text)) return { field: "channel", message: "That channel no longer exists; pick another." };
+  if (/not wired yet/i.test(text))
+    return { field: "channel", message: `${text.replace(/ \(.*\)$/, "")}; pick a wired channel.` };
+  if (/unknown channel/i.test(text))
+    return { field: "channel", message: "That channel no longer exists; pick another." };
   if (/not a date/i.test(text)) return { field: "when", message: "That is not a valid date and time." };
   const on = /already on the calendar \((slot [^)]*)\)/i.exec(text);
-  if (on) return { field: "form", message: `This video is already on the calendar (${on[1]}). Move or cancel that slot instead.` };
-  if (/already on the calendar/i.test(text)) return { field: "form", message: "This video is already on the calendar. Move or cancel that slot instead." };
+  if (on)
+    return {
+      field: "form",
+      message: `This video is already on the calendar (${on[1]}). Move or cancel that slot instead.`,
+    };
+  if (/already on the calendar/i.test(text))
+    return { field: "form", message: "This video is already on the calendar. Move or cancel that slot instead." };
   if (/publish gate has not allowed/i.test(text)) {
     const why = /: (.+)$/.exec(text)?.[1];
-    return { field: "form", message: `The publish gate does not allow this video's latest render${why ? ` (${why})` : ""}. Fix it in Produce first.` };
+    return {
+      field: "form",
+      message: `The publish gate does not allow this video's latest render${why ? ` (${why})` : ""}. Fix it in Produce first.`,
+    };
   }
-  if (/only a scheduled or missed slot/i.test(text)) return { field: "form", message: "This slot has already moved on (published, failed or cancelled), so it can no longer change." };
+  if (/only a scheduled or missed slot/i.test(text))
+    return {
+      field: "form",
+      message: "This slot has already moved on (published, failed or cancelled), so it can no longer change.",
+    };
   return { field: "form", message: text };
 }
 

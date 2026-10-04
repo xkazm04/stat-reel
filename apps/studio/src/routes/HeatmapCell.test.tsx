@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 
 // The layer's states, rendered without a router or a server: the hooks it reads are stubbed.
 const state = vi.hoisted(() => ({
-  hm: { isLoading: false, isError: false, isFetching: false, error: null as unknown, data: undefined as unknown, refetch: () => {} },
+  hm: {
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    error: null as unknown,
+    data: undefined as unknown,
+    refetch: () => {},
+  },
 }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children?: unknown }) => h("a", null, children as never),

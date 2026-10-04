@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 
 // The sources desk's states, rendered without a server: the data hook is stubbed.
 const state = vi.hoisted(() => ({
-  q: { isLoading: false, isError: false, isFetching: false, error: null as unknown, data: undefined as unknown, refetch: () => {} },
+  q: {
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    error: null as unknown,
+    data: undefined as unknown,
+    refetch: () => {},
+  },
 }));
 vi.mock("../data", () => ({ useSources: () => state.q }));
 // staged arrival waits for timers a static render never runs: mount the sections at once

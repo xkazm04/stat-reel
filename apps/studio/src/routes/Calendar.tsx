@@ -57,8 +57,8 @@ import { Arrow, FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading } from "../components/ui";
 import { useCalendar, useHeatmap, useMetrics } from "../data";
-import { MODE_LABEL, relTime } from "../logic";
 import { formatLabel } from "../display";
+import { MODE_LABEL, relTime } from "../logic";
 
 // ------------------------------------------------------------------ marks
 
@@ -103,7 +103,16 @@ function SlotMark({ status, size = 14 }: { status: SlotStatusKey; size?: number 
   else
     inner = (
       <>
-        <rect x="1.75" y="1.75" width="12.5" height="12.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 2" />
+        <rect
+          x="1.75"
+          y="1.75"
+          width="12.5"
+          height="12.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeDasharray="2 2"
+        />
         <path d="M3 8h10" stroke="currentColor" strokeWidth="1.7" />
       </>
     );
@@ -128,7 +137,15 @@ function ChannelMark({ status }: { status: string }) {
 }
 
 /** Visibility of a published slot: the stored publication when metrics has it, else v1's rule (private). */
-function Visibility({ slot, channel, pubs }: { slot: CalendarSlot; channel: Channel | undefined; pubs: MetricsPublication[] }) {
+function Visibility({
+  slot,
+  channel,
+  pubs,
+}: {
+  slot: CalendarSlot;
+  channel: Channel | undefined;
+  pubs: MetricsPublication[];
+}) {
   const pub = slot.publication_id ? pubs.find((p) => p.publication_id === slot.publication_id) : undefined;
   const dry = pub ? pub.mode === "dry" : channel?.status === "dry";
   return (
@@ -178,8 +195,8 @@ export function CalendarPage() {
         <div className="cal-private" role="note">
           <b>Private only</b>
           <span>
-            Every upload is private (YouTube) or a draft (TikTok, later). Making a video public is the owner's call, made
-            on the platform itself; this studio never flips visibility.
+            Every upload is private (YouTube) or a draft (TikTok, later). Making a video public is the owner's call,
+            made on the platform itself; this studio never flips visibility.
           </span>
         </div>
       </header>
@@ -240,7 +257,9 @@ export function CalendarPage() {
               >
                 {linked && !ready.some((r) => r.project_id === linked) ? (
                   <p className="cal-note" role="status">
-                    {slots.some((s) => s.project_id === linked && (s.status === "scheduled" || s.status === "publishing"))
+                    {slots.some(
+                      (s) => s.project_id === linked && (s.status === "scheduled" || s.status === "publishing"),
+                    )
                       ? `${linked} is already on the calendar; find it under Every slot below.`
                       : `${linked} is not ready to schedule: it needs a render that the publish gate allows.`}
                   </p>
@@ -248,7 +267,14 @@ export function CalendarPage() {
                 {ready.length ? (
                   <ul className="ready-list">
                     {ready.map((r) => (
-                      <ReadyItem key={r.project_id} r={r} wired={wired} slots={slots} linked={r.project_id === linked} ucName={ucName(r.use_case_id)} />
+                      <ReadyItem
+                        key={r.project_id}
+                        r={r}
+                        wired={wired}
+                        slots={slots}
+                        linked={r.project_id === linked}
+                        ucName={ucName(r.use_case_id)}
+                      />
                     ))}
                   </ul>
                 ) : (
@@ -343,12 +369,7 @@ function ConfirmDialog({
     else if (!open && d.open) d.close();
   }, [open]);
   return (
-    <dialog
-      ref={ref}
-      className="cal-confirm"
-      aria-labelledby={tid}
-      onClose={onClose}
-    >
+    <dialog ref={ref} className="cal-confirm" aria-labelledby={tid} onClose={onClose}>
       <h2 id={tid} className="cal-confirm__t">
         {title}
       </h2>
@@ -447,7 +468,10 @@ function ReadyItem({
   };
   const invalid = (f: FieldIssue["field"]) => (issue?.field === f ? true : undefined);
   const described = (f: FieldIssue["field"]) => {
-    const parts = [issue?.field === f ? ids.form : "", f === "when" && check.warnings.length ? `${base}-warn` : ""].filter(Boolean);
+    const parts = [
+      issue?.field === f ? ids.form : "",
+      f === "when" && check.warnings.length ? `${base}-warn` : "",
+    ].filter(Boolean);
     return parts.length ? parts.join(" ") : undefined;
   };
   return (
@@ -518,15 +542,31 @@ function ReadyItem({
           <summary>Title, description, tags (optional)</summary>
           <label className="fld">
             <span className="fld__k">Title</span>
-            <input type="text" value={title} maxLength={100} placeholder={r.title} onChange={(e) => setTitle(e.target.value)} />
+            <input
+              type="text"
+              value={title}
+              maxLength={100}
+              placeholder={r.title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </label>
           <label className="fld">
             <span className="fld__k">Description</span>
-            <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="The server adds the method note, every source attribution and the AI disclosure." />
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="The server adds the method note, every source attribution and the AI disclosure."
+            />
           </label>
           <label className="fld">
             <span className="fld__k">Tags, comma separated</span>
-            <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} placeholder={`${r.sport}, data`} />
+            <input
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder={`${r.sport}, data`}
+            />
           </label>
         </details>
         <div className="ready__acts">
@@ -616,7 +656,10 @@ function WeekView({
           const list = buckets.get(k) ?? [];
           const l = dayLabel(d);
           return (
-            <li key={k} className={`day${k === today ? " is-today" : ""}${d < new Date(now.getFullYear(), now.getMonth(), now.getDate()) ? " is-past" : ""}`}>
+            <li
+              key={k}
+              className={`day${k === today ? " is-today" : ""}${d < new Date(now.getFullYear(), now.getMonth(), now.getDate()) ? " is-past" : ""}`}
+            >
               <h3 className="day__h">
                 <span className="day__dow">{l.dow}</span>
                 <span className="day__date num">{l.date}</span>
@@ -627,7 +670,11 @@ function WeekView({
                   {list.map((s) => {
                     const st = slotStatus(s.status);
                     return (
-                      <li key={s.id} className={`wk-slot wk-slot--${st}`} style={artStyle(identVar(s.project?.use_case_id ?? ""))}>
+                      <li
+                        key={s.id}
+                        className={`wk-slot wk-slot--${st}`}
+                        style={artStyle(identVar(s.project?.use_case_id ?? ""))}
+                      >
                         <span className="wk-slot__t num">{timeLabel(s.publish_at)}</span>
                         <SlotState status={st} />
                         <Link to="/studio/$projectId" params={{ projectId: s.project_id }} className="wk-slot__p">
@@ -693,7 +740,11 @@ function SlotRow({
   const actionable = st === "scheduled" || st === "missed";
   const moveLabel = st === "missed" || drift ? "Reschedule" : "Move";
   return (
-    <li className={`slot slot--${st}`} data-testid={testid ? `slot-${s.project_id}` : undefined} style={artStyle(identVar(s.project?.use_case_id ?? ""))}>
+    <li
+      className={`slot slot--${st}`}
+      data-testid={testid ? `slot-${s.project_id}` : undefined}
+      style={artStyle(identVar(s.project?.use_case_id ?? ""))}
+    >
       <span className="slot__when">
         <b className="num">{dateTimeLabel(s.publish_at)}</b>
         <span className="slot__rel">{relWhen(s.publish_at)}</span>
@@ -748,7 +799,12 @@ function SlotRow({
             <button type="submit" className="btn btn--sm" disabled={move.isPending}>
               {move.isPending ? "Moving" : moveLabel}
             </button>
-            <button type="button" className="btn btn--sm btn--ghost" disabled={cancel.isPending} onClick={() => setConfirmCancel(true)}>
+            <button
+              type="button"
+              className="btn btn--sm btn--ghost"
+              disabled={cancel.isPending}
+              onClick={() => setConfirmCancel(true)}
+            >
               {cancel.isPending ? "Cancelling" : "Cancel slot"}
             </button>
           </form>

@@ -2,21 +2,21 @@ import { describe, expect, it } from "vitest";
 import { SLOT_STATUSES } from "./api";
 import {
   bucketByDay,
-  checkSchedule,
-  mapScheduleError,
-  needsDecision,
-  parseCalendarSearch,
-  SLOT_META,
-  slotDrift,
-  slotGroups,
   channelLabel,
+  checkSchedule,
   dayKey,
   fromLocalInput,
   latestSlotPerProject,
+  mapScheduleError,
   milestoneOf,
   moveDefault,
+  needsDecision,
   nextFullHour,
+  parseCalendarSearch,
   relWhen,
+  SLOT_META,
+  slotDrift,
+  slotGroups,
   slotStatus,
   splitTags,
   toLocalInput,
@@ -109,7 +109,7 @@ describe("slots and channels", () => {
 describe("relWhen", () => {
   it("reads both sides of now", () => {
     const now = Date.parse("2026-09-30T12:00:00Z");
-    
+
     expect(relWhen("2026-09-30T15:00:00Z", now)).toBe("in 3 h");
     expect(relWhen("2026-09-30T11:48:00Z", now)).toBe("12 min ago");
     expect(relWhen("2026-09-30T12:00:10Z", now)).toBe("now");
@@ -139,7 +139,9 @@ describe("labels", () => {
 
 describe("checkSchedule (the one validation door)", () => {
   const now = new Date(2026, 8, 30, 12, 0);
-  const slots = [{ id: "sl-a", channel_id: "ch-yt", publish_at: new Date(2026, 9, 1, 9, 0).toISOString(), status: "scheduled" }];
+  const slots = [
+    { id: "sl-a", channel_id: "ch-yt", publish_at: new Date(2026, 9, 1, 9, 0).toISOString(), status: "scheduled" },
+  ];
   const base = { channelId: "ch-yt", now, slots };
   it("blocks an empty time", () => {
     const c = checkSchedule({ ...base, when: "" });
@@ -169,12 +171,19 @@ describe("checkSchedule (the one validation door)", () => {
 
 describe("mapScheduleError", () => {
   it("maps the known server errors to a field with a plain message", () => {
-    expect(mapScheduleError("TikTok is not wired yet (Content Posting API - milestone M5)")).toMatchObject({ field: "channel" });
+    expect(mapScheduleError("TikTok is not wired yet (Content Posting API - milestone M5)")).toMatchObject({
+      field: "channel",
+    });
     expect(mapScheduleError("publish_at is not a date: x").field).toBe("when");
-    const gate = mapScheduleError("the publish gate has not allowed this project's latest render: safe-zone violations");
+    const gate = mapScheduleError(
+      "the publish gate has not allowed this project's latest render: safe-zone violations",
+    );
     expect(gate.field).toBe("form");
     expect(gate.message).toMatch(/safe-zone violations/);
-    expect(mapScheduleError("this project is already on the calendar (slot sl-1, scheduled for 2026-10-01T09:00:00Z)").message).toMatch(/slot sl-1/);
+    expect(
+      mapScheduleError("this project is already on the calendar (slot sl-1, scheduled for 2026-10-01T09:00:00Z)")
+        .message,
+    ).toMatch(/slot sl-1/);
     expect(mapScheduleError("this render is already on the calendar (slot sl-2, published)").field).toBe("form");
     expect(mapScheduleError("only a scheduled or missed slot can move").field).toBe("form");
   });
@@ -189,7 +198,13 @@ describe("slotGroups", () => {
     // the common case: nothing to decide, nothing done yet -> one group, no empty lists
     expect(slotGroups([s("a", "scheduled"), s("b", "publishing")]).map((g) => g.key)).toEqual(["upcoming"]);
     expect(slotGroups([]).length).toBe(0);
-    const all = slotGroups([s("p1", "published"), s("m", "missed"), s("u", "scheduled"), s("d", "scheduled", "gate_denied"), s("p2", "failed")]);
+    const all = slotGroups([
+      s("p1", "published"),
+      s("m", "missed"),
+      s("u", "scheduled"),
+      s("d", "scheduled", "gate_denied"),
+      s("p2", "failed"),
+    ]);
     expect(all.map((g) => [g.key, g.slots.map((x) => x.id)])).toEqual([
       ["attention", ["m", "d"]],
       ["upcoming", ["u"]],
@@ -216,9 +231,9 @@ describe("moveDefault", () => {
 describe("drift and missed", () => {
   it("narrows the drift field and flags slots the owner must decide on", () => {
     expect(slotDrift({ drift: "superseded_render" })).toBe("superseded_render");
-        expect(slotDrift({})).toBeNull();
+    expect(slotDrift({})).toBeNull();
     expect(needsDecision({ status: "missed" })).toBe(true);
-    expect(needsDecision({ status: "scheduled", drift: "gate_denied" } )).toBe(true);
+    expect(needsDecision({ status: "scheduled", drift: "gate_denied" })).toBe(true);
     expect(needsDecision({ status: "scheduled" })).toBe(false);
     expect(slotStatus("missed")).toBe("missed");
   });

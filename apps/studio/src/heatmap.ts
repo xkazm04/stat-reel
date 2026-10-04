@@ -5,8 +5,8 @@
  * No React, no DOM (unit-tested in heatmap.test.ts).
  */
 import type { CellStatus, HeatmapCell, LicenseClass, Mode, Sport } from "@statreel/schemas";
-import { allowedIn, decisionAid, failingKinds, relTime, SPORTS } from "./logic";
 import { bestCells } from "./display";
+import { allowedIn, decisionAid, failingKinds, relTime, SPORTS } from "./logic";
 
 /**
  * Why a Blocked cell is blocked (DESIGN §7). Blocked stays ONE status; the cause is what a reader

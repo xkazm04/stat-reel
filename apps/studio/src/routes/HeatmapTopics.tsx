@@ -23,15 +23,15 @@ import {
   cellTarget,
   clampPos,
   emptyCellLabel,
-  gridColCount,
   type GridPos,
+  gridColCount,
   gridWidth,
   newTabLabel,
   nextPos,
   sortTopics,
-  tabIndexFor,
   type TopicRow,
   type TopicVideoCell,
+  tabIndexFor,
   topicSummary,
   visibleColumns,
 } from "../topicHeatmap";
@@ -80,7 +80,12 @@ export function HeatmapTopics() {
 
         {q.isError ? (
           <Card className="tp-card">
-            <Failure error={q.error} what="The topic heatmap" onRetry={() => void q.refetch()} retrying={q.isFetching} />
+            <Failure
+              error={q.error}
+              what="The topic heatmap"
+              onRetry={() => void q.refetch()}
+              retrying={q.isFetching}
+            />
           </Card>
         ) : q.isLoading || !data ? (
           <Card className="tp-card">
@@ -90,8 +95,8 @@ export function HeatmapTopics() {
           // the empty copy names "Show all topics", so the toggle stays on screen with no rows
           <Card className="tp-card" title="Videos per topic" actions={<ShowAll all={all} setAll={setAll} />}>
             <div className="empty" data-testid="topics-empty">
-              <b>No videos yet</b>
-              A row appears for a topic once a case in it is accepted on the Board; cells fill as videos finish.{" "}
+              <b>No videos yet</b>A row appears for a topic once a case in it is accepted on the Board; cells fill as
+              videos finish.{" "}
               <Link to="/board" search={{ tab: "cases" } as never}>
                 Open the Board cases
               </Link>
@@ -109,14 +114,12 @@ export function HeatmapTopics() {
               title="Videos per topic"
               tag={`${rows.length} topic${rows.length === 1 ? "" : "s"} · ${totalVideos} video${totalVideos === 1 ? "" : "s"}`}
               pad="none"
-              actions={
-                <ShowAll all={all} setAll={setAll} />
-              }
+              actions={<ShowAll all={all} setAll={setAll} />}
               footer={
                 <>
                   <span>
                     <kbd>Arrows</kbd> move between videos
-                </span>
+                  </span>
                   <span>Column n is the n-th video made for the topic, oldest first.</span>
                   <span>{data.generated_at ? `As of ${relTime(data.generated_at)}` : ""}</span>
                 </>
@@ -124,58 +127,58 @@ export function HeatmapTopics() {
             >
               <div className="card__toolbar">
                 <ul className="tp-legend" aria-label="Colour scale: how long ago a video was made">
-            {RECENCY_BUCKETS.map((b) => (
-              <li key={b.id} data-bucket={b.id}>
-                <i aria-hidden="true" />
-                <span>{b.label}</span>
-              </li>
-            ))}
-            <li data-bucket="pending">
-              <i aria-hidden="true" />
-              <span>queued / rendering</span>
-            </li>
+                  {RECENCY_BUCKETS.map((b) => (
+                    <li key={b.id} data-bucket={b.id}>
+                      <i aria-hidden="true" />
+                      <span>{b.label}</span>
+                    </li>
+                  ))}
+                  <li data-bucket="pending">
+                    <i aria-hidden="true" />
+                    <span>queued / rendering</span>
+                  </li>
                 </ul>
               </div>
               <div className="tp-wrap">
-              {totalVideos === 0 ? (
-                <p className="tp-note" data-testid="topics-no-videos">
-                  Topics are listed, but no video has finished yet. Cells fill as videos finish.
-                </p>
-              ) : null}
+                {totalVideos === 0 ? (
+                  <p className="tp-note" data-testid="topics-no-videos">
+                    Topics are listed, but no video has finished yet. Cells fill as videos finish.
+                  </p>
+                ) : null}
                 <p className="sr-only" id="tp-summary" data-testid="topics-summary">
                   {topicSummary(rows)}. Arrow keys move between cells; Enter opens a video.
                 </p>
-              <div
-                ref={grid}
-                className="tp-grid"
-                role="grid"
-                aria-label="Videos per topic, by order of creation"
-                aria-rowcount={rows.length + 1}
-                aria-colcount={gridColCount(n, cols.earlier)}
-                aria-describedby="tp-summary"
-                onKeyDown={onKeyDown}
-                onFocus={onFocus}
-                style={{ ["--cols" as string]: n + (cols.earlier ? 1 : 0) }}
-              >
-                <div className="tp-row tp-row--head" role="row">
-                  <div className="tp-corner" role="columnheader">
-                    Topic
+                <div
+                  ref={grid}
+                  className="tp-grid"
+                  role="grid"
+                  aria-label="Videos per topic, by order of creation"
+                  aria-rowcount={rows.length + 1}
+                  aria-colcount={gridColCount(n, cols.earlier)}
+                  aria-describedby="tp-summary"
+                  onKeyDown={onKeyDown}
+                  onFocus={onFocus}
+                  style={{ ["--cols" as string]: n + (cols.earlier ? 1 : 0) }}
+                >
+                  <div className="tp-row tp-row--head" role="row">
+                    <div className="tp-corner" role="columnheader">
+                      Topic
+                    </div>
+                    {cols.earlier ? (
+                      <div className="tp-colh tp-colh--earlier num" role="columnheader">
+                        +{cols.earlier} earlier
+                      </div>
+                    ) : null}
+                    {ordinals.map((o) => (
+                      <div key={o} className="tp-colh num" role="columnheader">
+                        {o}
+                      </div>
+                    ))}
                   </div>
-                  {cols.earlier ? (
-                    <div className="tp-colh tp-colh--earlier num" role="columnheader">
-                      +{cols.earlier} earlier
-                    </div>
-                  ) : null}
-                  {ordinals.map((o) => (
-                    <div key={o} className="tp-colh num" role="columnheader">
-                      {o}
-                    </div>
+                  {rows.map((t, ri) => (
+                    <TopicLine key={t.key} t={t} ri={ri} cur={cur} hasEarlier={cols.earlier > 0} ordinals={ordinals} />
                   ))}
                 </div>
-                {rows.map((t, ri) => (
-                  <TopicLine key={t.key} t={t} ri={ri} cur={cur} hasEarlier={cols.earlier > 0} ordinals={ordinals} />
-                ))}
-              </div>
               </div>
             </Card>
           </Defer>
@@ -229,7 +232,19 @@ function TopicLine({
       {hasEarlier ? <div className="tp-cell tp-cell--earlier" aria-hidden="true" /> : null}
       {ordinals.map((o, ci) => {
         const v = byN.get(o);
-        if (v) return <VideoCell key={o} topic={t.label} topicKey={t.key} v={v} total={t.videos.length} ri={ri} ci={ci} tab={tabIndexFor(cur, ri, ci)} />;
+        if (v)
+          return (
+            <VideoCell
+              key={o}
+              topic={t.label}
+              topicKey={t.key}
+              v={v}
+              total={t.videos.length}
+              ri={ri}
+              ci={ci}
+              tab={tabIndexFor(cur, ri, ci)}
+            />
+          );
         if (o === next && pendingLabel)
           return (
             <div

@@ -18,12 +18,12 @@ import { useCreateProject } from "../components/createProject";
 import { DnsList, FinishPicture, ModeSwitch, testWord } from "../components/finish";
 import { Arrow, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
-import { takeLayerOrigin, visibleRect, type Rect } from "../components/layerTransition";
+import { type Rect, takeLayerOrigin, visibleRect } from "../components/layerTransition";
 import { artStyle, Failure, Loading, useReducedMotion } from "../components/ui";
 import { useHeatmap, useProjects, useSources } from "../data";
+import { formatLabel, kindLong, LICENCE_WORD, neverFetchedFor, pad2, STATUS_AIR, STATUS_WORD } from "../display";
 import { cellFixes, focusKey, neighbours, snapshotAge } from "../heatmap";
 import { type Capability, cellOf, MODE_LABEL, SPORTS, STAGE_LABEL } from "../logic";
-import { formatLabel, kindLong, LICENCE_WORD, neverFetchedFor, pad2, STATUS_AIR, STATUS_WORD } from "../display";
 import type { HeatmapSearch } from "../router";
 
 // ------------------------------------------------------------------ choreography
@@ -506,7 +506,9 @@ function MakeNext({ uc, sport, mode, cell, cells, usecases, onCell }: BodyProps)
                 ) : (
                   "This cell also misses another kind; this fix alone does not clear it."
                 )}
-                {f.best ? ` · best passing today: ${LICENCE_WORD[f.best].toLowerCase()} (not allowed in ${MODE_LABEL[mode].toLowerCase()})` : ""}
+                {f.best
+                  ? ` · best passing today: ${LICENCE_WORD[f.best].toLowerCase()} (not allowed in ${MODE_LABEL[mode].toLowerCase()})`
+                  : ""}
               </p>
               <p className="hl-fix__c">
                 {f.candidates.length ? (

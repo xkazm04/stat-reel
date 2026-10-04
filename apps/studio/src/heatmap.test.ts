@@ -1,6 +1,18 @@
 import type { HeatmapCell } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
-import { blockedBreakdown, blockedCause, blockedLegend, cellFixes, cellHint, focusKey, gridMove, neighbours, parseFocus, snapshotAge, sportCounts } from "./heatmap";
+import {
+  blockedBreakdown,
+  blockedCause,
+  blockedLegend,
+  cellFixes,
+  cellHint,
+  focusKey,
+  gridMove,
+  neighbours,
+  parseFocus,
+  snapshotAge,
+  sportCounts,
+} from "./heatmap";
 
 const cell = (o: Partial<HeatmapCell> & Pick<HeatmapCell, "usecase" | "sport" | "status">): HeatmapCell => ({
   mode: "monetized",
@@ -41,16 +53,25 @@ const f1Go = cell({
   sport: "F1",
   status: "go",
   composition_implemented: true,
-  kinds: [{ kind: "hist", best: "legal", tested: true, sources: [{ id: "f1db", license_class: "legal", status: "pass" }] }],
+  kinds: [
+    { kind: "hist", best: "legal", tested: true, sources: [{ id: "f1db", license_class: "legal", status: "pass" }] },
+  ],
 });
 
 describe("heatmap helpers", () => {
   it("hints why in three words", () => {
     expect(cellHint(f1Go)).toBe("cleared, built");
     expect(cellHint(nbaBlocked)).toBe("not tested");
-    expect(cellHint(cell({ usecase: "x", sport: "F1", status: "blocked", kinds: [{ kind: "hist", best: null, tested: false, sources: [] }] }))).toBe(
-      "no source",
-    );
+    expect(
+      cellHint(
+        cell({
+          usecase: "x",
+          sport: "F1",
+          status: "blocked",
+          kinds: [{ kind: "hist", best: null, tested: false, sources: [] }],
+        }),
+      ),
+    ).toBe("no source");
   });
 
   it("names the cause of every blocked cell", () => {
@@ -64,7 +85,9 @@ describe("heatmap helpers", () => {
     const b = (kinds: HeatmapCell["kinds"], o: Partial<HeatmapCell> = {}) =>
       cell({ usecase: "x", sport: "NBA", status: "blocked", kinds, ...o });
     expect(blockedCause(nbaBlocked)).toBe("not-tested");
-    expect(blockedCause(b([k({ tested: true, sources: [{ id: "a", license_class: "legal", status: "fail" }] })]))).toBe("failing-test");
+    expect(blockedCause(b([k({ tested: true, sources: [{ id: "a", license_class: "legal", status: "fail" }] })]))).toBe(
+      "failing-test",
+    );
     expect(blockedCause(b([k({})]))).toBe("no-source");
     // declared, but only a non-commercial source: monetized can never clear it, non-commercial can
     const nc = [k({ sources: [{ id: "nc", license_class: "non_commercial", status: "declared" }] })];
@@ -103,7 +126,12 @@ describe("heatmap helpers", () => {
   });
 
   it("counts per sport and mode", () => {
-    expect(sportCounts([nbaBlocked, nhlBlocked, f1Go], "monetized", "NBA")).toEqual({ go: 0, "data-ready": 0, ask: 0, blocked: 2 });
+    expect(sportCounts([nbaBlocked, nhlBlocked, f1Go], "monetized", "NBA")).toEqual({
+      go: 0,
+      "data-ready": 0,
+      ask: 0,
+      blocked: 2,
+    });
   });
 
   it("names the fix for a cell: failing kinds, legal candidates, grid-wide flips", () => {
@@ -134,7 +162,6 @@ describe("heatmap helpers", () => {
     const n = neighbours([nbaBlocked, nhlBlocked, f1Go], nbaBlocked, () => 1, 4);
     expect(n.map((c) => `${c.usecase}|${c.sport}`)).toEqual(["era|F1", "dist|NBA"]);
   });
-
 });
 
 describe("text floor (shared.css --text-xs: nothing a user must read is smaller)", () => {
@@ -143,12 +170,19 @@ describe("text floor (shared.css --text-xs: nothing a user must read is smaller)
     const { fileURLToPath } = await import("node:url");
     const read = (f: string) =>
       readFileSync(fileURLToPath(new URL(`./styles/${f}`, import.meta.url)), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const floor = Number(/--text-xs:\s*(\d+)px/.exec(readFileSync(fileURLToPath(new URL("../../../packages/design-tokens/src/shared.css", import.meta.url)), "utf8"))?.[1]);
+    const floor = Number(
+      /--text-xs:\s*(\d+)px/.exec(
+        readFileSync(fileURLToPath(new URL("../../../packages/design-tokens/src/shared.css", import.meta.url)), "utf8"),
+      )?.[1],
+    );
     expect(floor).toBe(12);
     for (const f of ["heatmap.css", "calendar.css"]) {
       const sizes = [...read(f).matchAll(/font-size:\s*([\d.]+)px/g)].map((m) => Number(m[1]));
       expect(sizes.length, f).toBeGreaterThan(10);
-      expect(sizes.filter((s) => s < floor), f).toEqual([]);
+      expect(
+        sizes.filter((s) => s < floor),
+        f,
+      ).toEqual([]);
     }
   });
 });

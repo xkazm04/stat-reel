@@ -14,17 +14,17 @@ import { Outlet, useNavigate, useParams, useSearch } from "@tanstack/react-route
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { api, errorText, qk } from "../api";
 import { Defer } from "../components/arrive";
-import { ViewSwitch } from "../components/HeatmapViews";
 import { LaneBar, ModeSwitch } from "../components/finish";
 import { FormatIcon, StatusChip } from "../components/glyphs";
+import { ViewSwitch } from "../components/HeatmapViews";
 import { identVar } from "../components/idents";
 import { setLayerOrigin } from "../components/layerTransition";
 import { artStyle, Failure, Loading, Sparkline } from "../components/ui";
 import { useHeatmap, useSources } from "../data";
+import { formatLabel, pad2, STATUS_ORDER, STATUS_WORD, trendSummary } from "../display";
 import { LINE, REACH } from "../finishline";
 import { blockedBreakdown, blockedLegend, cellHint, focusKey, gridMove, parseFocus, sportCounts } from "../heatmap";
 import { cellOf, countStatuses, MODE_LABEL, relTime, SPORTS, trendSeries } from "../logic";
-import { formatLabel, pad2, STATUS_ORDER, STATUS_WORD, trendSummary } from "../display";
 import type { HeatmapSearch } from "../router";
 
 type OpenCell = (uc: UseCase, sport: Sport, el: HTMLElement) => void;
@@ -164,9 +164,7 @@ export function HeatmapFeasibility() {
       <div className="hm-layer1" inert={open}>
         <header className="hm-head">
           <div className="hm-title">
-            <p className="eyebrow">
-              {`The finish sheet · ${SPORTS.length} heats × ${usecases.length || "—"} lanes`}
-            </p>
+            <p className="eyebrow">{`The finish sheet · ${SPORTS.length} heats × ${usecases.length || "—"} lanes`}</p>
             <h1>What can cross the line</h1>
           </div>
           <ul className="hm-legend" aria-label={`Status counts, ${MODE_LABEL[mode]}`}>
@@ -213,7 +211,9 @@ export function HeatmapFeasibility() {
             </div>
           </div>
         ) : (
-          <div className="hm-wrap card-surface"><FinishSheet {...gridProps} /></div>
+          <div className="hm-wrap card-surface">
+            <FinishSheet {...gridProps} />
+          </div>
         )}
 
         <Defer tier={1} id="hm:foot" phClass="hm-foot" minHeight={48}>
@@ -281,7 +281,18 @@ function cellLabel(u: UseCase, sport: string, mode: Mode, c: HeatmapCell): strin
 
 // ------------------------------------------------------------------ Photo Finish: the finish sheet
 
-function FinishSheet({ usecases, cells, mode, trend, cur, selected, onOpen, onFocusCell, register, onKeyDown }: GridProps) {
+function FinishSheet({
+  usecases,
+  cells,
+  mode,
+  trend,
+  cur,
+  selected,
+  onOpen,
+  onFocusCell,
+  register,
+  onKeyDown,
+}: GridProps) {
   return (
     <div
       className="pf-heats"
@@ -329,7 +340,11 @@ function FinishSheet({ usecases, cells, mode, trend, cur, selected, onOpen, onFo
                   <TrendLine series={series} t={t} w={32} />
                 </span>
               </span>
-              <span className="pf-rowhead__fmt" role="img" aria-label={`default format ${formatLabel(u.default_format)}`}>
+              <span
+                className="pf-rowhead__fmt"
+                role="img"
+                aria-label={`default format ${formatLabel(u.default_format)}`}
+              >
                 <FormatIcon format={u.default_format} h={14} />
               </span>
             </div>

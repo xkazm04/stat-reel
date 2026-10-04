@@ -703,7 +703,11 @@ html.hm-layer-open {
 .hl--photofinish {
   background:
     linear-gradient(to right, color-mix(in srgb, var(--art) 11%, transparent), transparent 58%),
-    repeating-linear-gradient(to bottom, transparent 0 calc(12.5vh - 1px), var(--color-line-faint) calc(12.5vh - 1px) 12.5vh),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(12.5vh - 1px),
+      var(--color-line-faint) calc(12.5vh - 1px) 12.5vh
+    ),
     var(--color-bg);
   background-attachment: fixed;
   --lb-ground: var(--color-bg);
@@ -827,7 +831,6 @@ html.hm-layer-open {
   .hl-side .hl-block:first-child {
     margin-top: 18px;
   }
-  
 }
 @media (max-width: 1100px) {
   .hm-layer1 {
@@ -843,7 +846,7 @@ html.hm-layer-open {
     overflow-x: auto;
     padding-bottom: 6px;
   }
-  
+
   .pf-heats {
     --rowhead: 176px;
     min-width: calc(var(--rowhead) + 4 * 236px);
@@ -852,7 +855,7 @@ html.hm-layer-open {
   }
   /* the grid scrolls inside its own container; the row heads stay put */
   .pf-corner,
-.pf-rowhead {
+  .pf-rowhead {
     position: sticky;
     left: 0;
     z-index: 5;
@@ -861,7 +864,6 @@ html.hm-layer-open {
   .pf-rowhead__meta {
     display: none;
   }
-  
 }
 @media (max-width: 860px) {
   .hl-body {
