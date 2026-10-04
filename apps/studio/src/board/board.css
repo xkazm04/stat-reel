@@ -1670,29 +1670,6 @@ html.bd-modal-open {
   color: var(--color-text-muted);
   font-size: 13px;
 }
-.bd-lib__gh {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 18px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--color-line);
-}
-.bd-lib__gh h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: var(--weight-display);
-  font-size: var(--text-2xl);
-  line-height: 1;
-}
-.bd-lib__gh h2 .num {
-  color: var(--color-text-dim);
-}
-.bd-lib__gh p {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
 .bd-lib__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
@@ -1906,12 +1883,6 @@ html.bd-modal-open {
   color: var(--color-text);
   margin-right: 4px;
 }
-.bd-ideas {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
-  gap: 16px;
-  align-items: start;
-}
 .bd-idea {
   display: grid;
   gap: 10px;
@@ -1995,10 +1966,6 @@ html.bd-modal-open {
 .bd-idea__data a {
   color: var(--color-text);
 }
-.bd-idea__gate {
-  display: grid;
-  gap: 8px;
-}
 .bd-idea__note {
   width: 100%;
   padding: 6px 8px;
@@ -2040,14 +2007,6 @@ html.bd-modal-open {
 .bd-idea__beats b {
   margin-right: 6px;
   color: var(--color-text);
-}
-.bd-idea__more summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-.bd-idea__more[open] summary {
-  margin-bottom: 8px;
 }
 
 /* use cases, layer 1: titles only */
