@@ -116,6 +116,22 @@ describe("one schema for replay and live", () => {
     expect(((await executor(tools)("nope", {})) as { error: string }).error).toMatch(/unknown tool nope\. Available tools: .*query/);
   });
 
+  it("a handler that throws is a failed result in replay exactly as in live (the SDK turns a throw into isError)", async () => {
+    const { d } = deps();
+    const boom = { ...d, projects: { ...d.projects, setProps: async () => { throw new Error("warehouse is not built: run just transform"); } } } as unknown as ToolDeps;
+    const tools = makeTools(boom);
+    // live: the MCP SDK catches the throw and answers isError with the message
+    const client = new Client({ name: "t", version: "0" });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await Promise.all([buildMcpServer(tools).connect(a), client.connect(b)]);
+    const live = await client.callTool({ name: "set_props", arguments: { project: "p-1", props: {} } });
+    expect(live.isError).toBe(true);
+    expect(JSON.stringify(live.content)).toContain("warehouse is not built");
+    // replay: the executor returns the same failure instead of rejecting the whole replayed session
+    const replay = await executor(tools)("set_props", { project: "p-1", props: {} });
+    expect(replay).toEqual({ error: "warehouse is not built: run just transform" });
+  });
+
   it("every tool has a schema shape", () => {
     expect(Object.keys(toolShapes).sort()).toEqual(Object.keys(makeTools(deps().d)).sort());
   });

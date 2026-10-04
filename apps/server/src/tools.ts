@@ -100,6 +100,12 @@ export function executor(tools: Tools) {
     // the same schemas the MCP server enforces: a replayed call is validated exactly like a live one
     const parsed = parseToolInput(tool, input);
     if (!parsed.ok) return { error: parsed.error, issues: parsed.issues };
-    return fn(parsed.value);
+    // a live session never sees a throw: the MCP SDK answers it as an isError result with the message.
+    // Replay must agree, or one throwing handler kills a replayed session the live model would have recovered from.
+    try {
+      return await fn(parsed.value);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
   };
 }
