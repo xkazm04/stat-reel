@@ -189,7 +189,10 @@ describe("caption box geometry and safe zone", () => {
     expect(estimateLineWidth("Fangio won 24 races", "vertical")).toBeLessThan(captionTextWidth("vertical"));
     expect(captionSafeZoneViolations([caps, mixed], "vertical")).toBe(1);
     // same OFL face, same weight as the burn-in style: the width the layout trusts is the width viz measures
-    expect(estimateLineWidth("MAXIMUM WORLD TITLE", "landscape")).toBeCloseTo(measureText("MAXIMUM WORLD TITLE", 52, "ui", 0, 700), 6);
+    expect(estimateLineWidth("MAXIMUM WORLD TITLE", "landscape")).toBeCloseTo(
+      measureText("MAXIMUM WORLD TITLE", 52, "ui", 0, 700),
+      6,
+    );
   });
 
   it("cues built by buildCues have zero safe-zone violations in both formats", () => {
