@@ -154,6 +154,12 @@ describe("refusal precision", () => {
     expect(isRefusal([call("query", "a"), res("{}", "a"), ...result("I can't help with that request.")])).toBe(true);
   });
 
+  it("a typographic apostrophe (U+2019) is the same wording", () => {
+    for (const text of ["I can’t help with that request.", "I won’t do that.", "I can’t help with this."]) {
+      expect(isRefusal(result(text))).toBe(true);
+    }
+  });
+
   it("ordinary text is not a refusal", () => {
     expect(isRefusal(result("All done."))).toBe(false);
   });

@@ -58,7 +58,8 @@ export type ToolExecutor = (tool: string, input: unknown) => Promise<unknown>;
 
 export const stripMcpPrefix = (name: string) => name.replace(/^mcp__statreel__/, "");
 
-const REFUSAL = /\b(I can(?:'|no)t help with|I won't|I'm not able to (?:help|assist))\b/i;
+// ['’]: models also write the typographic apostrophe; a straight-quote-only pattern let "I can’t help with that" pass as success
+const REFUSAL = /\b(I can(?:['’]|no)t help with|I won['’]t|I['’]m not able to (?:help|assist))\b/i;
 
 export function parseStreamLine(line: string): LlmEvent[] {
   const trimmed = line.trim();
