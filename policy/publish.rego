@@ -119,10 +119,14 @@ font_allowed(f) if {
 	a.sha256 == f.sha256
 }
 
-valid_plan_tier(a) if {
+has_plan_tier(a) if {
 	is_string(a.plan_tier)
 	a.plan_tier != ""
 }
+
+# The schema's PlanTier enum (packages/schemas; policy.test.ts pins the two together). Anything else - "Free",
+# "trial" - is not evidence of a plan, so it cannot clear the free-plan rule by spelling.
+plan_tiers := {"free", "starter", "creator", "pro", "scale", "business", "enterprise"}
 
 # ------------------------------------------------------------------ data rights
 
@@ -176,8 +180,16 @@ deny contains msg if {
 # rule: audio_missing_plan_tier
 deny contains msg if {
 	some a in audio
-	not valid_plan_tier(a)
+	not has_plan_tier(a)
 	msg := sprintf("%s audio has no plan_tier", [object.get(a, "kind", "unknown")])
+}
+
+# rule: audio_missing_plan_tier
+deny contains msg if {
+	some a in audio
+	has_plan_tier(a)
+	not a.plan_tier in plan_tiers
+	msg := sprintf("%s audio has unknown plan_tier %v", [object.get(a, "kind", "unknown"), a.plan_tier])
 }
 
 # ------------------------------------------------------------------ fonts

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ProvenanceManifestSchema, PublishTargetSchema, sampleManifest } from "@statreel/schemas";
+import { PlanTier, ProvenanceManifestSchema, PublishTargetSchema, sampleManifest } from "@statreel/schemas";
 import { describe, expect, it } from "vitest";
 import { defaultOpaBin, evaluatePolicy, opaArgs, PolicyEvaluationError, parseOpaOutput, repoRoot } from "./policy";
 
@@ -182,6 +182,15 @@ describe("policy/publish.rego checks_run", () => {
 
   it("every rule has its own section in publish_test.rego", () => {
     expect(checksRun.filter((r) => !sections.includes(r))).toEqual([]);
+  });
+});
+
+describe("policy/publish.rego plan_tiers", () => {
+  it("is the schema's PlanTier enum, so the gate and the asset schema accept the same tiers", () => {
+    const src = readFileSync(join(repoRoot(), "policy", "publish.rego"), "utf8");
+    const set = /^plan_tiers := \{([^}]*)\}/m.exec(src)?.[1] ?? "";
+    const tiers = [...set.matchAll(/"([a-z_]+)"/g)].map((m) => m[1] as string);
+    expect(tiers.sort()).toEqual([...PlanTier.options].sort());
   });
 });
 

@@ -205,6 +205,30 @@ test_audio_missing_plan_tier_positive if denies(remove("/manifest/audio/0/plan_t
 
 test_audio_empty_plan_tier_positive if denies(replace("/manifest/audio/0/plan_tier", ""), "tts audio has no plan_tier")
 
+# a tier outside the schema enum is not a plan: "Free" must not slip past the free-plan rule by its spelling
+test_audio_unknown_plan_tier_positive if {
+	inp := replace("/manifest/audio/1/plan_tier", "Free")
+	denies(inp, "music audio has unknown plan_tier Free")
+	not publish.allow with input as inp
+}
+
+test_audio_trial_plan_tier_positive if denies(replace("/manifest/audio/0/plan_tier", "trial"), "tts audio has unknown plan_tier trial")
+
+test_audio_known_plan_tiers_negative if {
+	every tier in ["free", "starter", "creator", "pro", "scale", "business", "enterprise"] {
+		inp := patched([
+			{"op": "replace", "path": "/manifest/audio/0/plan_tier", "value": tier},
+			{"op": "replace", "path": "/target/monetized", "value": false},
+		])
+		not any_plan_tier_deny(inp)
+	}
+}
+
+any_plan_tier_deny(inp) if {
+	some m in publish.deny with input as inp
+	contains(m, "plan_tier")
+}
+
 # ------------------------------------------------------------------ font_not_ofl
 
 test_font_not_ofl_negative if not denies(base, "font Barlow Condensed is not OFL")

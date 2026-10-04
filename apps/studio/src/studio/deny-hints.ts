@@ -27,6 +27,10 @@ const RULES: [RegExp, string][] = [
     "Generate the audio on a paid ElevenLabs plan, or make the project non-commercial.",
   ],
   [
+    /^\S+ audio has unknown plan_tier /,
+    "The audio's plan tier is not an ElevenLabs plan StatReel knows; Produce again so it is regenerated and stamped.",
+  ],
+  [
     /^\S+ audio has no plan_tier$/,
     "The audio's plan tier was not recorded; Produce again so the audio is regenerated with it.",
   ],
