@@ -53,7 +53,16 @@ describe("Card", () => {
   });
 
   it("titleId and titleTabIndex give the heading a stable focus target; element and test id pass through", () => {
-    const out = html(h(Card, { as: "li", title: "Every slot", titleId: "h-slots", titleTabIndex: -1, testId: "slots", className: "cal-slots" }));
+    const out = html(
+      h(Card, {
+        as: "li",
+        title: "Every slot",
+        titleId: "h-slots",
+        titleTabIndex: -1,
+        testId: "slots",
+        className: "cal-slots",
+      }),
+    );
     expect(out).toMatch(/^<li /);
     expect(out).toContain('id="h-slots"');
     expect(out).toContain('tabindex="-1"');

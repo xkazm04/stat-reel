@@ -9,7 +9,10 @@ import { describe, expect, it } from "vitest";
  * violation"); the validator enforces DATA_RACE_LIMITS / ENDING_FRAMES. A number the prompt states that the
  * validator does not hold costs a rejected props file and another paid turn, so every stated figure is checked here.
  */
-const rules = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../prompts/generation/_rules.md"), "utf8");
+const rules = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../prompts/generation/_rules.md"),
+  "utf8",
+);
 const num = (re: RegExp): number[] => {
   const m = rules.match(re);
   if (!m) throw new Error(`_rules.md no longer states ${re}`);
@@ -38,11 +41,11 @@ describe("_rules.md states the limits the generation validator enforces", () => 
   });
 
   it("ending sequence frames", () => {
-    expect(num(/winner spotlight:.*?\((\d+) frames\);.*?like & subscribe card \((\d+) frames\);.*?Powered by StatReel.*?\((\d+) frames\)/)).toEqual([
-      ENDING_FRAMES.spotlight,
-      ENDING_FRAMES.like,
-      ENDING_FRAMES.powered,
-    ]);
+    expect(
+      num(
+        /winner spotlight:.*?\((\d+) frames\);.*?like & subscribe card \((\d+) frames\);.*?Powered by StatReel.*?\((\d+) frames\)/,
+      ),
+    ).toEqual([ENDING_FRAMES.spotlight, ENDING_FRAMES.like, ENDING_FRAMES.powered]);
   });
 
   it("no text size under the 28 px floor (owner rule; the compositions test every readable text >= 28 px)", () => {
