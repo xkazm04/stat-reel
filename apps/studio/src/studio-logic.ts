@@ -185,3 +185,21 @@ export function reusedRenderOf(
 
 /** The sentence shown for a reused render. */
 export const REUSED_RENDER_TEXT = "Reused the existing render (inputs unchanged)";
+
+/** The props JSON editor's draft: the text being edited, the stored text it was opened on, and that version. */
+export type PropsDraft = { text: string; base: string; version: number };
+
+/**
+ * Rebase the JSON draft onto the latest stored props (the co-pilot can store a version while the owner
+ * types). An untouched draft follows the new props; an edited one is never replaced, and `stale` names the
+ * version that landed underneath so the editor can say a save would supersede it.
+ */
+export function rebasePropsDraft(
+  draft: PropsDraft,
+  latest: { text: string; version: number },
+): { draft: PropsDraft; stale: number | null } {
+  if (latest.version === draft.version) return { draft, stale: null };
+  if (draft.text === draft.base)
+    return { draft: { text: latest.text, base: latest.text, version: latest.version }, stale: null };
+  return { draft, stale: latest.version };
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCancelJob, canSchedule, compositionLoadStatus, compositionLoadWanted, compositionState, cps, draftSpans, hasPlayer, peakCueCps, produceBlockReason, REUSED_RENDER_TEXT, reusedRenderOf, rulerTicks, sceneSpans, scheduleOffered, spanAt, spanLabel, verdictView } from "./studio-logic";
+import { canCancelJob, canSchedule, compositionLoadStatus, compositionLoadWanted, compositionState, cps, draftSpans, hasPlayer, peakCueCps, produceBlockReason, rebasePropsDraft, REUSED_RENDER_TEXT, reusedRenderOf, rulerTicks, sceneSpans, scheduleOffered, spanAt, spanLabel, verdictView } from "./studio-logic";
 
 const scenes = [
   { id: "hook", kind: "hook" },
@@ -161,5 +161,24 @@ describe("reusedRenderOf", () => {
   });
   it("has the sentence the screens show", () => {
     expect(REUSED_RENDER_TEXT).toBe("Reused the existing render (inputs unchanged)");
+  });
+});
+
+describe("rebasePropsDraft (the JSON editor keeps typing when new props land)", () => {
+  const v1 = { text: '{"title":"A"}', version: 1 };
+  const v2 = { text: '{"title":"B"}', version: 2 };
+  it("keeps the draft while the stored version is the one it was opened on", () => {
+    const d = { text: '{"title":"edited"}', base: v1.text, version: 1 };
+    expect(rebasePropsDraft(d, v1)).toEqual({ draft: d, stale: null });
+  });
+  it("follows new props when nothing was edited", () => {
+    const d = { text: v1.text, base: v1.text, version: 1 };
+    expect(rebasePropsDraft(d, v2)).toEqual({ draft: { text: v2.text, base: v2.text, version: 2 }, stale: null });
+  });
+  it("never drops edited text when new props land; it names the version that landed instead", () => {
+    const d = { text: '{"title":"edited"}', base: v1.text, version: 1 };
+    const r = rebasePropsDraft(d, v2);
+    expect(r.draft.text).toBe('{"title":"edited"}');
+    expect(r.stale).toBe(2);
   });
 });
