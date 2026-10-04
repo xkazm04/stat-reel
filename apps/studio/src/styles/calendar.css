@@ -2,8 +2,14 @@
    of every slot. Structure from tokens; Photo Finish
    dresses it in rules on the timing sheet (the published slot crosses the clay line). */
 
+.cal-page {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
 .cal-page .page__head {
   align-items: stretch;
+  margin-bottom: 0;
 }
 .cal-private {
   display: grid;
@@ -28,22 +34,17 @@
 
 /* ── channels ───────────────────────────────────────────────────────── */
 .ch-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.ch-card {
+.ch-card > .card__body {
   display: grid;
   align-content: start;
   gap: 6px;
-  padding: 12px 14px;
-  border: 1px solid var(--color-line);
-  background: var(--color-bg-raised);
-  min-width: 0;
 }
 .ch-card--not_wired {
   border-style: dashed;
-  background: transparent;
 }
 .ch-card__h {
   display: flex;
@@ -113,8 +114,12 @@
 .cal-main {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(0, 2.1fr);
-  gap: 0 24px;
-  align-items: start;
+  gap: 16px;
+  align-items: stretch;
+}
+.cal-week .week {
+  border: 0;
+  border-top: 1px solid var(--color-line-faint);
 }
 .ready-list {
   display: grid;

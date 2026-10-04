@@ -1,0 +1,250 @@
+/* ── Cards (components/Card.tsx) ────────────────────────────────────────────────────────────
+   Raised white cards on the timing sheet; a card inside a card is a recessed well. One look for
+   every screen, parametrised by data-* attributes (tone, elevation, pad, scroll, accent).
+   `.card-surface` gives the same skin to bespoke containers that cannot use the component
+   (the studio's three-column room). Tokens: --card-* in theme-photofinish.css. */
+
+.card-surface,
+.card {
+  position: relative;
+  min-width: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-edge);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow-1);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  --card-pad: 16px;
+}
+.card[data-elev="0"] {
+  box-shadow: none;
+}
+.card[data-elev="2"] {
+  box-shadow: var(--card-shadow-2);
+}
+.card[data-tone="well"] {
+  background: var(--card-well-bg);
+  border-color: var(--color-line);
+  box-shadow: var(--card-shadow-well);
+}
+.card[data-tone="well"][data-elev="1"],
+.card[data-tone="well"][data-elev="2"] {
+  box-shadow: var(--card-shadow-well), var(--card-shadow-1);
+}
+.card[data-tone="signal"],
+.card[data-accent] {
+  border-top: 3px solid var(--card-accent, var(--color-signal));
+}
+.card[data-tone="signal"]:not([data-accent]) {
+  --card-accent: var(--color-signal);
+}
+
+.card[data-pad="sm"] {
+  --card-pad: 10px;
+}
+.card[data-pad="lg"] {
+  --card-pad: 24px;
+}
+.card[data-pad="none"] {
+  --card-pad: 0px;
+}
+
+/* header: title, tag, actions */
+.card__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 12px max(var(--card-pad), 14px) 10px;
+  border-bottom: 1px solid var(--color-line-faint);
+}
+.card[data-tone="well"] > .card__head {
+  border-bottom-color: var(--color-line);
+}
+.card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-heavy);
+  font-size: 16px;
+  line-height: 1.1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+.card .card .card__title {
+  font-size: 14px;
+  letter-spacing: 0.12em;
+}
+.card__tag {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  font-feature-settings: "tnum";
+}
+.card__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
+
+.card__body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--card-pad);
+}
+.card[data-pad="none"] > .card__body {
+  border-radius: 0 0 var(--card-radius) var(--card-radius);
+}
+.card[data-pad="none"]:not(:has(> .card__foot)) > .card__body {
+  overflow: clip;
+}
+.card[data-scroll="fill"] {
+  min-height: 0;
+  overflow: hidden;
+}
+.card[data-scroll="fill"] > .card__body {
+  overflow: auto;
+}
+.card[data-scroll="max"] > .card__body {
+  max-height: var(--card-max);
+  overflow: auto;
+}
+.card[data-sticky] > .card__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: inherit;
+  border-radius: var(--card-radius) var(--card-radius) 0 0;
+}
+.card[aria-busy="true"] > .card__body {
+  opacity: 0.55;
+  transition: opacity 160ms linear;
+}
+
+.card__foot {
+  padding: 10px max(var(--card-pad), 14px);
+  border-top: 1px solid var(--color-line-faint);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-dim);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
+/* children that carried their own frame look flat inside a card */
+.card .empty {
+  margin-top: 0;
+  background: var(--card-well-bg);
+  border-radius: 6px;
+}
+.card .table-wrap {
+  max-width: 100%;
+}
+.card[data-pad="none"] .tbl thead th:first-child,
+.card[data-pad="none"] .tbl tbody td:first-child {
+  padding-left: 16px;
+}
+.card[data-pad="none"] .tbl thead th:last-child,
+.card[data-pad="none"] .tbl tbody td:last-child {
+  padding-right: 16px;
+}
+.card[data-pad="none"] .tbl tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* grid of cards */
+.card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min, 280px)), 1fr));
+  align-items: stretch;
+}
+.card-grid[data-gap="sm"] {
+  gap: 10px;
+}
+.card-grid[data-gap="lg"] {
+  gap: 24px;
+}
+.card-grid[data-cols="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.card-grid[data-cols="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.card-grid[data-cols="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.card-grid[data-cols="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 760px) {
+  .card-grid[data-cols] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* a titled group of cards */
+.band {
+  margin-top: 28px;
+}
+.band__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "num title actions" "lede lede lede";
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 12px;
+}
+.band__num {
+  grid-area: num;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-brand);
+  letter-spacing: var(--tracking-label);
+}
+.band__title {
+  grid-area: title;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-heavy);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.band__lede {
+  grid-area: lede;
+  margin: 4px 0 0;
+  max-width: 72ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.band__actions {
+  grid-area: actions;
+}
+
+/* stacks of cards on a page */
+.card-stack {
+  display: grid;
+  gap: 16px;
+}
+
+@media print {
+  .card,
+  .card-surface {
+    box-shadow: none;
+  }
+}

@@ -7,6 +7,7 @@ import "./styles/studio.css";
 import "./styles/calendar.css";
 import "./styles/pages.css";
 import "./styles/arrive.css";
+import "./styles/card.css";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";

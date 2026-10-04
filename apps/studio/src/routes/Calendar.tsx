@@ -51,6 +51,7 @@ import {
   wiredChannels,
 } from "../calendar";
 import { Defer } from "../components/arrive";
+import { Card, CardGrid } from "../components/Card";
 import { Arrow, FormatIcon } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { artStyle, Empty, Failure, Loading } from "../components/ui";
@@ -190,19 +191,22 @@ export function CalendarPage() {
       ) : (
         <>
           <Defer tier={1} id="cal:channels" phClass="cal-channels" minHeight={140}>
-            <section className="cal-channels" aria-labelledby="h-channels">
-              <h2 className="sec-h sec-h--page" id="h-channels">
-                <span>Channels · {channels.length}</span>
+            <Card
+              className="cal-channels"
+              title="Channels"
+              tag={channels.length}
+              actions={
                 <span>
                   {wired.length} wired · {channels.length - wired.length} not wired
                 </span>
-              </h2>
+              }
+            >
               {channels.length ? (
-                <ul className="ch-cards">
+                <CardGrid as="ul" min={260} gap="sm" className="ch-cards">
                   {channels.map((c) => {
                     const mine = slots.filter((s) => s.channel_id === c.id);
                     return (
-                      <li key={c.id} className={`ch-card ch-card--${c.status}`}>
+                      <Card as="li" key={c.id} className={`ch-card ch-card--${c.status}`}>
                         <div className="ch-card__h">
                           <b className="ch-card__name">{c.name}</b>
                           <span className={`ch-state ch-state--${c.status}`}>
@@ -216,23 +220,24 @@ export function CalendarPage() {
                             ? "Cannot take a slot until it is wired."
                             : `${mine.filter((s) => isUpcoming(s.status)).length} upcoming · ${mine.filter((s) => s.status === "published").length} published`}
                         </p>
-                      </li>
+                      </Card>
                     );
                   })}
-                </ul>
+                </CardGrid>
               ) : (
                 <Empty title="No channel">The server seeds YouTube, TikTok and Instagram; none came back.</Empty>
               )}
-            </section>
+            </Card>
           </Defer>
 
           <Defer tier={linked ? 0 : 2} id="cal:main" minHeight={320}>
             <div className="cal-main">
-              <section className="cal-ready" aria-labelledby="h-ready">
-                <h2 className="sec-h sec-h--page" id="h-ready">
-                  <span>Ready to schedule · {ready.length}</span>
-                  <span>gated, not on the calendar</span>
-                </h2>
+              <Card
+                className="cal-ready"
+                title="Ready to schedule"
+                tag={ready.length}
+                actions={<span>gated, not on the calendar</span>}
+              >
                 {linked && !ready.some((r) => r.project_id === linked) ? (
                   <p className="cal-note" role="status">
                     {slots.some((s) => s.project_id === linked && (s.status === "scheduled" || s.status === "publishing"))
@@ -252,7 +257,7 @@ export function CalendarPage() {
                     project in the <Link to="/studio">studio</Link> and produce it until the gate says ALLOW.
                   </Empty>
                 )}
-              </section>
+              </Card>
 
               <Defer tier={1} id="cal:week" phClass="cal-week" minHeight={320}>
                 <WeekView week={week} setWeek={setWeek} slots={slots} chById={chById} />
@@ -261,13 +266,18 @@ export function CalendarPage() {
           </Defer>
 
           <Defer tier={3} id="cal:slots" visible phClass="cal-slots" minHeight={240}>
-            <section className="cal-slots" aria-labelledby="h-slots">
-              <h2 className="sec-h sec-h--page" id="h-slots" tabIndex={-1}>
-                <span>Every slot · {slots.length}</span>
+            <Card
+              className="cal-slots"
+              title="Every slot"
+              titleId="h-slots"
+              titleTabIndex={-1}
+              tag={slots.length}
+              actions={
                 <span>
                   {upcoming.length} upcoming · {history.length} done or stopped
                 </span>
-              </h2>
+              }
+            >
               {slots.length ? (
                 <>
                   {attention.length ? <h3 className="slot-group">Needs your decision</h3> : null}
@@ -315,7 +325,7 @@ export function CalendarPage() {
                   Schedule a ready video above, or publish it now; slots appear here and on the week.
                 </Empty>
               )}
-            </section>
+            </Card>
           </Defer>
           <p className="page__foot">
             Times are local ({Intl.DateTimeFormat().resolvedOptions().timeZone}). Scheduled slots can move or be
@@ -605,13 +615,12 @@ function WeekView({
   const today = dayKey(now);
   const count = [...buckets.values()].reduce((a, l) => a + l.length, 0);
   return (
-    <section className="cal-week" aria-labelledby="h-week">
-      <div className="cal-week__bar">
-        <h2 className="sec-h" id="h-week">
-          <span>
-            Week · {weekLabel(start)} · {count} slot{count === 1 ? "" : "s"}
-          </span>
-        </h2>
+    <Card
+      className="cal-week"
+      title="Week"
+      tag={`${weekLabel(start)} · ${count} slot${count === 1 ? "" : "s"}`}
+      pad="none"
+      actions={
         <div className="seg seg--sm" role="group" aria-label="Week">
           <button type="button" onClick={() => setWeek(week - 1)}>
             Previous
@@ -623,7 +632,8 @@ function WeekView({
             Next
           </button>
         </div>
-      </div>
+      }
+    >
       <ol className="week">
         {days.map((d) => {
           const k = dayKey(d);
@@ -659,7 +669,7 @@ function WeekView({
           );
         })}
       </ol>
-    </section>
+    </Card>
   );
 }
 
