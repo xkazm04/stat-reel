@@ -48,6 +48,25 @@ process.exit(0);`);
   });
 });
 
+describe("ClaudeEngine stream decoding", () => {
+  it("a multibyte character split across two stdout chunks decodes intact (names like Räikkönen)", async () => {
+    // the result line is written in two chunks, cut inside the 2-byte UTF-8 sequence of "ä"
+    const engine = fakeClaude(`const line = Buffer.from(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "R\\u00e4ikk\\u00f6nen \\u00b7 P\\u00e9rez", session_id: "s" }) + "\\n", "utf8");
+const i = line.indexOf(0xc3) + 1;
+process.stdout.write(line.subarray(0, i), () => setTimeout(() => process.stdout.write(line.subarray(i), () => process.exit(0)), 50));`);
+    const res = await run(engine, []);
+    expect(res.result).toBe("Räikkönen · Pérez");
+  });
+
+  it("the CLI's stderr is decoded the same way", async () => {
+    const engine = fakeClaude(`const b = Buffer.from("P\\u00e9rez failed\\n", "utf8");
+const i = b.indexOf(0xc3) + 1;
+process.stderr.write(b.subarray(0, i), () => setTimeout(() => process.stderr.write(b.subarray(i), () => process.exit(4)), 50));`);
+    const seen: LlmEvent[] = [];
+    await expect(run(engine, seen)).rejects.toThrow("Pérez failed");
+  });
+});
+
 describe("LLM_RECORD keeps only a successful run (a failed one must not overwrite the committed fixture)", () => {
   const recording = (script: string) => {
     const dir = mkdtempSync(path.join(tmpdir(), "llm-rec-"));

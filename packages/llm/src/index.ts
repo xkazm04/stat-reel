@@ -192,8 +192,11 @@ export class ClaudeEngine implements LlmEngine {
       const raw: string[] = [];
       const events: LlmEvent[] = [];
       let buf = "";
-      child.stdout.on("data", (d: Buffer) => {
-        buf += d.toString("utf8");
+      // setEncoding decodes across chunk boundaries (a per-chunk toString splits a multibyte character into U+FFFD)
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (d: string) => {
+        buf += d;
         let nl: number;
         while ((nl = buf.indexOf("\n")) >= 0) {
           const line = buf.slice(0, nl);
@@ -206,7 +209,7 @@ export class ClaudeEngine implements LlmEngine {
         }
       });
       let stderr = "";
-      child.stderr.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
+      child.stderr.on("data", (d: string) => (stderr += d));
       child.on("error", reject);
       child.on("close", (code) => {
         for (const e of parseStreamLine(buf)) {
