@@ -105,6 +105,16 @@ export async function launch() {
 }
 
 /**
+ * After load: fonts ready, then up to 15 s for window.statreel (a page may define it after an async
+ * font or data step). inspect() and board.mjs harvest share this, so a variant that passed the
+ * check is never skipped at harvest for an API it defines a moment later.
+ */
+export async function waitForStatreel(page) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction(() => typeof window.statreel?.seek === "function" && typeof window.statreel?.dataClock === "function", null, { timeout: 15000 }).catch(() => {});
+}
+
+/**
  * Everything harvest would reject or flag: shot.json contract, fact refs, network use, page errors,
  * the statreel API, duration agreement, longevity across the run, seek stability.
  * Returns { ok, errors[], meta, longevity, facts }.
@@ -159,8 +169,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
     const url = pathToFileURL(html);
     url.searchParams.set("capture", "1");
     await page.goto(url.href, { waitUntil: "load", timeout: 60000 });
-    await page.evaluate(() => document.fonts.ready);
-    await page.waitForFunction(() => window.statreel && typeof window.statreel.seek === "function", null, { timeout: 15000 }).catch(() => {});
+    await waitForStatreel(page);
     const api = await page.evaluate(() => ({ seek: typeof window.statreel?.seek, clock: typeof window.statreel?.dataClock, duration: window.statreel?.duration }));
     if (api.seek !== "function" || api.clock !== "function") {
       errors.push("window.statreel.seek(t) and window.statreel.dataClock(t) must be functions once the page has loaded");

@@ -27,7 +27,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { applyFeedback, assessLongevity, dataReadySports, dataReadyUseCases, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, rejectedCases, renderBrief, titleKey, renderLedgerMarkdown, seatLanes, stabilityProbe, validateDesign } from "./lib.mjs";
-import { inspect } from "./check-design.mjs";
+import { inspect, waitForStatreel } from "./check-design.mjs";
 import { checkCases } from "./check-cases.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -254,7 +254,7 @@ async function harvest() {
       const url = new URL(`file:///${path.join(dir, "index.html").split(path.sep).join("/")}`);
       url.searchParams.set("capture", "1");
       await page.goto(url.href, { waitUntil: "load" });
-      await page.evaluate(() => document.fonts.ready);
+      await waitForStatreel(page);
       const apiOk = await page.evaluate(() => typeof window.statreel?.seek === "function" && typeof window.statreel?.dataClock === "function");
       if (!apiOk) {
         console.log(`skip ${seat}/${v}: window.statreel.seek(t) and dataClock(t) are required`);
