@@ -12,12 +12,30 @@ import { captionsBurnedIn, loadedFontFamilies, parseFontsReport } from "./render
 // no keychain, no ElevenLabs, no ffmpeg: the pipeline is driven with fakes against fixture tmp dirs
 vi.mock("@napi-rs/keyring", () => ({ Entry: class { getPassword() { return "test"; } } }));
 const tts = vi.fn();
+const clientOpts: { signal?: AbortSignal }[] = [];
+const normalizeTo = vi.fn();
+const measureLoudness = vi.fn();
 vi.mock("@statreel/audio", async (orig) => ({
   ...(await orig<object>()),
   AudioCache: class {},
-  ElevenLabsClient: class { async subscription() { return { tier: "starter" }; } },
+  ElevenLabsClient: class {
+    constructor(o: { signal?: AbortSignal }) { clientOpts.push(o); }
+    async subscription() { return { tier: "starter" }; }
+  },
   generateTts: (...a: unknown[]) => tts(...a),
+  normalizeTo: (...a: unknown[]) => normalizeTo(...a),
+  measureLoudness: (...a: unknown[]) => measureLoudness(...a),
 }));
+// ffmpeg is faked only where a test turns it on (the mastering steps); every other process runs for real
+const fake = { ffmpeg: false };
+vi.mock("node:child_process", async (orig) => {
+  const real = await orig<typeof import("node:child_process")>();
+  const { promisify } = await import("node:util");
+  const execFile = (...a: unknown[]) => (real.execFile as (...x: unknown[]) => unknown)(...a);
+  Object.assign(execFile, { [promisify.custom]: (cmd: string, args: string[], opts?: object) =>
+    fake.ffmpeg && cmd === "ffmpeg" ? Promise.resolve({ stdout: "", stderr: "" }) : promisify(real.execFile)(cmd, args, opts ?? {}) });
+  return { ...real, execFile };
+});
 // the YouTube client is faked: publish jobs never touch the network, the tests drive uploadVideo directly
 const ytUpload = vi.fn();
 vi.mock("@statreel/publish", async (orig) => ({
@@ -75,6 +93,35 @@ describe("audio job cancellation (pipeline-real-cancel-cleanup)", () => {
     await runner.idle();
     expect(runner.get(id)?.status).toBe("succeeded");
     expect(attachTiming).toHaveBeenCalledWith("p1", expect.objectContaining({ duration_s: expect.any(Number) }), propsRow.version);
+  });
+
+  it("hands the job's cancel signal to the ElevenLabs client, so a cancel aborts the request in flight", async () => {
+    const { root, runner } = setup();
+    clientOpts.length = 0;
+    tts.mockImplementation(async () => voicedTake(root));
+    runner.enqueue("audio", { projectId: "p1", chain: false }, "p1");
+    await runner.idle();
+    expect(clientOpts).toHaveLength(1);
+    expect(clientOpts[0]?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe("render mastering takes the job's cancel signal", () => {
+  it("normalizeTo and measureLoudness get the render job's signal (cancel reaches the ffmpeg runs)", async () => {
+    const { runner, pipeline } = setup();
+    fake.ffmpeg = true;
+    try {
+      (pipeline as unknown as { worker: unknown }).worker = vi.fn(async () => ({ fontLogs: [] }));
+      normalizeTo.mockReset().mockResolvedValue({});
+      measureLoudness.mockReset().mockRejectedValue(new Error("stop after the loudness call"));
+      const id = runner.enqueue("render", { projectId: "p1", target }, "p1");
+      await runner.idle();
+      expect(runner.get(id)?.error).toContain("stop after the loudness call");
+      expect(normalizeTo.mock.calls[0]?.[0]).toMatchObject({ targetLufs: -14, signal: expect.any(AbortSignal) });
+      expect(measureLoudness.mock.calls[0]?.[1]).toMatchObject({ signal: expect.any(AbortSignal) });
+    } finally {
+      fake.ffmpeg = false;
+    }
   });
 });
 

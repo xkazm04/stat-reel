@@ -166,7 +166,7 @@ export class Pipeline implements PipelineApi {
     if (!project || !propsRow || !scriptRow) throw new Error("props and script are required before audio (draft with the co-pilot first)");
     const props = propsRow.props;
     const script = scriptRow.script;
-    const client = new ElevenLabsClient({ apiKey: async () => secret("elevenlabs") });
+    const client = new ElevenLabsClient({ apiKey: async () => secret("elevenlabs"), signal: ctx.signal });
     const cache = new AudioCache({ dir: path.join(paths.audio, "cache"), mode: modes.audio, fixturesDir: FIXTURES_AUDIO });
     const budget = new Budget({ ttsSeconds: 75, musicSeconds: 75 });
     const planTier = await this.planTier(client);
@@ -294,13 +294,13 @@ export class Pipeline implements PipelineApi {
     const mixWav = path.join(dir, "mix.wav");
     const masterWav = path.join(dir, "master.wav");
     await execFileP("ffmpeg", ["-hide_banner", "-y", "-i", raw, "-vn", "-ac", "2", "-ar", "48000", mixWav], { signal });
-    await normalizeTo({ input: mixWav, output: masterWav, targetLufs: -14, truePeak: -2.3 });
+    await normalizeTo({ input: mixWav, output: masterWav, targetLufs: -14, truePeak: -2.3, signal });
     signal.throwIfAborted();
     await execFileP("ffmpeg", ["-hide_banner", "-y", "-i", raw, "-i", masterWav, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", video], { signal });
 
     signal.throwIfAborted();
     ctx.progress(0.92, "checks");
-    const loud = await measureLoudness(video);
+    const loud = await measureLoudness(video, { signal });
     const probe = JSON.parse((await execFileP("ffprobe", ["-v", "error", "-show_streams", "-show_format", "-of", "json", video], { signal })).stdout);
     const v = probe.streams.find((s: { codec_type: string }) => s.codec_type === "video");
     const a = probe.streams.find((s: { codec_type: string }) => s.codec_type === "audio");
