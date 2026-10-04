@@ -155,3 +155,16 @@ describe("HTTP doors validate like their tool twins", () => {
     expect(calls).toEqual([["p1", [0, 4.5]]]);
   });
 });
+
+describe("job lists are cut in SQL, not in JS", () => {
+  it("GET /api/jobs and GET /api/projects pass their limit to runner.list (no full-table read per request)", async () => {
+    const list = vi.fn((_p?: string, limit?: number) => Array.from({ length: limit ?? 60 }, (_, i) => ({ id: `j${i}` })));
+    const app = buildApp({ bus: new EventBus(), topics: {}, runner: { list }, projects: { list: () => [{ id: "p1" }, { id: "p2" }] } } as unknown as AppDeps);
+    expect((await body(await app.request("/api/jobs"))).jobs).toHaveLength(50);
+    expect(list.mock.calls).toEqual([[undefined, 50]]);
+    list.mockClear();
+    const projects = (await body(await app.request("/api/projects"))).projects;
+    expect(projects.map((p: { jobs: unknown[] }) => p.jobs.length)).toEqual([5, 5]);
+    expect(list.mock.calls).toEqual([["p1", 5], ["p2", 5]]);
+  });
+});

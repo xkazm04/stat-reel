@@ -102,7 +102,7 @@ export function buildApp(d: AppDeps) {
   app.get("/api/sources", async (c) => c.json({ sources: d.heatmap.sources(), capabilities: await d.heatmap.capabilities() }));
 
   // ---- projects
-  app.get("/api/projects", (c) => c.json({ projects: d.projects.list().map((p) => ({ ...p, jobs: d.runner.list(p.id).slice(0, 5) })) }));
+  app.get("/api/projects", (c) => c.json({ projects: d.projects.list().map((p) => ({ ...p, jobs: d.runner.list(p.id, 5) })) }));
   app.post("/api/projects", async (c) => {
     try { return c.json(d.projects.create(await c.req.json()), 201); } catch (e) { return c.json({ error: e instanceof Error ? e.message : String(e) }, 400); }
   });
@@ -307,7 +307,7 @@ export function buildApp(d: AppDeps) {
   app.post("/api/metrics/refresh", (c) => c.json(d.pipeline.refreshMetrics()));
 
   // ---- jobs
-  app.get("/api/jobs", (c) => c.json({ jobs: d.runner.list().slice(0, 50) }));
+  app.get("/api/jobs", (c) => c.json({ jobs: d.runner.list(undefined, 50) }));
   app.post("/api/jobs/:id/cancel", (c) => {
     d.runner.cancel(c.req.param("id"));
     return c.json({ ok: true });
