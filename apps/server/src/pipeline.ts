@@ -413,7 +413,7 @@ export class Pipeline implements PipelineApi {
     const manifest = JSON.parse(readFileSync(render.manifest_path, "utf8")) as ProvenanceManifest;
     const attribution = [...new Set(manifest.data.sources.map((s) => s.attribution).filter(Boolean))].join(" · ");
     const props = this.projects.latestProps(p.projectId)?.props;
-    const description = [p.description ?? project.title, props?.method_note, attribution, "Narration and music are AI-generated (ElevenLabs)."].filter(Boolean).join("\n\n");
+    const description = [p.description ?? project.title, props?.method_note, attribution, disclosureLine(manifest.disclosure)].filter(Boolean).join("\n\n");
     const dir = path.dirname(render.path);
     const yt = new YouTubeClient({ mode: modes.publish, planFile: path.join(dir, "publish-plan.json") });
     ctx.progress(0.1, "uploading");
@@ -506,6 +506,17 @@ export async function runRenderWorker(
   } finally {
     rmSync(jobFile, { force: true });
   }
+}
+
+/**
+ * The AI-disclosure sentence for a description, from what the manifest says was actually generated (ADR 007:
+ * the format has no narration, so a fixed "narration and music" line would state something false). "" when none.
+ */
+export function disclosureLine(d: { ai_voice: boolean; ai_music: boolean }): string {
+  if (d.ai_voice && d.ai_music) return "Narration and music are AI-generated (ElevenLabs).";
+  if (d.ai_music) return "Music is AI-generated (ElevenLabs).";
+  if (d.ai_voice) return "Narration is AI-generated (ElevenLabs).";
+  return "";
 }
 
 /** The saved session URI for this render's file, or undefined when absent, unreadable or for a different file. */

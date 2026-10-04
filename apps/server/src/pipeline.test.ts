@@ -27,7 +27,7 @@ vi.mock("@statreel/publish", async (orig) => ({
 const runWorker = vi.fn();
 vi.mock("./render-support", async (orig) => ({ ...(await orig<object>()), runWorker: (...a: unknown[]) => runWorker(...a) }));
 
-const { Pipeline } = await import("./pipeline");
+const { Pipeline, disclosureLine } = await import("./pipeline");
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), "statreel-pipeline-"));
 const target = { platform: "youtube", monetized: true, ai_disclosure: true, visibility: "private" } as never;
@@ -282,5 +282,37 @@ describe("publish job render pin + resumable upload (publish-job-render-pin-and-
     expect(job.status).toBe("failed");
     expect(job.error).toContain("pinned render r-gone");
     expect(ytUpload).not.toHaveBeenCalled();
+  });
+});
+
+describe("publish description disclosure (publish-disclosure-from-manifest)", () => {
+  it("builds the line from manifest.disclosure: voice+music, music only, voice only, none", () => {
+    expect(disclosureLine({ ai_voice: true, ai_music: true })).toBe("Narration and music are AI-generated (ElevenLabs).");
+    expect(disclosureLine({ ai_voice: false, ai_music: true })).toBe("Music is AI-generated (ElevenLabs).");
+    expect(disclosureLine({ ai_voice: true, ai_music: false })).toBe("Narration is AI-generated (ElevenLabs).");
+    expect(disclosureLine({ ai_voice: false, ai_music: false })).toBe("");
+  });
+
+  it.each([
+    [{ ai_voice: false, ai_music: true }, "Music is AI-generated (ElevenLabs).", true],
+    [{ ai_voice: false, ai_music: false }, undefined, false],
+  ])("the uploaded description carries it (%j)", async (disclosure, line, synthetic) => {
+    const { root, runner, pipeline } = setup();
+    const dir = path.join(root, "renders", "p1", "r1");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "video.mp4"), "v");
+    writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ subject: { sha256: "x" }, data: { sources: [] }, disclosure: { ...disclosure, on_frame: true } }));
+    (pipeline as unknown as { db: { $client: { prepare: (q: string) => { run: (...a: unknown[]) => void } } } }).db.$client
+      .prepare("insert into renders (id, project_id, job_id, format, path, manifest_path, checks_json, policy_json, created_at) values ('r1', 'p1', 'j0', 'vertical', ?, ?, '{}', '{\"allow\":true}', '2026-04-01T00:00:00Z')")
+      .run(path.join(dir, "video.mp4"), path.join(dir, "manifest.json"));
+    ytUpload.mockReset();
+    ytUpload.mockResolvedValueOnce({ id: "vid1", privacyStatus: "private", mode: "dry" });
+    runner.enqueue("publish", { projectId: "p1" }, "p1");
+    await runner.idle();
+    const req = ytUpload.mock.calls[0]![0] as { description: string; containsSyntheticMedia: boolean };
+    expect(req.containsSyntheticMedia).toBe(synthetic);
+    if (line) expect(req.description).toContain(line);
+    expect(req.description).not.toContain("Narration and music");
+    if (!line) expect(req.description).not.toContain("AI-generated");
   });
 });
