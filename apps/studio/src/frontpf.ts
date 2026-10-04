@@ -173,3 +173,50 @@ export function clock(seconds: number): string {
   const r = s - m * 60;
   return `${m}:${r < 10 ? "0" : ""}${r.toFixed(3)}`;
 }
+
+// ------------------------------------------------------------------ copy from data, lane rotation
+
+/** "Ten lanes", or just "Lanes" while the use cases are not loaded (never a hardcoded count). */
+export const lanesLabel = (n: number): string => (n > 0 ? `${numberWord(n)} lanes` : "Lanes");
+
+/**
+ * The sports the registry actually covers, in the product's SPORTS order, as prose:
+ * "F1, NBA, NHL and soccer". Cross-sport ("all") sources name no sport; "" when there are none.
+ */
+export function sportsPhrase(sources: { sport: string }[]): string {
+  const have = new Set(sources.map((s) => s.sport));
+  const names = SPORTS.filter((s) => have.has(s)).map((s) => (s === "Soccer" ? "soccer" : s));
+  if (names.length < 2) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** "30-90 s" across the use cases' durations (ADR 007), or null when there are none. */
+export function durationRange(usecases: { duration_s: { min: number; max: number } }[]): string | null {
+  if (!usecases.length) return null;
+  const lo = Math.min(...usecases.map((u) => u.duration_s.min));
+  const hi = Math.max(...usecases.map((u) => u.duration_s.max));
+  return lo === hi ? `${lo} s` : `${lo}\u2013${hi} s`;
+}
+
+export type RotationInput = {
+  reduced: boolean;
+  /** the owner paused it (pause button, or by acting on a lane) */
+  paused: boolean;
+  hovered: boolean;
+  focused: boolean;
+  /** a lane scene overlay is open */
+  sceneOpen: boolean;
+  count: number;
+};
+
+/**
+ * The lane carousel's state (WCAG 2.2.2): it rotates only when it can (two lanes, no reduced
+ * motion) and nothing holds it (pause, hover, focus, scene). The pause control shows whenever it
+ * could rotate; the stage is a live region only while it is NOT rotating by itself, so a screen
+ * reader is not narrated a lane every 3 s.
+ */
+export function laneRotation(i: RotationInput): { auto: boolean; control: boolean; live: "off" | "polite" } {
+  const control = !i.reduced && i.count >= 2;
+  const auto = control && !i.paused && !i.hovered && !i.focused && !i.sceneOpen;
+  return { auto, control, live: auto ? "off" : "polite" };
+}

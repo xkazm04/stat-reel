@@ -4,10 +4,13 @@
  * they act. `way` is a row of the Front's ways in (Photo Finish ADR 009); `panel` sits in the
  * Rundown's empty state. Every figure is counted in frontpf.ts; loading, error and empty are labelled.
  */
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { type LineItem, lineIsQuiet, lineItems, videosLine } from "../frontpf";
-import { type OnTheLineState, useOnTheLine } from "../workQuery";
+import { boardQuery, lineTopicsQuery, type OnTheLineState, useOnTheLine } from "../workQuery";
 import { Arrow } from "./glyphs";
+import { RetryButton } from "./RetryButton";
 
 function Counted({ item }: { item: LineItem }) {
   const body = (
@@ -36,11 +39,22 @@ function Counted({ item }: { item: LineItem }) {
 }
 
 function Body({ state }: { state: OnTheLineState }) {
+  // Retry re-runs both sources' queries (the topic heatmap and the Board); no polling, only on click
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const retry = () => {
+    setBusy(true);
+    void Promise.allSettled([
+      qc.refetchQueries({ queryKey: lineTopicsQuery.queryKey }),
+      qc.refetchQueries({ queryKey: boardQuery.queryKey }),
+    ]).finally(() => setBusy(false));
+  };
   if (state.status === "loading") return <span role="status">Reading what is on the line.</span>;
   if (state.status === "error")
     return (
       <span role="alert">
-        {state.what} did not answer (API offline), so there is nothing to count.
+        {state.what} did not answer (API offline), so there is nothing to count.{" "}
+        <RetryButton onRetry={retry} busy={busy} />
       </span>
     );
   const { line, partial } = state;
@@ -48,7 +62,7 @@ function Body({ state }: { state: OnTheLineState }) {
     <>
       {partial ? (
         <span className="otl__warn" role="alert">
-          The {partial} did not answer; its counts are missing.{" "}
+          The {partial} did not answer; its counts are missing. <RetryButton onRetry={retry} busy={busy} />{" "}
         </span>
       ) : null}
       {lineIsQuiet(line) && !partial ? (

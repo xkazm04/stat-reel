@@ -27,8 +27,9 @@ import { DnsList, FinishPicture, LaneBar, ModeSwitch, SourceChip } from "../comp
 import { Arrow, FormatIcon, Glyph, NotEqual, StatusChip } from "../components/glyphs";
 import { identVar } from "../components/idents";
 import { LaneArt } from "../components/LaneArt";
-import { OnTheLine } from "../components/OnTheLine";
 import { Programme } from "../components/LazyProgramme";
+import { OnTheLine } from "../components/OnTheLine";
+import { RetryButton } from "../components/RetryButton";
 import type { PlayerMeta } from "../components/Programme";
 import { Slate } from "../components/Slate";
 import { useReducedMotion } from "../components/ui";
@@ -37,14 +38,19 @@ import { latestRender, renderPolicy, useHeatmap, useProjects, useSources } from 
 import {
   acrossCount,
   clock,
+  durationRange,
+  laneRotation,
+  lanesLabel,
   numberWord,
   REG_CLASSES,
   registryGrid,
   registryShare,
   sceneStrip,
   splitNeq,
+  sportsPhrase,
   studioCounts,
 } from "../frontpf";
+import { inertOutside } from "../inertBackground";
 import { cellOf, countStatuses, MODE_LABEL, SPORTS, STAGE_LABEL } from "../logic";
 import {
   biggestMovers,
@@ -119,18 +125,30 @@ export function FrontPhotoFinish() {
           reduced={reduced}
           loading={hm.isLoading}
           error={hm.isError}
+          onRetry={() => void hm.refetch()}
+          retrying={hm.isFetching}
           sceneOpen={!!openUc}
           onOpen={(u) => go({ format: u.id, mode })}
         />
       </Defer>
       <Defer tier={2} id="pf:line" visible anchor="pf-line" phClass="pf-line" minHeight="70vh">
-        <TheLine sources={sources} mode={mode} setMode={setMode} loading={src.isLoading} error={src.isError} />
+        <TheLine
+          sources={sources}
+          mode={mode}
+          setMode={setMode}
+          loading={src.isLoading}
+          error={src.isError}
+          onRetry={() => void src.refetch()}
+          retrying={src.isFetching}
+        />
       </Defer>
       <Defer tier={3} id="pf:short" visible anchor="pf-short" phClass="pf-short" minHeight="70vh">
         <FirstShort
           detail={programme.detail}
           loading={programme.loading || pr.isLoading}
           error={pr.isError}
+          onRetry={() => void pr.refetch()}
+          retrying={pr.isFetching}
           usecases={usecases}
           reduced={reduced}
         />
@@ -170,7 +188,7 @@ export function FrontPhotoFinish() {
 
 // ------------------------------------------------------------------ 1 · the frame
 
-type Q<T> = { data?: T; isLoading: boolean; isError: boolean };
+type Q<T> = { data?: T; isLoading: boolean; isError: boolean; isFetching: boolean; refetch: () => unknown };
 
 function Frame({
   mode,
@@ -200,6 +218,8 @@ function Frame({
   const [lx, setLx] = useState(0);
 
   const v = verdictCounts(sources);
+  const sports = sportsPhrase(sources);
+  const span = durationRange(usecases);
   const across = acrossCount(sources, mode);
   const n = countStatuses(cells, mode);
   const perMode = cells.filter((c) => c.mode === mode).length;
@@ -315,14 +335,14 @@ function Frame({
             <b>A photo-finish camera for sports data</b>
           </p>
           <nav className="pf-sections" aria-label="On this page">
-            <a href="#pf-lanes">Ten lanes</a>
+            <a href="#pf-lanes">{lanesLabel(usecases.length)}</a>
             <a href="#pf-line">The line</a>
             <a href="#pf-short">The first short</a>
           </nav>
         </div>
         <div className="pf-poster-wrap">
           <h1 className="pf-poster" id="pf-h1">
-            <span className="sr-only">StatReel: licensed sports data in, narrated data videos out.</span>
+            <span className="sr-only">StatReel: licensed sports data in, data videos that move through time out.</span>
             <span className="pf-poster__a" aria-hidden="true">
               Stat
             </span>
@@ -338,12 +358,15 @@ function Frame({
             <h2>Licensed sports data</h2>
             <p>
               {srcState.isError ? (
-                "The registry did not answer (API offline), so there is nothing to count."
+                <>
+                  The registry did not answer (API offline), so there is nothing to count.{" "}
+                  <RetryButton onRetry={() => void srcState.refetch()} busy={srcState.isFetching} />
+                </>
               ) : srcState.isLoading ? (
                 "Reading the registry."
               ) : (
                 <>
-                  F1, NBA, NHL and soccer, from a registry of <strong className="num">{sources.length}</strong> sources
+                  {sports ? `${sports}, from` : "From"} a registry of <strong className="num">{sources.length}</strong> sources
                   with a licence verdict on each. <strong className="num">{v.avoid}</strong> of them never start.
                 </>
               )}
@@ -351,9 +374,9 @@ function Frame({
           </div>
           <div className="pf-split__r" style={css({ "--d": 1 })}>
             <p className="eyebrow">Out · across the line</p>
-            <h2>Narrated data videos</h2>
+            <h2>Data videos through time</h2>
             <p>
-              <strong>9:16 shorts</strong> and <strong>16:9 explainers</strong>
+              Stats that move through time{span ? <>, <strong className="num">{span}</strong> long</> : null}
               {usecases.length ? (
                 <>
                   {" "}
@@ -387,7 +410,10 @@ function Frame({
             <span className="pf-way__detail">
               <span>
                 {projects.isError ? (
-                  "The rundown did not answer."
+                  <>
+                    The rundown did not answer.{" "}
+                    <RetryButton onRetry={() => void projects.refetch()} busy={projects.isFetching} />
+                  </>
                 ) : list.length ? (
                   <>
                     <b className="num">{sc.total}</b> project{sc.total === 1 ? "" : "s"},{" "}
@@ -759,6 +785,8 @@ function Lanes({
   reduced,
   loading,
   error,
+  onRetry,
+  retrying,
   sceneOpen,
   onOpen,
 }: {
@@ -769,6 +797,8 @@ function Lanes({
   reduced: boolean;
   loading: boolean;
   error: boolean;
+  onRetry: () => void;
+  retrying: boolean;
   sceneOpen: boolean;
   onOpen: (u: UseCase) => void;
 }) {
@@ -777,12 +807,16 @@ function Lanes({
     usecases.findIndex((u) => cells.some((c) => c.usecase === u.id && c.composition_implemented)),
   );
   const [active, setActive] = useState<number | null>(null);
+  // touched = the owner paused it (the pause button, or acting on a lane); hovered / focused hold it
   const [touched, setTouched] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [stageKey, setStageKey] = useState(0);
   const sec = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const i = active ?? first;
   const u = usecases[i];
+  const rot = laneRotation({ reduced, paused: touched, hovered, focused, sceneOpen, count: usecases.length });
 
   const pick = (k: number, quiet = false) => {
     if (k === i && active !== null) return;
@@ -791,7 +825,7 @@ function Lanes({
   };
   // idle: the stage cycles through the lanes while the section is in view (never with reduced motion)
   useEffect(() => {
-    if (reduced || touched || sceneOpen || usecases.length < 2) return;
+    if (!rot.auto) return;
     const iv = window.setInterval(() => {
       const r = sec.current?.getBoundingClientRect();
       if (!r || r.bottom < 80 || r.top > window.innerHeight - 80) return;
@@ -799,7 +833,7 @@ function Lanes({
       setStageKey((s) => s + 1);
     }, 3200);
     return () => window.clearInterval(iv);
-  }, [reduced, touched, sceneOpen, usecases.length, first]);
+  }, [rot.auto, usecases.length, first]);
 
   const open = (k: number, row: HTMLElement | null) => {
     const x = usecases[k];
@@ -826,23 +860,41 @@ function Lanes({
   const built = !!u && cells.some((c) => c.usecase === u.id && c.composition_implemented);
 
   return (
-    <section className="pf-lanes" id="pf-lanes" aria-labelledby="pf-lanes-h" ref={sec}>
+    <section
+      className="pf-lanes"
+      id="pf-lanes"
+      aria-labelledby="pf-lanes-h"
+      ref={sec}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
       <div className="pf-lanes__head">
         <nav className="pf-crumbs" aria-label="Where you are">
           <a href="#pf-frame">StatReel</a>
           <span className="pf-crumbs__sep" />
-          <span aria-current="true">{numberWord(usecases.length || 10)} lanes</span>
+          <span aria-current="true">{lanesLabel(usecases.length)}</span>
         </nav>
         <h2 id="pf-lanes-h">
-          {usecases.length ? numberWord(usecases.length) : "The"} lanes <em>· {usecases.length ? numberWord(usecases.length).toLowerCase() : "the"} kinds of video</em>
+          {lanesLabel(usecases.length)} <em>· {usecases.length ? `${numberWord(usecases.length).toLowerCase()} kinds of video` : "the kinds of video"}</em>
         </h2>
         <div className="pf-lanes__right">
           <span className="pf-hint">Point at, focus or tap a lane. Enter opens its scene.</span>
+          {rot.control ? (
+            <button type="button" className="btn btn--sm" onClick={() => setTouched((t) => !t)} aria-pressed={touched}>
+              {touched ? "Play lane rotation" : "Pause lane rotation"}
+            </button>
+          ) : null}
           <ModeSwitch mode={mode} onChange={setMode} label="Line at" />
         </div>
       </div>
       {error ? (
-        <p className="pf-lanes__msg">The use-case registry did not load (API offline).</p>
+        <p className="pf-lanes__msg" role="alert">
+          The use-case registry did not load (API offline). <RetryButton onRetry={onRetry} busy={retrying} />
+        </p>
       ) : loading ? (
         <p className="pf-lanes__msg">Reading the use-case registry.</p>
       ) : !usecases.length ? (
@@ -919,7 +971,7 @@ function Lanes({
               key={`${u.id}-${stageKey}`}
               ref={stageRef}
               style={css({ "--lane-color": laneOf(u.id) })}
-              aria-live="polite"
+              aria-live={rot.live}
             >
               <div className="pf-stage__no num" aria-hidden="true">
                 {pad2(i + 1)}
@@ -1014,7 +1066,10 @@ function LaneScene({
       el.style.clipPath = "inset(0 0 0 0)";
     }
     back.current?.focus({ preventScroll: true });
+    // aria-modal alone does not stop the page behind from being tabbed to or clicked
+    const restore = el ? inertOutside(el) : () => {};
     return () => {
+      restore();
       document.documentElement.style.overflow = "";
     };
   }, [reduced]);
@@ -1304,12 +1359,16 @@ function TheLine({
   setMode,
   loading,
   error,
+  onRetry,
+  retrying,
 }: {
   sources: Source[];
   mode: Mode;
   setMode: (m: Mode) => void;
   loading: boolean;
   error: boolean;
+  onRetry: () => void;
+  retrying: boolean;
 }) {
   const v = verdictCounts(sources);
   const across = acrossCount(sources, mode);
@@ -1381,7 +1440,8 @@ function TheLine({
       <div className="pf-line__pic">
         {error ? (
           <div className="empty">
-            <b>Registry offline</b>The API did not answer, so the registry picture cannot be drawn.
+            <b>Registry offline</b>The API did not answer, so the registry picture cannot be drawn.{" "}
+            <RetryButton onRetry={onRetry} busy={retrying} />
           </div>
         ) : loading ? (
           <p className="pf-lanes__msg">Reading the registry.</p>
@@ -1514,12 +1574,16 @@ function FirstShort({
   detail,
   loading,
   error,
+  onRetry,
+  retrying,
   usecases,
   reduced,
 }: {
   detail: ProjectDetail | null;
   loading: boolean;
   error: boolean;
+  onRetry: () => void;
+  retrying: boolean;
   usecases: UseCase[];
   reduced: boolean;
 }) {
@@ -1565,9 +1629,13 @@ function FirstShort({
                 title={loading ? "Tuning in" : "No short yet"}
                 lines={
                   <p>
-                    {error
-                      ? "The API did not answer, so there is no short to play."
-                      : "No project has props yet: create one from a Go cell and draft it with the co-pilot."}
+                    {error ? (
+                      <>
+                        The API did not answer, so there is no short to play. <RetryButton onRetry={onRetry} busy={retrying} />
+                      </>
+                    ) : (
+                      "No project has props yet: create one from a Go cell and draft it with the co-pilot."
+                    )}
                   </p>
                 }
               />

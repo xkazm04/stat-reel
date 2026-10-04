@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   acrossCount,
   clock,
+  durationRange,
+  laneRotation,
+  lanesLabel,
   lineIsQuiet,
   lineItems,
   numberWord,
@@ -10,6 +13,7 @@ import {
   registryShare,
   sceneStrip,
   splitNeq,
+  sportsPhrase,
   studioCounts,
   videosLine,
 } from "./frontpf";
@@ -109,5 +113,35 @@ describe("on the line today", () => {
   it("says honestly that the ledger is empty", () => {
     expect(videosLine(onTheLine([], []))).toMatch(/^0 videos rendered yet/);
     expect(videosLine(onTheLine([topic("a", 0, 0, false, 1)], []))).toBe("1 video on the ledger");
+  });
+});
+
+describe("front copy and lane rotation (derived, never hardcoded)", () => {
+  it("lanesLabel names the count, or none while loading", () => {
+    expect(lanesLabel(10)).toBe("Ten lanes");
+    expect(lanesLabel(7)).toBe("Seven lanes");
+    expect(lanesLabel(0)).toBe("Lanes");
+  });
+  it("sportsPhrase lists the sports the registry has, in product order, skipping cross-sport", () => {
+    expect(sportsPhrase([{ sport: "Soccer" }, { sport: "F1" }, { sport: "all" }, { sport: "NBA" }, { sport: "NHL" }])).toBe("F1, NBA, NHL and soccer");
+    expect(sportsPhrase([{ sport: "F1" }, { sport: "Soccer" }])).toBe("F1 and soccer");
+    expect(sportsPhrase([{ sport: "NBA" }])).toBe("NBA");
+    expect(sportsPhrase([{ sport: "all" }])).toBe("");
+    expect(sportsPhrase([])).toBe("");
+  });
+  it("durationRange spans the use cases", () => {
+    expect(durationRange([])).toBeNull();
+    expect(durationRange([{ duration_s: { min: 30, max: 60 } }, { duration_s: { min: 45, max: 90 } }])).toBe("30\u201390 s");
+    expect(durationRange([{ duration_s: { min: 30, max: 30 } }])).toBe("30 s");
+  });
+  const base = { reduced: false, paused: false, hovered: false, focused: false, sceneOpen: false, count: 10 };
+  it("laneRotation rotates only when nothing holds it, and is a live region only while still", () => {
+    expect(laneRotation(base)).toEqual({ auto: true, control: true, live: "off" });
+    for (const hold of [{ paused: true }, { hovered: true }, { focused: true }, { sceneOpen: true }])
+      expect(laneRotation({ ...base, ...hold })).toMatchObject({ auto: false, live: "polite" });
+  });
+  it("laneRotation never rotates under reduced motion or with fewer than two lanes, and then offers no control", () => {
+    expect(laneRotation({ ...base, reduced: true })).toEqual({ auto: false, control: false, live: "polite" });
+    expect(laneRotation({ ...base, count: 1 })).toEqual({ auto: false, control: false, live: "polite" });
   });
 });
