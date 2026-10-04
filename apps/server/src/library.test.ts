@@ -149,6 +149,17 @@ describe("Style library (verdicts from the gate + owner management)", () => {
     board.archive([a.id], "off brief");
     expect(styles.list(board.list({ status: "all" }))).toEqual([]);
   });
+
+  it("refuses to manage a style the library does not list (all its items archived) and an archived hero, storing nothing", () => {
+    const { board, styles, db } = setup();
+    const a = board.create(shot("ink"));
+    const b = board.create(shot("ink", "k2"));
+    board.archive([b.id], "off brief");
+    expect(() => styles.update("ink", board.list({ status: "all" }), { hero_item_id: b.id })).toThrow(/item .* is archived/);
+    board.archive([a.id], "off brief");
+    expect(() => styles.update("ink", board.list({ status: "all" }), { status: "locked" })).toThrow(/style ink is archived; restore one of its items first/);
+    expect(db.$client.prepare("select count(*) as n from board_styles").get()).toEqual({ n: 0 });
+  });
 });
 
 const idea: NewCaseIdea = {

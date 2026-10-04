@@ -100,12 +100,19 @@ export class StyleLibrary {
    * picks the item shown for the style.
    */
   update(id: string, items: readonly BoardItem[], patch: { status?: StyleOverride | null; note?: string | null; hero_item_id?: string | null }): StyleEntry {
-    if (!items.some((i) => i.style?.id === id)) throw new Error(`unknown style ${id}`);
+    const own = items.filter((i) => i.style?.id === id);
+    if (!own.length) throw new Error(`unknown style ${id}`);
+    // list() skips archived items, so a style with only archived items is not listed: managing it would store an
+    // override and then have no entry to return (restore an item first)
+    if (own.every((i) => i.status === "archived")) throw new ArchivedError("style", id, "restore one of its items first");
     if (patch.status !== undefined && patch.status !== null && !STYLE_ACTIONS.includes(patch.status)) {
       throw new Error(`status must be one of ${STYLE_ACTIONS.join(", ")} or null`);
     }
-    if (patch.hero_item_id && !items.some((i) => i.id === patch.hero_item_id && i.style?.id === id)) {
-      throw new Error(`item ${patch.hero_item_id} does not carry style ${id}`);
+    if (patch.hero_item_id) {
+      const hero = items.find((i) => i.id === patch.hero_item_id);
+      if (!hero || hero.style?.id !== id) throw new Error(`item ${patch.hero_item_id} does not carry style ${id}`);
+      // list() never shows an archived hero, so it would be stored and silently replaced
+      if (hero.status === "archived") throw new ArchivedError("item", hero.id, "restore it before making it the hero");
     }
     const cur = this.db.select().from(boardStyles).where(eq(boardStyles.id, id)).get();
     const row = {
