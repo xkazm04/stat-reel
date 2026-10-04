@@ -211,3 +211,27 @@ def test_guard_allows_documentation_url_keys_but_not_other_yaml_urls():
     bad = "sources:\n  - name: s\n    meta:\n      url: https://x.test\n      external_location: https://x.test/a.csv\n"
     assert beyond_import_offenders({}, {"models/_s.yml": bad})
     assert beyond_import_offenders({}, {"models/m.sql": "-- url: https://x.test\nselect 1"})  # key allow-list is yml-only
+
+
+# --- beyond the package: every committed Python file in the repo -----------------------------------
+# DESIGN §5 binds all ingestion code, not only statreel_ingest/. A fetch script dropped into scripts/
+# would otherwise sit outside both scans above. Tests are exempt (they import httpx for MockTransport).
+import subprocess  # noqa: E402
+
+REPO = PIPELINE.parent
+TEST_FILE = re.compile(r"^pipeline/tests/(test_[^/]*|conftest)\.py$")
+
+
+def tracked_python_outside_the_package() -> dict[str, str]:
+    listed = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=REPO, capture_output=True, check=True).stdout
+    paths = [p for p in listed.decode("utf-8").split("\0") if p]
+    return {p: (REPO / p).read_text(encoding="utf-8") for p in paths
+            if not p.startswith("pipeline/statreel_ingest/") and not TEST_FILE.match(p) and (REPO / p).exists()}
+
+
+def test_no_committed_python_outside_the_package_reaches_the_network():
+    files = tracked_python_outside_the_package()
+    assert "scripts/stage-contest-data.py" in files and "pipeline/tests/fixtures/make_f1db_mini.py" in files
+    assert not any(TEST_FILE.match(p) for p in files)
+    hits = {p: sorted(network_imports(src) | shell_network_calls(src) | remote_sql_strings(src)) for p, src in files.items()}
+    assert {p: h for p, h in hits.items() if h} == {}
