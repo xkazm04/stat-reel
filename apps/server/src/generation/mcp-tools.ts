@@ -26,9 +26,9 @@ export type GenerationMcpTools = {
 /**
  * The plan's props must match it exactly (checkGenerationRules: same entities, same period count, an event per
  * plan event), so the plan takes the props' limits: a plan the props can never carry is refused here, not after
- * the session has written props around it.
+ * the session has written props around it. mcp.ts publishes this same object as the tool's input schema.
  */
-const TimingInput = z.object({
+export const TimingInput = z.object({
   periods: z.array(z.string().min(1)).min(2).max(DATA_RACE_LIMITS.maxPeriods),
   entities: z.array(z.string().min(1)).min(2).max(DATA_RACE_LIMITS.maxEntities),
   values: z.record(z.array(z.number().finite().nullable()).max(DATA_RACE_LIMITS.maxPeriods)),
