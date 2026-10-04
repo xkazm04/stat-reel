@@ -1334,6 +1334,13 @@ function LaneScene({
                       <DnsList sources={never} empty={`No off-limits source is registered for ${sport} on these kinds.`} />
                     </div>
                     <div className="pf-l4__actions">
+                      {cell.status === "ask" || cell.status === "blocked" ? (
+                        // the same warning the heatmap layer shows above its Create project (HeatmapCell.tsx)
+                        <p className="pf-l4__err">
+                          You can draft it, but the gate refuses a {MODE_LABEL[mode].toLowerCase()} publish until every
+                          required kind clears.
+                        </p>
+                      ) : null}
                       <Link
                         className="btn btn--primary"
                         to="/heatmap/$usecase/$sport"
