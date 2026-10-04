@@ -248,3 +248,28 @@
     box-shadow: none;
   }
 }
+
+/* a page whose sections are cards: they stack with one rhythm (Defer wrappers add no box) */
+.page--cards {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.page--cards > .page__head {
+  margin-bottom: 0;
+}
+
+/* a filter / tool row at the top of a card, above flush content */
+.card__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background: var(--card-well-bg);
+  border-bottom: 1px solid var(--color-line);
+}
+/* padding for loose content inside a flush (pad="none") card, e.g. an empty state */
+.card__pad {
+  padding: 16px;
+}

@@ -5,6 +5,7 @@
 import type { LicenseClass, Source } from "@statreel/schemas";
 import { useState } from "react";
 import { Defer } from "../components/arrive";
+import { Card } from "../components/Card";
 import { LicChip, TestChip } from "../components/glyphs";
 import { Empty, Failure, Loading } from "../components/ui";
 import { useSources } from "../data";
@@ -44,7 +45,7 @@ export function SourcesPage() {
   const shown = verdict === "manual" ? bySport.filter((s) => s.access === "manual") : filterByVerdict(bySport, verdict);
   const v = verdictCounts(sources);
   return (
-    <main id="main" className="page sources-page">
+    <main id="main" className="page page--cards sources-page">
       <header className="page__head">
         <div>
           <p className="eyebrow">
@@ -76,7 +77,10 @@ export function SourcesPage() {
         <Loading what="the registry" />
       ) : (
         <>
-          <div className="page__tools page__tools--row">
+          <Defer tier={1} id="sources:registry" phClass="card" minHeight={260}>
+            <Card title="Registry" tag={`${shown.length} sources`} pad="none">
+              <div className="card__toolbar">
+
             <div className="seg" role="group" aria-label="Sport">
               {["all", ...SPORTS].map((s) => (
                 <button type="button" key={s} aria-pressed={sport === s} onClick={() => setSport(s)}>
@@ -91,11 +95,7 @@ export function SourcesPage() {
                 </button>
               ))}
             </div>
-          </div>
-          <h2 className="sec-h sec-h--page">
-            <span>Registry · {shown.length} sources</span>
-          </h2>
-          <Defer tier={1} id="sources:registry" phClass="table-wrap" minHeight={260}>
+              </div>
             <div className="table-wrap">
               <table className="tbl tbl--sources">
                 <thead>
@@ -161,13 +161,11 @@ export function SourcesPage() {
                 </tbody>
               </table>
             </div>
+            </Card>
           </Defer>
 
           <Defer tier={2} id="sources:caps" visible minHeight={200}>
-            <h2 className="sec-h sec-h--page">
-              <span>Tested capabilities · {caps.length}</span>
-              <span>{caps.filter((c) => c.status === "pass").length} pass</span>
-            </h2>
+            <Card title="Tested capabilities" tag={caps.length} actions={<span>{caps.filter((c) => c.status === "pass").length} pass</span>} pad="none">
             {caps.length ? (
               <div className="table-wrap">
                 <table className="tbl">
@@ -208,11 +206,14 @@ export function SourcesPage() {
                 </table>
               </div>
             ) : (
-              <Empty title="No capability tested yet">
+              <div className="card__pad">
+                <Empty title="No capability tested yet">
                 Run <span className="mono">just transform</span>: until a capability passes, every cell on the rights
                 grid says "not tested" and stays Blocked.
               </Empty>
+              </div>
             )}
+            </Card>
           </Defer>
           <p className="page__foot">
             Licence classes:{" "}
