@@ -10,6 +10,9 @@ import { TABULAR, type VizTheme } from "./types";
 /** Tabular digit advance of Barlow Condensed (em), used for column width. */
 export const DIGIT_EM = 0.5;
 
+/** Owner rule: every readable text is >= 28 px in the 1080x1920 artboard. */
+const MIN_TEXT_PX = 28;
+
 export type DigitColumn = {
   /** place value in units of the last shown decimal (0 = last digit) */
   place: number;
@@ -90,13 +93,17 @@ export function Callout(props: CalloutProps): ReactElement {
     suffixScale = 1,
     label,
     theme,
-    fontSize: fs,
-    labelFontSize = Math.max(28, Math.round(fs * 0.2)),
+    fontSize: fsIn,
+    labelFontSize: labelIn,
     color = theme.ink,
     labelColor = theme.inkDim,
     align = "start",
     weight = 800,
   } = props;
+
+  // owner rule: every readable text >= 28 px (DataClock and LineRace clamp the same way)
+  const fs = Math.max(MIN_TEXT_PX, fsIn);
+  const labelFontSize = Math.max(MIN_TEXT_PX, labelIn ?? Math.round(fs * 0.2));
 
   // land exactly on the shown precision, so the last column comes to rest on a whole digit
   const target = Number(value.toFixed(decimals));
@@ -118,10 +125,10 @@ export function Callout(props: CalloutProps): ReactElement {
     return { ...c, x, w };
   });
   const digitsW = cursor;
-  const prefixFs = fs * prefixScale;
+  const prefixFs = Math.max(MIN_TEXT_PX, fs * prefixScale);
   const prefixColor = props.prefixColor ?? color;
   const prefixW = prefix ? estimateWidth(prefix, prefixFs, "condensedCaps") + fs * 0.08 : 0;
-  const suffixFs = fs * suffixScale;
+  const suffixFs = Math.max(MIN_TEXT_PX, fs * suffixScale);
   const suffixW = suffix ? estimateWidth(suffix, suffixFs, "condensedCaps") + fs * 0.06 : 0;
   const labelW = label ? estimateWidth(label, labelFontSize, "mono", labelFontSize * 0.08) : 0;
   const contentW = prefixW + digitsW + suffixW;

@@ -307,6 +307,26 @@ describe("Callout", () => {
     expect(mid[1]?.position).toBeCloseTo(9.5);
   });
 
+  it("keeps every readable text >= 28 px, like DataClock and LineRace (owner rule)", () => {
+    const small = Callout({
+      value: 3,
+      t: 1,
+      theme,
+      fontSize: 60,
+      prefix: "12TH →",
+      prefixScale: 0.4,
+      suffix: "RD",
+      suffixScale: 0.3,
+      label: "Era-adjusted rank",
+      labelFontSize: 20,
+    });
+    const sizes = walk(small)
+      .filter((e) => e.type === "text")
+      .map((e) => Number(e.props.fontSize));
+    expect(sizes.length).toBeGreaterThanOrEqual(4);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(28);
+  });
+
   it("counts from `from` to `value` over its window and uses tabular figures", () => {
     const at = (t: number) =>
       Callout({
