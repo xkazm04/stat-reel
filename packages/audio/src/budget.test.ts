@@ -46,6 +46,15 @@ describe("Budget", () => {
     expect(() => b.release(r)).toThrow(/settled/);
   });
 
+  it("a limit that is not a finite number of seconds fails at construction, never open", () => {
+    // NaN made every `used + s > limit` comparison false: unlimited spend from a typo'd setting
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      expect(() => new Budget({ musicSeconds: bad })).toThrow(RangeError);
+      expect(() => new Budget({ ttsSeconds: bad })).toThrow(RangeError);
+    }
+    expect(new Budget({ ttsSeconds: 0 }).remaining("tts")).toBe(0);
+  });
+
   it("rejects negative or non-finite amounts", () => {
     const b = new Budget();
     expect(() => b.reserve("tts", -1)).toThrow(RangeError);

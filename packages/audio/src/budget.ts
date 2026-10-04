@@ -34,6 +34,12 @@ export class Budget {
 
   constructor(opts: BudgetOptions = {}) {
     this.limits = { tts: opts.ttsSeconds ?? 75, music: opts.musicSeconds ?? 75 };
+    // fail closed: a NaN limit makes every `used + s > limit` false, i.e. unlimited spend
+    for (const k of ["tts", "music"] as const) {
+      const l = this.limits[k];
+      if (!Number.isFinite(l) || l < 0)
+        throw new RangeError(`${k} budget must be a finite number of seconds ≥ 0, got ${l}`);
+    }
   }
 
   limit(kind: BudgetKind) {
