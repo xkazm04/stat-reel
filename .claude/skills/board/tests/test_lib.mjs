@@ -34,6 +34,22 @@ test("applying the same feedback twice changes nothing (idempotent by item id)",
   assert.deepEqual(applyFeedback(once, fb), once);
 });
 
+test("a re-decided item (undo, then a new decision) replaces its old tally instead of being skipped", () => {
+  const first = applyFeedback(emptyLedger(), [item("a", "reject_both", "neon", "era-adjusted-rankings", "too busy")]);
+  const redo = { ...item("a", "reject_case", "neon", "era-adjusted-rankings", "style is fine, case is not"), decided_at: "2026-10-02T09:00:00Z" };
+  const l = applyFeedback(first, [redo]);
+  assert.deepEqual([l.styles.neon.accepts, l.styles.neon.style_rejects, l.styles.neon.notes], [0, 0, []]);
+  assert.deepEqual([l.cases["era-adjusted-rankings"].case_rejects, l.cases["era-adjusted-rankings"].notes], [1, ["style is fine, case is not"]]);
+  assert.equal(l.cursor, "2026-10-02T09:00:00Z");
+  assert.deepEqual(applyFeedback(l, [redo]), l, "the same decision folded twice is still a no-op");
+  const accepted = applyFeedback(l, [{ ...item("a", "accept", "neon", "era-adjusted-rankings"), decided_at: "2026-10-03T09:00:00Z" }]);
+  assert.deepEqual([accepted.styles.neon.accepts, accepted.cases["era-adjusted-rankings"].case_rejects, accepted.cases["era-adjusted-rankings"].accepts], [1, 0, 1]);
+  assert.equal(accepted.seen.length, 1);
+  const b = renderBrief({ template: "{{styles_rejected}}", ledger: first, shots: 3 });
+  assert.match(b, /neon/);
+  assert.doesNotMatch(renderBrief({ template: "{{styles_rejected}}", ledger: accepted, shots: 3 }), /neon/, "an un-rejected style leaves the anti-pattern list");
+});
+
 test("discovery until enough decisions and at least one accepted style, then exploit", () => {
   assert.equal(loopPhase(emptyLedger()), "discovery");
   const l = applyFeedback(emptyLedger(), Array.from({ length: 12 }, (_, i) => item("x".repeat(i + 1), i % 3 ? "reject_style" : "accept", `s${i}`, "era-adjusted-rankings")));

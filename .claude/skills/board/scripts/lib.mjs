@@ -5,30 +5,49 @@ const FACT_REF = /^[a-z0-9-]+:[^#\s]+#[a-z_]+$/;
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export function emptyLedger() {
-  return { version: 1, cursor: null, seen: [], styles: {}, cases: {} };
+  return { version: 1, cursor: null, seen: [], styles: {}, cases: {}, decisions: {} };
 }
 
 export const caseKey = (item) => (item.use_case_id ? item.use_case_id : item.proposed_case ? `proposed:${slug(item.proposed_case.name)}` : "unknown");
 
-/** Fold decided board items into the ledger. Idempotent by item id. */
+/** Add (sign 1) or take back (sign -1) one decision's tallies and note. */
+function foldDecision(s, c, { decision, note }, sign) {
+  if (decision === "accept") { s.accepts += sign; c.accepts += sign; }
+  if (decision === "reject_style" || decision === "reject_both") s.style_rejects += sign;
+  if (decision === "reject_case" || decision === "reject_both") c.case_rejects += sign;
+  if (!note) return;
+  const lists = [];
+  if (decision !== "reject_case") lists.push(s.notes);
+  if (decision === "reject_case" || decision === "reject_both" || decision === "accept") lists.push(c.notes);
+  for (const notes of lists) {
+    if (sign > 0) notes.push(note);
+    else if (notes.lastIndexOf(note) >= 0) notes.splice(notes.lastIndexOf(note), 1);
+  }
+}
+
+/**
+ * Fold decided board items into the ledger. Idempotent by item id and decision: the same decision
+ * twice is a no-op, but a re-decided item (the Board's undo, then a new decision) takes its old
+ * tally back first, so the brief never quotes a verdict the owner withdrew. Items folded before
+ * `decisions` existed have no record to take back and keep the old skip.
+ */
 export function applyFeedback(ledger, items) {
   const l = structuredClone(ledger);
+  l.decisions ??= {};
   const seen = new Set(l.seen);
   for (const it of items) {
-    if (!it.decision || seen.has(it.id)) continue;
+    if (!it.decision) continue;
+    const prev = l.decisions[it.id];
+    const note = it.note ?? null;
+    if (seen.has(it.id) && (!prev || (prev.decision === it.decision && prev.note === note))) continue;
     seen.add(it.id);
+    if (prev) foldDecision(l.styles[prev.style], l.cases[prev.case], prev, -1);
     const styleId = it.style?.id ?? "unknown";
     const s = (l.styles[styleId] ??= { name: it.style?.name ?? styleId, accepts: 0, style_rejects: 0, notes: [], last: null });
     const ck = caseKey(it);
     const c = (l.cases[ck] ??= { name: it.proposed_case?.name ?? it.use_case_id ?? ck, ...(it.proposed_case ? { pitch: it.proposed_case.pitch } : {}), accepts: 0, case_rejects: 0, notes: [], last: null });
-    if (it.decision === "accept") { s.accepts++; c.accepts++; }
-    if (it.decision === "reject_style" || it.decision === "reject_both") s.style_rejects++;
-    if (it.decision === "reject_case" || it.decision === "reject_both") c.case_rejects++;
-    if (it.note) {
-      if (it.decision !== "reject_case") s.notes.push(it.note);
-      if (it.decision === "reject_case" || it.decision === "reject_both") c.notes.push(it.note);
-      if (it.decision === "accept") c.notes.push(it.note);
-    }
+    foldDecision(s, c, { decision: it.decision, note }, 1);
+    l.decisions[it.id] = { decision: it.decision, style: styleId, case: ck, note };
     s.last = it.decided_at;
     c.last = it.decided_at;
     if (!l.cursor || it.decided_at > l.cursor) l.cursor = it.decided_at;
