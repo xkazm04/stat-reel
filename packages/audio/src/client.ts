@@ -298,7 +298,8 @@ export class ElevenLabsClient {
         httpStatus: res.status,
         requestId,
       });
-    if (!isAlignment(json.alignment))
+    // an empty alignment for non-empty text would read as a 0 s voice: billed, uncounted, uncaptioned
+    if (!isAlignment(json.alignment) || (json.alignment.characters.length === 0 && p.text.trim() !== ""))
       throw new ProviderError("ElevenLabs text-to-speech returned no character alignment", {
         httpStatus: res.status,
         requestId,

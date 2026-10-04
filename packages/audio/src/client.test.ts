@@ -241,6 +241,16 @@ describe("ElevenLabsClient", () => {
     );
   });
 
+  it("an empty alignment for non-empty text is a provider error, not a 0 s success", async () => {
+    const empty = { characters: [], character_start_times_seconds: [], character_end_times_seconds: [] };
+    const { fetch } = mockFetch([json(200, { audio_base64: "AAAA", alignment: empty })]);
+    const err = await client(fetch)
+      .c.ttsWithTimestamps({ voiceId: "v", text: "Hello there.", modelId: "m" })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProviderError);
+    expect((err as Error).message).toMatch(/no character alignment/);
+  });
+
   it("composeMusic returns the binary body", async () => {
     const bytes = Buffer.from([0xff, 0xfb, 0x90, 0x00]);
     const { fetch, calls } = mockFetch([
