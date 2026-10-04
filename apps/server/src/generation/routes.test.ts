@@ -105,6 +105,16 @@ describe("/api/generation", () => {
     expect((await app.request("/api/generation/jobs/gj-00000000")).status).toBe(404);
   });
 
+  it("the detail's log tail of a multi-MB log is its last 200 whole lines", async () => {
+    const { job } = await json(await enqueue());
+    const p = jobPaths(job.id, dir);
+    mkdirSync(p.dir, { recursive: true });
+    const lines = Array.from({ length: 3000 }, (_, i) => `line ${i} Räikkönen ${"x".repeat(1500)}`);
+    writeFileSync(p.runLog, `${lines.join("\n")}\n`);
+    const d = await json(await app.request(`/api/generation/jobs/${job.id}`));
+    expect(d.log_tail).toEqual(lines.slice(-200));
+  });
+
   it("incremental log with X-Next-Offset", async () => {
     const { job } = await json(await enqueue());
     const p = jobPaths(job.id, dir);
