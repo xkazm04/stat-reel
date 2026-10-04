@@ -60,6 +60,23 @@ describe("generation schemas", () => {
     expect(extraArgsProblem(["--effort", "high"])).toBeNull();
     expect(GenerationConfigSchema.safeParse({ cli: { extraArgs: ["--add-dir", "/"] } }).success).toBe(false);
   });
+  // every flag below exists in `claude --help` (2026-10-04); each one widens the sandbox, swaps the session or
+  // the prompt, or overrides a flag buildClaudeArgs already sets (model, budget, output stream)
+  it.each([
+    ["--plugin-dir", "x"], ["--plugin-url", "https://x/p.zip"], ["--agents", "{}"], ["--agent", "x"], ["--setting-sources", "user"],
+    ["--permission-prompt-tool", "x"], ["--chrome"], ["--ide"], ["--remote-control"], ["--cloud"], ["--worktree"], ["--tmux"],
+    ["--teleport"], ["--from-pr"], ["--resume", "s"], ["--continue"], ["--fork-session"], ["--session-id", "u"], ["--file", "f"],
+    ["--debug-file", "C:/x.log"], ["--system-prompt", "x"], ["--append-system-prompt", "x"], ["--max-budget-usd", "999"],
+    ["--output-format", "text"], ["--input-format", "stream-json"], ["--model", "opus"], ["--fallback-model", "opus"],
+    ["--background"], ["--bg"], ["--effort", "high", "-r", "s"], ["--effort", "high", "-c"], ["--effort", "high", "-w"],
+    ["--max-budget-usd=999"],
+  ])("refuses %s (and its value) in extraArgs", (...args) => {
+    expect(extraArgsProblem(args)).toMatch(/runner owns/);
+    expect(GenerationConfigSchema.safeParse({ cli: { extraArgs: args } }).success).toBe(false);
+  });
+  it("still allows flags that change nothing the runner owns", () => {
+    for (const args of [["--effort", "high"], ["--betas", "x"], ["--autocompact", "auto"]]) expect(extraArgsProblem(args)).toBeNull();
+  });
   it("model id is pattern checked", () => {
     expect(GenerationConfigSchema.safeParse({ model: "x; rm -rf /" }).success).toBe(false);
   });

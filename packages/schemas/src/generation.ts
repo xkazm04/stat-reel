@@ -65,10 +65,23 @@ export type GenerationEventType = z.infer<typeof GenerationEventType>;
 
 /** Anything that would widen the sandbox. Checked on every token of `cli.extraArgs`. */
 const FORBIDDEN_TOKEN = [/bypasspermissions/i, /dangerously/i, /\b(bash|powershell|pwsh)\b/i];
-/** Flags the runner owns: permissions, tools, MCP wiring and the working directory scope. */
+/**
+ * Flags the runner owns. Every one exists in `claude --help` (checked 2026-10-04); extraArgs come after the
+ * runner's own flags, so any of these would override or widen what buildClaudeArgs set.
+ */
 const OWNED_FLAGS = new Set([
+  // permissions, tools, MCP wiring and the working directory scope
   "--permission-mode", "--add-dir", "--mcp-config", "--strict-mcp-config", "--tools", "--allowedtools", "--disallowedtools",
   "--allowed-tools", "--disallowed-tools", "--restricted", "--settings", "--dangerously-skip-permissions", "--permission-prompts",
+  "--permission-prompt-tool", "--setting-sources",
+  // code the session would load or reach: plugins (with hooks), custom agents, browser / IDE / remote bridges, files
+  "--plugin-dir", "--plugin-url", "--agents", "--agent", "--chrome", "--ide", "--remote-control", "--cloud", "--environment",
+  "--worktree", "-w", "--tmux", "--file", "--debug-file",
+  // the session and the prompt: a job is one fresh, unpersisted session with the runner's system prompt
+  "--resume", "-r", "--continue", "-c", "--fork-session", "--session-id", "--teleport", "--from-pr", "--no-session-persistence",
+  "--system-prompt", "--append-system-prompt", "--background", "--bg",
+  // what the runner reads and pays for: the stream it parses, the pinned model, the budget cap
+  "--output-format", "--input-format", "--model", "--fallback-model", "--max-budget-usd",
 ]);
 
 export function extraArgsProblem(args: readonly string[]): string | null {
@@ -76,7 +89,8 @@ export function extraArgsProblem(args: readonly string[]): string | null {
   for (const a of args) {
     if (FORBIDDEN_TOKEN.some((re) => re.test(a))) return `extraArgs may not contain "${a}" (bypassPermissions, dangerous flags, Bash and PowerShell are refused)`;
     const flag = a.split("=")[0]?.toLowerCase() ?? "";
-    if (a.startsWith("--") && OWNED_FLAGS.has(flag)) return `extraArgs may not set ${flag}: the runner owns permissions, tools and MCP`;
+    if (a.startsWith("-") && OWNED_FLAGS.has(flag))
+      return `extraArgs may not set ${flag}: the runner owns permissions, tools, MCP, the session, the prompt, the model, the budget and the output stream`;
   }
   return null;
 }
