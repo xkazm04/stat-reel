@@ -63,12 +63,25 @@ describe("no declared token is unreferenced", () => {
     ...walk(path.join(root, "apps/studio/src")),
     ...readdirSync(path.join(root, "packages")).flatMap((p) => walk(path.join(root, "packages", p, "src"))),
   ];
+  // A comment that NAMES a token is not a use: index.ts annotates every videoTheme value with the
+  // token it copies, so an unstripped scan keeps a token "used" after its last real reference goes.
+  // `://` (urls) is kept; a `//` inside a string can only make a token look unused (fails loud).
+  const stripComments = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'\\])\/\/.*$/gm, "$1");
   // the token files themselves count only through var(--x) (a declaration is not a use)
-  const own = [shared, theme].join("\n");
+  const own = stripComments([shared, theme].join("\n"));
   const external = sources
     .filter((f) => !f.endsWith("shared.css") && !f.endsWith("theme-photofinish.css"))
-    .map((f) => readFileSync(f, "utf8"))
+    .map((f) => stripComments(readFileSync(f, "utf8")))
     .join("\n");
+  const isUsed = (n: string, ext: string, decls: string): boolean =>
+    new RegExp(`${n}(?![\\w-])`).test(ext) || new RegExp(`var\\(\\s*${n}(?![\\w-])`).test(decls);
+
+  it("a token named only in comments counts as unused (seeded)", () => {
+    const ext = stripComments('const a = "#56616c"; // --seeded-token, the dim ink\n/* --seeded-token again */\n');
+    expect(isUsed("--seeded-token", ext, "")).toBe(false);
+    expect(isUsed("--seeded-token", stripComments("color: var(--seeded-token); // why"), "")).toBe(true);
+    expect(isUsed("--seeded-token", stripComments('url("https://x.test/a") var(--seeded-token)'), "")).toBe(true);
+  });
   // referenced by building the name at runtime: identVar() -> --ident-<id>, Sources.tsx ->
   // --licence-<class>, FrontPhotoFinish.tsx -> --lane-<n>
   const DYNAMIC = ["--ident-", "--licence-", "--lane-"];
@@ -80,8 +93,7 @@ describe("no declared token is unreferenced", () => {
   for (const n of names) {
     it(`${n} is used`, () => {
       if (DYNAMIC.some((p) => n.startsWith(p))) return;
-      const used = new RegExp(`${n}(?![\\w-])`).test(external) || new RegExp(`var\\(\\s*${n}(?![\\w-])`).test(own);
-      expect(used, `${n} is declared but nothing references it`).toBe(true);
+      expect(isUsed(n, external, own), `${n} is declared but nothing references it`).toBe(true);
     });
   }
 });
