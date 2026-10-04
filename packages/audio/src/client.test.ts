@@ -138,13 +138,63 @@ describe("request builders", () => {
   });
 
   it("music length is bounded to 3000-600000 ms", () => {
-    expect(() => buildMusicRequest({ prompt: "x", musicLengthMs: 2999, forceInstrumental: true })).toThrow(RangeError);
-    expect(() => buildMusicRequest({ prompt: "x", musicLengthMs: 600_001, forceInstrumental: true })).toThrow(
-      RangeError,
-    );
-    expect(() => buildMusicRequest({ prompt: "x", musicLengthMs: 3000.5, forceInstrumental: true })).toThrow(
-      RangeError,
-    );
+    for (const musicLengthMs of [2999, 600_001, 3000.5])
+      expect(() => buildMusicRequest({ prompt: "x", musicLengthMs, forceInstrumental: true })).toThrow(
+        InvalidMusicRequest,
+      );
+  });
+
+  it("every pre-call rejection is an InvalidMusicRequest naming the field (one shape, one job status)", () => {
+    const sec = {
+      section_name: "a",
+      positive_local_styles: [],
+      negative_local_styles: [],
+      duration_ms: 5000,
+      lines: [] as string[],
+    };
+    const plan = { positive_global_styles: [], negative_global_styles: [], sections: [sec] };
+    const cases: [string, () => unknown][] = [
+      ["musicLengthMs", () => buildMusicRequest({ prompt: "x", musicLengthMs: 1, forceInstrumental: true })],
+      [
+        "forceInstrumental",
+        () => buildMusicRequest({ prompt: "x", musicLengthMs: 5000, forceInstrumental: false as unknown as true }),
+      ],
+      ["prompt", () => buildMusicRequest({ prompt: "  ", musicLengthMs: 5000, forceInstrumental: true })],
+      [
+        "prompt",
+        () =>
+          buildMusicRequest({
+            prompt: "x",
+            compositionPlan: plan,
+            musicLengthMs: 5000,
+            forceInstrumental: true,
+          } as unknown as Parameters<typeof buildMusicRequest>[0]),
+      ],
+      [
+        "compositionPlan.sections",
+        () => buildMusicRequest({ compositionPlan: plan, musicLengthMs: 6000, forceInstrumental: true }),
+      ],
+      [
+        "compositionPlan.sections[0].lines",
+        () =>
+          buildMusicRequest({
+            compositionPlan: { ...plan, sections: [{ ...sec, lines: ["la"] }] },
+            musicLengthMs: 5000,
+            forceInstrumental: true,
+          }),
+      ],
+    ];
+    for (const [field, call] of cases) {
+      let err: unknown;
+      try {
+        call();
+      } catch (e) {
+        err = e;
+      }
+      expect(err, field).toBeInstanceOf(InvalidMusicRequest);
+      expect((err as InvalidMusicRequest).field).toBe(field);
+      expect((err as Error).message).toMatch(/No ElevenLabs call was made/);
+    }
   });
 });
 

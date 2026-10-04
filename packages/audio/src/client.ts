@@ -115,13 +115,18 @@ export function buildTtsRequest(p: TtsParams): ProviderRequest {
 export function buildMusicRequest(p: MusicParams): ProviderRequest {
   const len = p.musicLengthMs;
   if (!Number.isInteger(len) || len < MUSIC_MIN_MS || len > MUSIC_MAX_MS)
-    throw new RangeError(`musicLengthMs must be an integer in ${MUSIC_MIN_MS}-${MUSIC_MAX_MS}, got ${len}`);
-  if (p.forceInstrumental !== true) throw new Error("music must be instrumental (forceInstrumental: true)");
+    throw new InvalidMusicRequest(
+      "musicLengthMs",
+      `must be whole milliseconds from ${MUSIC_MIN_MS} to ${MUSIC_MAX_MS}, got ${len}`,
+    );
+  if (p.forceInstrumental !== true)
+    throw new InvalidMusicRequest("forceInstrumental", "music must be instrumental (forceInstrumental: true)");
   const model_id = p.modelId ?? DEFAULT_MUSIC_MODEL;
   const format = encodeURIComponent(p.outputFormat ?? DEFAULT_OUTPUT_FORMAT);
   const endpoint = `/v1/music?output_format=${format}`;
   if (p.compositionPlan !== undefined) {
-    if (p.prompt !== undefined) throw new Error("prompt and compositionPlan are mutually exclusive");
+    if (p.prompt !== undefined)
+      throw new InvalidMusicRequest("prompt", "prompt and compositionPlan are mutually exclusive; send one");
     const plan = p.compositionPlan;
     for (const [i, s] of plan.sections.entries()) {
       const where = `compositionPlan.sections[${i}]`;
@@ -134,9 +139,17 @@ export function buildMusicRequest(p: MusicParams): ProviderRequest {
         throw new InvalidMusicRequest(`${where}.section_name`, `must be 1-${SECTION_NAME_MAX} characters`);
     }
     const sum = plan.sections.reduce((s, x) => s + x.duration_ms, 0);
-    if (sum !== len) throw new Error(`composition plan sections sum to ${sum} ms, expected musicLengthMs ${len}`);
-    if (plan.sections.some((s) => s.lines.length > 0))
-      throw new Error("composition plan must be instrumental: sections may not carry lines");
+    if (sum !== len)
+      throw new InvalidMusicRequest(
+        "compositionPlan.sections",
+        `sections sum to ${sum} ms; they must sum to musicLengthMs ${len}`,
+      );
+    const lyrical = plan.sections.findIndex((s) => s.lines.length > 0);
+    if (lyrical >= 0)
+      throw new InvalidMusicRequest(
+        `compositionPlan.sections[${lyrical}].lines`,
+        "composition plan must be instrumental: sections may not carry lines",
+      );
     // the API documents music_length_ms / force_instrumental as prompt-only; a plan sets length via sections.
     // Instrumental then rests on empty `lines`, backed by the documented negative_global_styles list.
     const negative = plan.negative_global_styles.some((x) => VOCAL_STYLE.test(x))
@@ -148,7 +161,8 @@ export function buildMusicRequest(p: MusicParams): ProviderRequest {
       body: { composition_plan: { ...plan, negative_global_styles: negative }, model_id },
     };
   }
-  if (typeof p.prompt !== "string" || p.prompt.trim() === "") throw new Error("music prompt must be non-empty");
+  if (typeof p.prompt !== "string" || p.prompt.trim() === "")
+    throw new InvalidMusicRequest("prompt", "music prompt must be non-empty");
   return {
     method: "POST",
     endpoint,
