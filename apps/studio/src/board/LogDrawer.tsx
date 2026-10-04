@@ -6,6 +6,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { api, qk } from "../api";
+import { formatSpend } from "./jobs";
 
 export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => void }) {
   const [text, setText] = useState("");
@@ -42,11 +43,17 @@ export function LogDrawer({ jobId, onClose }: { jobId: string; onClose: () => vo
   }, [text]);
 
   const j = job.data?.job;
+  const spend = formatSpend(j);
   return (
     <aside className="jlog" role="dialog" aria-label="Generation log" data-testid="job-log">
       <header className="jlog__head">
         <b className="mono">{jobId}</b>
         <span className="jlog__state">{j ? `${j.type} · ${j.status}${j.error_kind ? ` · ${j.error_kind}` : ""}` : "loading"}</span>
+        {spend ? (
+          <span className="jlog__state mono" data-testid="job-log-cost">
+            {spend}
+          </span>
+        ) : null}
         {live ? <span className="jlog__live">live</span> : null}
         <button type="button" className="btn btn--sm" onClick={onClose} data-testid="job-log-close">
           Close

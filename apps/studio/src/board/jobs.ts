@@ -19,6 +19,8 @@ export type Badge = {
   actions: BadgeAction[];
   /** the job the actions (retry, log) apply to */
   jobId?: string;
+  /** "$0.42 · 17 turns" once the CLI reported a spend; absent when unknown */
+  cost?: string;
 };
 
 export const ERROR_WORDS: Record<string, string> = {
@@ -36,6 +38,22 @@ export const WORKER_OFFLINE_RUNNING = "worker offline - resumes or fails when it
 
 /** Cancel is always available for a live job (ADR 010, caps off); finished jobs have nothing to cancel. */
 export const canCancel = (job: Pick<JobRow, "status"> | null | undefined): boolean => job?.status === "queued" || job?.status === "running";
+
+/**
+ * "$0.42 · 17 turns" for a job's ledger columns. Unknown (null/undefined/NaN) gives null so nothing renders:
+ * unmeasurable is not zero. A reported 0 (the fake engine) is shown as "$0.00".
+ */
+export function formatSpend(s: { cost_usd?: number | null; turns?: number | null } | null | undefined): string | null {
+  const parts: string[] = [];
+  if (typeof s?.cost_usd === "number" && Number.isFinite(s.cost_usd)) parts.push(`$${s.cost_usd.toFixed(2)}`);
+  if (typeof s?.turns === "number" && Number.isFinite(s.turns)) parts.push(`${s.turns} turn${s.turns === 1 ? "" : "s"}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+const withCost = (b: Badge, job: JobRow | undefined): Badge => {
+  const cost = formatSpend(job);
+  return cost ? { ...b, cost } : b;
+};
 
 export const errorWords = (kind: string | null | undefined): string => (kind ? (ERROR_WORDS[kind] ?? kind) : "error");
 
@@ -66,8 +84,8 @@ const jobBadge = (job: JobRow | undefined, workerOnline: boolean, now: number): 
   if (job.status === "running") {
     return { kind: "running", label: `Running · ${elapsed(job.started_at, now)}${job.last_tool ? ` · ${job.last_tool}` : ""}`, detail: workerOnline ? (job.progress_note ?? undefined) : WORKER_OFFLINE_RUNNING, actions: ["cancel", "log"], jobId: job.id };
   }
-  if (job.status === "failed") return { kind: "failed", label: `Failed · ${errorWords(job.error_kind)}`, detail: job.error ?? undefined, actions: ["retry", "log"], jobId: job.id };
-  if (job.status === "cancelled") return { kind: "cancelled", label: "Cancelled", actions: ["retry"], jobId: job.id };
+  if (job.status === "failed") return withCost({ kind: "failed", label: `Failed · ${errorWords(job.error_kind)}`, detail: job.error ?? undefined, actions: ["retry", "log"], jobId: job.id }, job);
+  if (job.status === "cancelled") return withCost({ kind: "cancelled", label: "Cancelled", actions: ["retry"], jobId: job.id }, job);
   return null;
 };
 
@@ -86,9 +104,9 @@ export function badgeForCase(i: BadgeInput): Badge | null {
     case "visuals_failed":
       return jobBadge(visual, i.workerOnline, i.now) ?? { kind: "queued", label: "Visuals not started", actions: [] };
     case "visuals_ready": {
-      if (entry.accepted_item_id) return { kind: "ready", label: "Design accepted", actions: ["generate", "variants"] };
+      if (entry.accepted_item_id) return withCost({ kind: "ready", label: "Design accepted", actions: ["generate", "variants"] }, visual);
       const n = i.pendingVariants ?? 3;
-      return { kind: "ready", label: `${n} visual${n === 1 ? "" : "s"} ready`, actions: ["variants"] };
+      return withCost({ kind: "ready", label: `${n} visual${n === 1 ? "" : "s"} ready`, actions: ["variants"] }, visual);
     }
     case "data_blocked":
       return { kind: "blocked", label: "Data blocked", detail: entry.gate?.reason, actions: ["sources", "generate"] };
@@ -97,7 +115,7 @@ export function badgeForCase(i: BadgeInput): Badge | null {
     case "video_failed":
       return jobBadge(video, i.workerOnline, i.now) ?? { kind: "queued", label: "Video not started", actions: [] };
     case "video_ready":
-      return { kind: "done", label: "Video ready", actions: ["video"] };
+      return withCost({ kind: "done", label: "Video ready", actions: ["video"] }, video);
   }
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GenerationOverview } from "../api";
-import { badgeForCase, canCancel, elapsed, errorWords, hasActiveJobs, type JobRow, type OverviewCase, stripState, WORKER_OFFLINE_RUNNING } from "./jobs";
+import { badgeForCase, canCancel, elapsed, errorWords, formatSpend, hasActiveJobs, type JobRow, type OverviewCase, stripState, WORKER_OFFLINE_RUNNING } from "./jobs";
 
 const job = (o: Partial<JobRow>): JobRow =>
   ({
@@ -105,5 +105,24 @@ describe("queue strip and polling", () => {
     expect(hasActiveJobs(o({ jobs: [job({ status: "done" })] }))).toBe(false);
     expect(hasActiveJobs(o({ jobs: [job({ status: "queued" })] }))).toBe(true);
     expect(hasActiveJobs(undefined)).toBe(false);
+  });
+});
+
+describe("job cost (generation cost ledger)", () => {
+  it("formats cost and turns; unknown shows nothing, never $0", () => {
+    expect(formatSpend({ cost_usd: 0.42, turns: 17 })).toBe("$0.42 · 17 turns");
+    expect(formatSpend({ cost_usd: 1, turns: 1 })).toBe("$1.00 · 1 turn");
+    expect(formatSpend({ cost_usd: 0, turns: null })).toBe("$0.00"); // the engine reported 0 (fake engine)
+    expect(formatSpend({ cost_usd: null, turns: null })).toBeNull();
+    expect(formatSpend({})).toBeNull();
+    expect(formatSpend(undefined)).toBeNull();
+  });
+
+  it("finished badges carry the cost; an unknown cost leaves it off", () => {
+    expect(badge({ stage: "visuals_failed" }, [job({ status: "failed", error_kind: "budget", cost_usd: 0.42, turns: 17 })])?.cost).toBe("$0.42 · 17 turns");
+    expect(badge({ stage: "visuals_failed" }, [job({ status: "failed", error_kind: "cli_exit" })])?.cost).toBeUndefined();
+    expect(badge({ stage: "visuals_ready" }, [job({ status: "done", cost_usd: 0.1, turns: 3 })])?.cost).toBe("$0.10 · 3 turns");
+    expect(badge({ stage: "video_ready", video_job_id: "gj-00000002" }, [job({ id: "gj-00000002", type: "generate_video", status: "done", cost_usd: 2.5 })])?.cost).toBe("$2.50");
+    expect(badge({ stage: "visuals_queued" }, [job({ cost_usd: 0.3 })])?.cost).toBeUndefined();
   });
 });

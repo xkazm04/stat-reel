@@ -98,6 +98,11 @@ export function JobBadge({ caseId, compact = false, pendingVariants }: { caseId:
         <b className="jb__label">{badge.label}</b>
         {badge.kind === "running" ? <span className="jb__bar" aria-hidden="true" /> : null}
       </span>
+      {badge.cost && !compact ? (
+        <span className="jb__detail mono" data-testid={`job-cost-${caseId}`}>
+          {badge.cost}
+        </span>
+      ) : null}
       {badge.detail && !compact ? (
         <span className="jb__detail" data-testid={`job-detail-${caseId}`}>
           {badge.detail}
