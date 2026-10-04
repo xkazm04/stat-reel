@@ -2,7 +2,8 @@
  * JobBadge (SPEC D.11): the state of a case's background generation, on every case row, on generated
  * tiles and in the lightbox. Every state is a shape plus words, never colour alone: queued, running (clock
  * and current tool, with an indeterminate bar), "3 visuals ready", "Video ready", failed (Retry, View log),
- * data blocked (the gate's reason and a link to Sources) cancelled (Retry); queued and running offer Cancel (confirmed).
+ * data blocked (the gate's reason and a link to Sources) cancelled (Retry); "visuals ready" and "design accepted" link to the
+ * Board designs filtered to that case (pending when any are, else all; the URL is the state); queued and running offer Cancel (confirmed).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -10,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type BoardItem, qk, serverError } from "../api";
 import { type Badge, type BadgeKind, badgeForCase } from "./jobs";
 import { LogDrawer } from "./LogDrawer";
+import { designsSearchForCase } from "./search";
 import { useBoard } from "./shared";
 import { useOverview } from "./useGeneration";
 import "./jobs.css";
@@ -131,6 +133,16 @@ export function JobBadge({ caseId, compact = false, pendingVariants }: { caseId:
             >
               Generate video
             </button>
+          ) : null}
+          {has("variants") ? (
+            <Link
+              to="/board"
+              search={designsSearchForCase(caseId, entry.title, board.data?.items ?? [], pending ? "pending" : "all") as never}
+              className="bd-link"
+              data-testid={`job-variants-${caseId}`}
+            >
+              {pending ? `See the ${pending} pending design${pending === 1 ? "" : "s"}` : "See the designs"}
+            </Link>
           ) : null}
           {has("sources") ? (
             <Link to="/sources" className="bd-link" data-testid={`job-sources-${caseId}`}>

@@ -5,13 +5,17 @@
  */
 import {
   type BoardFilter,
+  caseOf,
   DEFAULT_FILTER,
   parseVariant,
+  slug,
   STATUS_FILTERS,
   type StatusFilter,
   type Variant,
 } from "./board";
+import type { BoardItem } from "../api";
 import { parseTab, type Tab } from "./library";
+
 
 export type BoardSearch = { v?: Variant; tab?: Tab; st?: StatusFilter; style?: string; case?: string };
 
@@ -46,4 +50,21 @@ export function searchFromFilter(f: BoardFilter): Pick<BoardSearch, "st" | "styl
     style: f.style === "all" ? undefined : f.style,
     case: f.case === "all" ? undefined : f.case,
   };
+}
+
+/**
+ * The Board designs for one case idea, as search params (the "visuals ready" badge link). Generated designs carry
+ * `case_idea_id`; their case filter key is the one `caseOf` derives (a proposed case named after the idea), so it is
+ * read off the first such item, falling back to the title the generation names them by. The tab is left out so the link
+ * lands on Designs from the Use cases tab; the status is the pending queue unless told otherwise, and the URL is the state.
+ */
+export function designsSearchForCase(
+  caseId: string,
+  title: string,
+  items: readonly Pick<BoardItem, "case_idea_id" | "use_case_id" | "proposed_case">[],
+  status: StatusFilter = "pending",
+): BoardSearch {
+  const hit = items.find((i) => i.case_idea_id === caseId);
+  const key = hit ? caseOf(hit).key : `new:${slug(title)}`;
+  return { case: key, st: status === DEFAULT_FILTER.status ? undefined : status };
 }
