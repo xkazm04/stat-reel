@@ -19,7 +19,14 @@ models:
         data_tests:
           - not_null
           - relationships: {to: ref('stg_f1db__drivers'), field: driver_id}
+  - name: stg_f1db__constructors
+    columns:
+      - name: constructor_id
+        data_tests: [unique, not_null]
   - name: stg_f1db__season_driver_standings
+    data_tests:
+      - dbt_utils_free_unique_combination:
+          columns: [season, driver_id]
     columns:
       - name: driver_id
         data_tests: [not_null]
