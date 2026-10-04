@@ -72,7 +72,7 @@ export function SourcesPage() {
       </header>
 
       {src.isError ? (
-        <Failure error={src.error} what="The registry" />
+        <Failure error={src.error} what="The registry" onRetry={() => void src.refetch()} retrying={src.isFetching} />
       ) : src.isLoading ? (
         <Loading what="the registry" />
       ) : (
