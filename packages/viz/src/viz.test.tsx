@@ -171,6 +171,15 @@ describe("slopegraphLayout", () => {
     });
   }
 
+  it("never shrinks names below the 28 px floor, even from an odd fitted size", () => {
+    // 9 rows fit at 29 px; 17-char surnames then force the horizontal shrink (29 -> 27 before the fix)
+    for (let len = 10; len <= 22; len++) {
+      const name = `A ${"M".repeat(len)}`;
+      const rows = Array.from({ length: 9 }, (_, i) => ({ id: `p${i}`, name, left: i + 1, right: 9 - i }));
+      expect(slopegraphLayout(rows, { ...zone, titles }).fontSize, `surname ${len}`).toBeGreaterThanOrEqual(28);
+    }
+  });
+
   it("flags overflow when 12 rows cannot fit at 44 px", () => {
     expect(slopegraphLayout(rows12, { ...zone, height: 300 }).overflow).toBe(true);
   });

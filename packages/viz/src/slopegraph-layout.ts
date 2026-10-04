@@ -208,7 +208,8 @@ export function slopegraphLayout(rows: readonly SlopeRow[], opts: SlopegraphLayo
   };
   let m = measure(fontSize);
   while (m.span < minSpan && fontSize > minFont) {
-    fontSize -= 2;
+    // the fitted size can be odd (29, 31 ...): step down by 2 but never past the floor
+    fontSize = Math.max(minFont, fontSize - 2);
     m = measure(fontSize);
   }
   if (m.span < minSpan && nameStyle === "full") {
