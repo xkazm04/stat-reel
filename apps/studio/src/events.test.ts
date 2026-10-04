@@ -1,6 +1,56 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { GenerationEventType, JobStatus } from "@statreel/schemas";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import { type ConnectionState, keepConnected, reopenDelay, watchConnection } from "./events";
+import {
+  type ConnectionState,
+  EVENT_NAMES,
+  GEN_EVENTS,
+  JOB_EVENTS,
+  keepConnected,
+  reopenDelay,
+  watchConnection,
+} from "./events";
+
+/**
+ * The event vocabulary has its authority on the server (realtime-events/event-registry: gate the mirror
+ * against the artefacts both sides run). Literal names come from the server's own emit sites, read with
+ * comments stripped so a comment that only TALKS about an event cannot satisfy the gate; the two
+ * template families (`job.${status}`, `gen.${type}`) come from their schema enums.
+ */
+describe("event vocabulary parity", () => {
+  const dir = new URL("../../server/src/", import.meta.url);
+  const files = (readdirSync(dir, { recursive: true }) as string[]).filter(
+    (f) => f.endsWith(".ts") && !f.endsWith(".test.ts"),
+  );
+  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const emitted = new Set<string>();
+  for (const f of files) {
+    const src = strip(readFileSync(new URL(f.replace(/\\/g, "/"), dir), "utf8"));
+    for (const m of src.matchAll(/emit\(\{[^}]*?\btype:\s*"([a-z_]+\.[a-z_]+)"/g)) emitted.add(m[1] as string);
+    for (const m of src.matchAll(/writeSSE\(\{\s*event:\s*"([a-z_.]+)"/g)) emitted.add(m[1] as string);
+  }
+  const families = new Set<string>([...JOB_EVENTS, ...GEN_EVENTS]);
+
+  it("found the server's emit sites", () => {
+    expect(files.length).toBeGreaterThan(10);
+    expect(emitted.has("render.done")).toBe(true);
+    expect(emitted.has("ping")).toBe(true);
+  });
+  it("every literal name the server emits has a listener", () => {
+    expect([...emitted].filter((n) => !(EVENT_NAMES as readonly string[]).includes(n))).toEqual([]);
+  });
+  it("every listened name outside the job / gen families has an emitter", () => {
+    expect(EVENT_NAMES.filter((n) => !families.has(n) && !emitted.has(n))).toEqual([]);
+  });
+  it("the gen family is the schema's GenerationEventType", () => {
+    expect([...GEN_EVENTS].sort()).toEqual(GenerationEventType.options.map((t) => `gen.${t}`).sort());
+  });
+  it("the job family covers queued, started, progress and every terminal JobStatus", () => {
+    const terminal = JobStatus.options.filter((s) => s !== "queued" && s !== "running").map((s) => `job.${s}`);
+    expect([...JOB_EVENTS].sort()).toEqual(["job.queued", "job.started", "job.progress", ...terminal].sort());
+  });
+});
 
 /** Just enough of EventSource: listeners, a readyState the test sets, and the CLOSED constant. */
 class FakeEventSource {

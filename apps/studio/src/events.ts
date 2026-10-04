@@ -2,10 +2,11 @@
  * One EventSource('/events') for the whole app, shared through React context. The provider also
  * keeps TanStack Query honest: every job state change (job.* except progress), render.done and
  * co-pilot tool results invalidate the caches they can change. Named listeners are registered for
- * job.queued/started/progress/succeeded/failed/cancelled/refused, llm.event and render.done.
+ * every name in EVENT_NAMES (job.*, llm.event, render.done, heatmap.updated, the owner's gates, gen.*).
  * Calendar slots follow their publish job, so job.* also invalidates the calendar.
  * board.decided (the owner's gate on a Board item) invalidates the board and the style library;
- * styles.updated (lock / retire / note) the style library; cases.decided the case ideas.
+ * styles.updated (lock / retire / note) the style library; cases.decided the case ideas; gen.* the
+ * generation queue (and, once a job ends, the board, cases, styles and topic heatmap).
  */
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { createContext, createElement, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -44,13 +45,16 @@ export const JOB_EVENTS = [
 ] as const;
 /** Generation queue events relayed from the worker process (ADR 010). */
 export const GEN_EVENTS = ["gen.queued", "gen.started", "gen.progress", "gen.done", "gen.failed", "gen.cancelled"] as const;
-/** Named SSE events (the server writes `event: <type>`; EventSource needs one listener per name). */
-const NAMED = [
+/**
+ * Named SSE events (the server writes `event: <type>`; EventSource needs one listener per name). A name
+ * missing here is never delivered; a name no server code emits is a listener on nothing. Both are
+ * gated against the server's emit sites and the schema enums in events.test.ts.
+ */
+export const EVENT_NAMES = [
   ...JOB_EVENTS,
   "llm.event",
   "render.done",
   "heatmap.updated",
-  "project.updated",
   "board.decided",
   "styles.updated",
   "cases.decided",
@@ -76,7 +80,7 @@ function invalidate(qc: QueryClient, e: AppEvent): void {
     // a finished co-pilot session: reload its authoritative event log
     if (e.kind === "llm" && e.type !== "job.queued" && e.type !== "job.started")
       void qc.invalidateQueries({ queryKey: ["llm-events"] });
-  } else if (e.type === "render.done" || e.type === "project.updated") {
+  } else if (e.type === "render.done") {
     // a finished render adds a video to the topic heatmap
     void qc.invalidateQueries({ queryKey: ["heatmap-topics"] });
     if (pid) void qc.invalidateQueries({ queryKey: qk.project(pid) });
@@ -233,10 +237,10 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       setState,
       (es) => {
         es.addEventListener("message", handle);
-        for (const name of NAMED) es.addEventListener(name, handle as EventListener);
+        for (const name of EVENT_NAMES) es.addEventListener(name, handle as EventListener);
         return () => {
           es.removeEventListener("message", handle);
-          for (const name of NAMED) es.removeEventListener(name, handle as EventListener);
+          for (const name of EVENT_NAMES) es.removeEventListener(name, handle as EventListener);
         };
       },
     );
