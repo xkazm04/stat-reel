@@ -109,6 +109,16 @@ export async function launch() {
  * font or data step). inspect() and board.mjs harvest share this, so a variant that passed the
  * check is never skipped at harvest for an API it defines a moment later.
  */
+export async function blockNetwork(page, onBlocked = () => {}) {
+  // "No network at render time": a seat page's http(s) request is aborted, not merely reported, so
+  // no remote font, script or data reaches a check or a rendered cut-out (data HTTP belongs to
+  // the ingest clients). file:// loads of the staged data are untouched.
+  await page.route(/^https?:/i, (route) => {
+    onBlocked(route.request().url());
+    return route.abort("blockedbyclient");
+  });
+}
+
 export async function waitForStatreel(page) {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => typeof window.statreel?.seek === "function" && typeof window.statreel?.dataClock === "function", null, { timeout: 15000 }).catch(() => {});
@@ -161,7 +171,7 @@ export async function inspect(variantDir, dataDir, { browser, useCases, sports }
   const pageErrors = [];
   page.on("pageerror", (e) => pageErrors.push(e.message));
   page.on("console", (m) => m.type() === "error" && pageErrors.push(m.text()));
-  page.on("request", (r) => /^https?:/.test(r.url()) && pageErrors.push(`network request: ${r.url()}`));
+  await blockNetwork(page, (u) => pageErrors.push(`network request: ${u}`));
   let longevity = null;
   let truth = null;
   await page.addInitScript(CANVAS_PROBE);

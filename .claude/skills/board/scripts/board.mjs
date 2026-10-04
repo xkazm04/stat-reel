@@ -27,7 +27,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { applyFeedback, assessLongevity, dataReadySports, dataReadyUseCases, emptyLedger, excerptWindow, FORMATS, frameTimes, longevitySamples, loopPhase, rejectedCases, renderBrief, titleKey, renderLedgerMarkdown, seatLanes, stabilityProbe, validateDesign } from "./lib.mjs";
-import { inspect, waitForStatreel } from "./check-design.mjs";
+import { blockNetwork, inspect, waitForStatreel } from "./check-design.mjs";
 import { checkCases } from "./check-cases.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -251,6 +251,8 @@ async function harvest() {
       const [w, h] = FORMATS[meta.format];
       const base = `${id}-${String.fromCharCode(65 + si)}${v.split("-")[1]}`;
       const page = await browser.newPage({ viewport: { width: w, height: h } });
+      const blocked = new Set();
+      await blockNetwork(page, (u) => blocked.add(u));
       const url = new URL(`file:///${path.join(dir, "index.html").split(path.sep).join("/")}`);
       url.searchParams.set("capture", "1");
       await page.goto(url.href, { waitUntil: "load" });
@@ -264,6 +266,7 @@ async function harvest() {
       const cut = await renderCutout(page, meta, w, h, path.join(outDir, `${base}.mp4`), path.join(outDir, `${base}.png`));
       const longevity = await measureLongevity(page, meta, w, h);
       await page.close();
+      if (blocked.size) console.log(`  network blocked (${blocked.size}): ${[...blocked].slice(0, 3).join(", ")} - the cut-out shows the offline page`);
       console.log(`  ${meta.duration_s}s run, cut-out ${cut.excerpt.start_s.toFixed(1)}-${(cut.excerpt.start_s + cut.excerpt.duration_s).toFixed(1)}s, seek-stable: ${cut.seek_stable}, longevity: ${longevity.ok ? "ok" : longevity.problems.join("; ")}`);
       const item = await api("/api/board", {
         image: `items/${base}.png`, video: `items/${base}.mp4`, duration_s: cut.excerpt.duration_s, width: w, height: h,
