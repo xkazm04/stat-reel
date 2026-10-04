@@ -157,18 +157,27 @@ const NEUTRAL = (g: string): string =>
   '<path d="M40 300H560M40 60V300" stroke-width="1.5" opacity=".5"/>' +
   P("M40 260L160 210L280 228L400 140L560 110", 0, ' stroke-width="4"');
 
+/**
+ * One drawing per use case, built once with a placeholder gradient id; each mount fills in its own
+ * id. (Keyed by mount id, the cache grew by a full drawing on every remount: useId is fresh per
+ * client mount and the Front's lane stage remounts on each rotation step and hover.)
+ */
+const G = "LANEARTGRADIENT";
 const cache = new Map<string, string>();
 function markup(id: string, g: string): string {
-  const key = `${id}|${g}`;
-  let m = cache.get(key);
+  let m = cache.get(id);
   if (m === undefined) {
-    m = (ART[id] ?? NEUTRAL)(g);
-    cache.set(key, m);
+    m = (ART[id] ?? NEUTRAL)(G);
+    cache.set(id, m);
   }
-  return m;
+  return m.split(G).join(g);
 }
 
 export const hasLaneArt = (id: string): boolean => id in ART;
+
+/** Test hooks: the drawing markup for one mount, and how many drawings the cache holds. */
+export const laneArtMarkup = markup;
+export const laneArtCached = (): number => cache.size;
 
 /** One lane illustration; `live` draws it in (reduced motion: shown at once via CSS). */
 export function LaneArt({ id, name, live = true, className = "" }: { id: string; name?: string; live?: boolean; className?: string }) {
