@@ -92,8 +92,12 @@ export function registerGenerationRoutes(app: Hono<{ Bindings: HttpBindings }>, 
         const start = Math.min(offset, size);
         const buf = Buffer.alloc(Math.min(size - start, 1_000_000));
         readSync(fd, buf, 0, buf.length, start);
-        body = buf.toString("utf8");
-        next = start + buf.length;
+        // end on a whole line: the 1 MB cap (or a line the worker is still appending) must not split a UTF-8
+        // character into two U+FFFD; the cut bytes are read again from `next`. A newline-free full read is sent as is.
+        const nl = buf.lastIndexOf(0x0a);
+        const end = nl >= 0 ? nl + 1 : buf.length < 1_000_000 ? 0 : buf.length;
+        body = buf.subarray(0, end).toString("utf8");
+        next = start + end;
       } finally {
         closeSync(fd);
       }
