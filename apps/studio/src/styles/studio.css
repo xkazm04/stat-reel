@@ -2068,3 +2068,32 @@ button.tl-b {
   -webkit-mask-image: linear-gradient(90deg, currentColor 70%, transparent);
   mask-image: linear-gradient(90deg, currentColor 70%, transparent);
 }
+
+/* ── control room on cards: the stage bar and the four panels float on the sheet ───────────────
+   (one skin with components/Card.tsx: --card-* tokens) */
+[data-theme="photofinish"] .room {
+  gap: 12px;
+  padding: 12px var(--page-gutter) 14px;
+}
+[data-theme="photofinish"] .panel-col,
+[data-theme="photofinish"] .pgm,
+[data-theme="photofinish"] .tl,
+[data-theme="photofinish"] .stagebar {
+  background: var(--card-bg);
+  border: 1px solid var(--card-edge);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow-1);
+}
+[data-theme="photofinish"] .stagebar {
+  margin: 12px var(--page-gutter) 0;
+  padding: 10px 16px;
+}
+[data-theme="photofinish"] .tl {
+  padding: 10px 16px 12px;
+}
+[data-theme="photofinish"] .room-wrap > .joberr,
+[data-theme="photofinish"] .deny-inline {
+  margin: 12px var(--page-gutter) 0;
+  border: 1px solid var(--card-edge);
+  border-radius: var(--card-radius);
+}
