@@ -305,7 +305,7 @@ export class CaseIdeas {
     if (cur.status !== "archived") throw new NotArchivedError("case idea", id);
     const legacyReasonNote = cur.archive_reason === null && cur.decision === null;
     this.db.update(caseIdeas).set({ status: statusBeforeArchive(cur.decision), archive_reason: null, ...(legacyReasonNote ? { note: null } : {}) }).where(eq(caseIdeas.id, id)).run();
-    return this.get(id)!;
+    return this.get(id) ?? cur;
   }
 
   /** Decided ideas since an ISO time (exclusive), oldest first: the case loop's feedback feed. */

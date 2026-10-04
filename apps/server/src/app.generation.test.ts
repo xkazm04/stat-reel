@@ -128,24 +128,24 @@ describe("accepting a variant (D.2 transitions 3 and 5)", () => {
   it("a decision POSTed to an archived sibling is a 409 and does not strand the superseded marker", async () => {
     const c = cases.create(idea);
     await accept(c.id);
-    const [v1, v2] = variants(c.id);
-    await call("POST", `/api/board/${v2!.id}/decision`, { decision: "accept" });
-    const r = await call("POST", `/api/board/${v1!.id}/decision`, { decision: "reject_style" });
+    const [i1, i2] = variants(c.id).map((v) => v.id) as [string, string];
+    await call("POST", `/api/board/${i2}/decision`, { decision: "accept" });
+    const r = await call("POST", `/api/board/${i1}/decision`, { decision: "reject_style" });
     expect(r.status).toBe(409);
-    expect(board.get(v1!.id)).toMatchObject({ status: "archived", decision: "superseded" });
+    expect(board.get(i1)).toMatchObject({ status: "archived", decision: "superseded" });
   });
 
   it("restoring a superseded sibling by hand returns it to pending; undoing the winner then leaves it alone", async () => {
     const c = cases.create(idea);
     await accept(c.id);
-    const [v1, v2, v3] = variants(c.id);
-    await call("POST", `/api/board/${v2!.id}/decision`, { decision: "accept" });
-    const r = await call("POST", `/api/board/${v1!.id}/restore`);
+    const [i1, i2, i3] = variants(c.id).map((v) => v.id) as [string, string, string];
+    await call("POST", `/api/board/${i2}/decision`, { decision: "accept" });
+    const r = await call("POST", `/api/board/${i1}/restore`);
     expect(r.status).toBe(200);
-    expect(board.get(v1!.id)).toMatchObject({ status: "pending", decision: null, archive_reason: null });
-    const undo = await j(await call("DELETE", `/api/board/${v2!.id}/decision`));
-    expect(undo.restored_ids).toEqual([v3!.id]);
-    expect((await call("POST", `/api/board/${v2!.id}/restore`)).status).toBe(409);
+    expect(board.get(i1)).toMatchObject({ status: "pending", decision: null, archive_reason: null });
+    const undo = await j(await call("DELETE", `/api/board/${i2}/decision`));
+    expect(undo.restored_ids).toEqual([i3]);
+    expect((await call("POST", `/api/board/${i2}/restore`)).status).toBe(409);
     expect((await call("POST", "/api/board/bd-nope/restore")).status).toBe(404);
   });
 

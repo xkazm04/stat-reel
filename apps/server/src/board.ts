@@ -119,7 +119,7 @@ export class BoardService {
       ...(superseded ? { decision: null, decided_at: null } : {}),
       ...(superseded || cur.archive_reason === null ? { note: null } : {}),
     }).where(eq(boardItems.id, id)).run();
-    return this.get(id)!;
+    return this.get(id) ?? cur;
   }
 
   get(id: string): BoardItem | undefined {
