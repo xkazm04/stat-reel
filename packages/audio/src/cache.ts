@@ -44,6 +44,8 @@ export interface Produced {
   normalizedAlignment?: CharAlignment;
   requestId?: string;
   model?: string;
+  /** the account's plan tier when the provider generated this (rights are not retroactive) */
+  planTier?: string;
 }
 
 export interface CacheMeta {
@@ -54,6 +56,8 @@ export interface CacheMeta {
   normalized_alignment: CharAlignment | null;
   request_id: string | null;
   model: string | null;
+  /** plan tier at generation time; absent on entries written before it was recorded */
+  plan_tier?: string | null;
   generated_at: string;
   sha256: string;
   bytes: number;
@@ -131,6 +135,7 @@ export class AudioCache {
       normalized_alignment: p.normalizedAlignment ?? null,
       request_id: p.requestId ?? null,
       model: p.model ?? null,
+      plan_tier: p.planTier ?? null,
       generated_at: new Date().toISOString(),
       sha256: sha256(p.audio),
       bytes: p.audio.length,

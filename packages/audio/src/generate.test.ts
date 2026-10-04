@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -72,6 +72,31 @@ describe("generateTts", () => {
     });
   });
 
+  it("records the plan tier in force at generation; a cache hit after an upgrade keeps the old tier", async () => {
+    const d = deps([() => ttsResponse(2)]);
+    const params = { voiceId: "v", text, modelId: "m" };
+    const first = await generateTts({ ...d, planTier: "free" }, params);
+    expect(first.asset.plan_tier).toBe("free");
+    expect(JSON.parse(readFileSync(first.audioPath.replace(/\.mp3$/, ".json"), "utf8")).plan_tier).toBe("free");
+    // the account upgrades; the cached take was still generated on the free plan (non-retroactive)
+    const later = await generateTts({ ...d, planTier: "creator" }, params);
+    expect(later.source).toBe("cache");
+    expect(later.asset.plan_tier).toBe("free");
+  });
+
+  it("a cached entry with no recorded tier carries none (the publish gate then denies it)", async () => {
+    const d = deps([() => ttsResponse(2)]);
+    const params = { voiceId: "v", text, modelId: "m" };
+    const first = await generateTts(d, params); // generated with no known tier
+    const metaPath = first.audioPath.replace(/\.mp3$/, ".json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf8"));
+    delete meta.plan_tier; // an entry written before tiers were recorded
+    writeFileSync(metaPath, JSON.stringify(meta));
+    const hit = await generateTts({ ...d, planTier: "pro" }, params);
+    expect(hit.source).toBe("cache");
+    expect(hit.asset).not.toHaveProperty("plan_tier");
+  });
+
   it("refuses before calling the provider when the estimate exceeds the budget", async () => {
     const d = deps([() => ttsResponse(1)], new Budget({ ttsSeconds: 3, musicSeconds: 3 }));
     await expect(generateTts(d, { voiceId: "v", text, modelId: "m" })).rejects.toBeInstanceOf(BudgetExceeded);
@@ -79,9 +104,7 @@ describe("generateTts", () => {
   });
 
   it("keeps the reservation when the provider answered 200 and the result is unusable (billed)", async () => {
-    const d = deps([
-      () => new Response(JSON.stringify({ audio_base64: "AAAA", alignment: null }), { status: 200 }),
-    ]);
+    const d = deps([() => new Response(JSON.stringify({ audio_base64: "AAAA", alignment: null }), { status: 200 })]);
     await expect(generateTts(d, { voiceId: "v", text, modelId: "m" })).rejects.toBeInstanceOf(ProviderError);
     expect(d.budget.used("tts")).toBe(4);
     expect(d.budget.snapshot().tts.generations).toBe(1);

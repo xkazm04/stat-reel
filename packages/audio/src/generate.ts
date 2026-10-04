@@ -2,7 +2,7 @@
  * The audio stage's generation paths: client + request-hash cache + budget + take acceptance.
  * Budget is reserved only inside `produce`, so cache hits and replay fixtures cost nothing.
  */
-import type { AudioAssetSchema, CharAlignment } from "@statreel/schemas";
+import { type AudioAssetSchema, type CharAlignment, PlanTier } from "@statreel/schemas";
 import type { Budget, Reservation } from "./budget";
 import { estimateTtsSeconds } from "./budget";
 import { type AudioCache, type CacheEntry, canonicalJson, sha256 } from "./cache";
@@ -19,7 +19,7 @@ export interface GenerateDeps {
   client: ElevenLabsClient;
   cache: AudioCache;
   budget: Budget;
-  /** from `planTierFromSubscription(await client.subscription())` */
+  /** the tier in force NOW (`planTierFromSubscription(await client.subscription())`); stamped on what this run generates, never on cache hits */
   planTier?: PlanTierValue;
   /** injectable for tests; defaults to ffprobe */
   probeDurationS?: ((file: string) => Promise<number>) | undefined;
@@ -46,6 +46,16 @@ function settleOrRelease(budget: Budget, r: Reservation, e: unknown) {
   else budget.settle(r, r.seconds);
 }
 
+/**
+ * The plan tier an asset was GENERATED under, from its cache record - never today's tier: a
+ * commercial grant is not retroactive, so a free-plan take served from cache after an upgrade
+ * stays free. An entry with no recorded tier gets none, and the publish gate denies it.
+ */
+function generatedPlanTier(entry: CacheEntry): AudioAsset["plan_tier"] | undefined {
+  const t = PlanTier.safeParse(entry.meta.plan_tier);
+  return t.success ? t.data : undefined;
+}
+
 const alignmentEndS = (a: CharAlignment) => a.character_end_times_seconds.reduce((m, x) => Math.max(m, x), 0);
 
 export async function generateTts(
@@ -59,7 +69,7 @@ export async function generateTts(
     try {
       const out = await deps.client.ttsWithTimestamps(tts);
       deps.budget.settle(r, alignmentEndS(out.alignment));
-      return { ...out, model: tts.modelId };
+      return { ...out, model: tts.modelId, ...(deps.planTier ? { planTier: deps.planTier } : {}) };
     } catch (e) {
       settleOrRelease(deps.budget, r, e);
       throw e;
@@ -78,7 +88,8 @@ export async function generateTts(
     scene_id: sceneId ?? null,
     c2pa: "unknown",
   };
-  if (deps.planTier) asset.plan_tier = deps.planTier;
+  const tier = generatedPlanTier(entry);
+  if (tier) asset.plan_tier = tier;
   const out: TtsGeneration = {
     key: entry.key,
     source: entry.source,
@@ -120,7 +131,11 @@ export async function generateMusic(
       try {
         const out = await deps.client.composeMusic(music as MusicParams);
         deps.budget.settle(r, music.musicLengthMs / 1000);
-        return { ...out, model: String(base.body?.model_id) };
+        return {
+          ...out,
+          model: String(base.body?.model_id),
+          ...(deps.planTier ? { planTier: deps.planTier } : {}),
+        };
       } catch (e) {
         settleOrRelease(deps.budget, r, e);
         throw e;
@@ -142,7 +157,8 @@ export async function generateMusic(
         sha256: entry.meta.sha256,
         c2pa: "unknown",
       };
-      if (deps.planTier) asset.plan_tier = deps.planTier;
+      const tier = generatedPlanTier(entry);
+      if (tier) asset.plan_tier = tier;
       return { key: entry.key, source: entry.source, audioPath: entry.audioPath, take, durationMs, rejected, asset };
     } catch (e) {
       if (!(e instanceof TakeRejected)) throw e;
