@@ -185,6 +185,23 @@ describe("validated props reads", () => {
     expect(svc.attachTiming(p.id, undefined, 2)).toBe(3); // the version it was measured on is still the latest
   });
 
+  it("setProps refuses a timing block that times other scenes than the props carry (a JSON edit round-tripping it)", async () => {
+    const db = openDb(":memory:");
+    const svc = new ProjectService(db, { facts: async () => new Map() } as unknown as Warehouse, []);
+    const p = svc.create({ title: "t", use_case_id: "era-adjusted-rankings", sport: "F1", format: "vertical", mode: "monetized" });
+    const ids = sampleEraProps.scenes.map((s) => s.id);
+    const timingFor = (sceneIds: string[]) => ({ duration_s: 10, words: [], cues: [], music: [], voice_lead_s: 0.5,
+      scenes: sceneIds.map((scene_id, i) => ({ scene_id, start_s: i, end_s: i + 1 })) });
+    const stale = await svc.setProps(p.id, { ...sampleEraProps, timing: timingFor([...ids].reverse()) }, "user");
+    expect(stale.version).toBeNull();
+    expect(stale.errors[0]).toMatch(/^timing: it times scenes .* but the props have .*remove the timing block/);
+    const dropped = await svc.setProps(p.id, { ...sampleEraProps, timing: timingFor(ids.slice(1)) }, "user");
+    expect(dropped.errors[0]).toMatch(/^timing: /);
+    // a timing that still times exactly these scenes is not refused for its timing
+    const same = await svc.setProps(p.id, { ...sampleEraProps, timing: timingFor(ids) }, "user");
+    expect(same.errors.some((e) => e.startsWith("timing:"))).toBe(false);
+  });
+
   it("attachTiming rejects a malformed timing block instead of storing it", () => {
     const { svc, p, put } = setup();
     put(1, sampleEraProps);

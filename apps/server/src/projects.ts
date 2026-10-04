@@ -103,6 +103,14 @@ export class ProjectService {
     if (!this.get(id)) return { version: null, errors: [`unknown project ${id}`] };
     const parsed = EraAdjustedPropsSchema.safeParse(input);
     if (!parsed.success) return { version: null, errors: parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`) };
+    // timing belongs to the audio stage: an author version may carry it only while it still times exactly
+    // these scenes in this order (a JSON edit round-trips the stored block; reordered or new scenes would
+    // play the old cues until the next Produce)
+    const timed = parsed.data.timing?.scenes.map((s) => s.scene_id);
+    const scenes = parsed.data.scenes.map((s) => s.id);
+    if (timed && timed.join("\u0000") !== scenes.join("\u0000")) {
+      return { version: null, errors: [`timing: it times scenes ${timed.join(", ")} but the props have ${scenes.join(", ")}; remove the timing block (the next Produce times the new scenes)`] };
+    }
     const refs = parsed.data.rows.flatMap((r) => [r.raw_fact_key, r.adjusted_fact_key, r.raw_rank_fact_key, r.adjusted_rank_fact_key]);
     const errors = untracedFigures(parsed.data, await this.wh.facts(refs));
     if (errors.length) return { version: null, errors };
