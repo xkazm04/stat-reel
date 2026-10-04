@@ -183,9 +183,12 @@ describe("Calendar (channels + scheduling on top of composed videos)", () => {
       const yt = cal.channels()[0]!;
       const first = cal.schedule({ project_id: "p1", channel_id: yt.id, publish_at: "2026-09-30T13:00:00Z" });
       reRender(db);
-      expect(cal.ready().map((r) => r.render_id)).toEqual(["r2"]); // the re-render reappears as ready
+      // ready() offers exactly what schedule() accepts: not the re-render while the project has a live slot
+      // (the slot's drift flag + reschedule is the way to re-point it)
+      expect(cal.ready()).toEqual([]);
       expect(() => cal.schedule({ project_id: "p1", channel_id: yt.id, publish_at: "2026-09-30T15:00:00Z" })).toThrow(new RegExp(`already on the calendar.*${first.id}`));
       cal.cancel(first.id);
+      expect(cal.ready().map((r) => r.render_id)).toEqual(["r2"]);
       expect(cal.schedule({ project_id: "p1", channel_id: yt.id, publish_at: "2026-09-30T15:00:00Z" }).render_id).toBe("r2");
     });
   });

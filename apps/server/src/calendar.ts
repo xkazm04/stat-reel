@@ -79,13 +79,19 @@ export class CalendarService {
     return this.db.select().from(renders).where(eq(renders.project_id, projectId)).orderBy(desc(renders.created_at)).get();
   }
 
-  /** Composed videos: latest render allowed by the gate and not already on the calendar. */
+  /**
+   * Composed videos: latest render allowed by the gate and not already on the calendar - exactly what
+   * schedule() accepts: a project with a live slot (on any render) is not offered, a re-render of it is
+   * re-pointed through that slot's reschedule.
+   */
   ready() {
-    const taken = new Set(this.db.select().from(schedule).where(inArray(schedule.status, ACTIVE)).all().map((s) => s.render_id));
+    const active = this.db.select().from(schedule).where(inArray(schedule.status, ACTIVE)).all();
+    const taken = new Set(active.map((s) => s.render_id));
+    const live = new Set(active.filter((s) => LIVE.includes(s.status)).map((s) => s.project_id));
     return this.db.select().from(projects).all().flatMap((p) => {
       const r = this.latestRender(p.id);
       const policy = r?.policy_json ? (JSON.parse(r.policy_json) as { allow?: boolean }) : null;
-      if (!r || !policy?.allow || taken.has(r.id)) return [];
+      if (!r || !policy?.allow || taken.has(r.id) || live.has(p.id)) return [];
       return [{ project_id: p.id, title: p.title, use_case_id: p.use_case_id, sport: p.sport, format: p.format, mode: p.mode, render_id: r.id, rendered_at: r.created_at }];
     });
   }
