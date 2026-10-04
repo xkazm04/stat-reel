@@ -23,6 +23,8 @@ export type RenderStepContext = {
   signal: AbortSignal;
   note: (progressNote: string) => void;
   log: (line: string) => void;
+  /** wraps a server callback in the worker's server-down retry/backoff (a restart mid-render must not fail the job) */
+  call?: <T>(fn: () => Promise<T>) => Promise<T>;
 };
 export type RenderStep = (ctx: RenderStepContext) => Promise<Record<string, unknown>>;
 
@@ -45,9 +47,10 @@ export async function waitForRender(cb: ServerCallbacks, renderJobId: string, si
 
 export function makeRenderStep(cb: ServerCallbacks, o: { pollMs?: number } = {}): RenderStep {
   const render = async (ctx: RenderStepContext, req: { kind: "stills" | "video"; props_path: string; frames?: number[] }) => {
-    const { render_job_id } = await cb.render(ctx.job.id, req);
+    const call = ctx.call ?? (<T,>(fn: () => Promise<T>) => fn());
+    const { render_job_id } = await call(() => cb.render(ctx.job.id, req));
     ctx.log(`render ${req.kind} ${req.props_path} -> ${render_job_id}`);
-    return waitForRender(cb, render_job_id, ctx.signal, o.pollMs);
+    return waitForRender({ ...cb, renderStatus: (id) => call(() => cb.renderStatus(id)) }, render_job_id, ctx.signal, o.pollMs);
   };
   return async (ctx) => {
     const plan = readPlan(ctx.paths);

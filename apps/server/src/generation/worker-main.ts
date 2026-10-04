@@ -64,9 +64,17 @@ async function main() {
     process.exit(0);
   }
   log(`generation worker ready pid=${process.pid} mode=${config.mode} model=${config.model} api=${base} recovered: requeued=${started.requeued.length} failed=${started.failed.length}`);
+  // close is a controlled crash: abort the job (kills the CLI tree), re-queue it without burning an attempt,
+  // release the lease; a hard timer guarantees the process exits even if something hangs
+  let leaving = false;
   const bye = () => {
-    worker.release();
-    process.exit(0);
+    if (leaving) return;
+    leaving = true;
+    setTimeout(() => process.exit(1), 6000).unref();
+    worker.shutdown(4000).then((r) => {
+      log(`shutdown: ${r.requeued ? `job ${r.requeued} re-queued` : "no running job"}${r.timedOut ? " (timed out)" : ""}`);
+      process.exit(0);
+    }, () => process.exit(1));
   };
   process.on("SIGINT", bye);
   process.on("SIGTERM", bye);
