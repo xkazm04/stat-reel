@@ -108,6 +108,38 @@ describe("JobRunner", () => {
     expect(resumedWith).toEqual({ project: "p1" });
   });
 
+  it("a kind registered after resume() (main.ts registers gen_render late) still runs its re-queued rows", async () => {
+    const { db } = setup();
+    const first = new JobRunner(db, new EventBus());
+    first.register("gen_render", () => new Promise(() => {}), { lane: "render" }); // the process "dies" mid-render
+    const id = first.enqueue("gen_render", { generation_job_id: "g1" });
+    await tick();
+    expect(first.get(id)?.status).toBe("running");
+
+    const second = new JobRunner(db, new EventBus());
+    second.register("render", async () => ({}));
+    second.resume();
+    second.register("gen_render", async () => ({ stills: ["a.png"] }), { lane: "render" });
+    await vi.waitFor(() => expect(second.get(id)?.status).toBe("succeeded"), { timeout: 500 });
+  });
+
+  it("registering before resume() starts nothing: resume() runs the startup sweeps first", async () => {
+    const { db } = setup();
+    db.$client.prepare("insert into jobs (id, kind, status, params_json, created_at) values ('q1', 'render', 'queued', '{}', ?)").run(new Date().toISOString());
+    const runner = new JobRunner(db, new EventBus());
+    const order: string[] = [];
+    runner.onStartup(() => order.push("sweep"));
+    runner.register("render", async () => {
+      order.push("job");
+      return {};
+    });
+    await tick();
+    expect(order).toEqual([]);
+    runner.resume();
+    await runner.idle();
+    expect(order).toEqual(["sweep", "job"]);
+  });
+
   it("runs startup sweeps before re-queuing, and a throwing sweep does not block the resume", async () => {
     const { db } = setup();
     const first = new JobRunner(db, new EventBus());

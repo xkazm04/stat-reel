@@ -41,12 +41,20 @@ export class JobRunner {
   private startupHooks: (() => void)[] = [];
   /** set by shutdown(): nothing new starts; queued rows stay queued for the next process's resume() */
   private closing = false;
+  /** set by resume(): from then on a late register() starts its kind's queued rows itself */
+  private resumed = false;
 
   constructor(private readonly db: Db, private readonly bus: EventBus) {}
 
+  /**
+   * A kind registered after resume() (main.ts wires gen_render after it) starts its queued rows here:
+   * resume() only pumps kinds that had a handler at the time, so a row re-queued at boot would otherwise
+   * wait for an unrelated job on its lane, and the generation worker polls it forever.
+   */
   register(kind: JobKind, handler: Handler, opts: { lane?: string } = {}): void {
     this.handlers.set(kind, handler);
     if (opts.lane) this.lanes.set(kind, opts.lane);
+    if (this.resumed) this.pump(kind);
   }
 
   private laneOf(kind: string): string {
@@ -162,6 +170,7 @@ export class JobRunner {
       }
     }
     this.retain();
+    this.resumed = true;
     this.db.update(jobs).set({ status: "queued", started_at: null, progress: 0 }).where(eq(jobs.status, "running")).run();
     const kinds = new Set(this.db.select({ kind: jobs.kind }).from(jobs).where(eq(jobs.status, "queued")).all().map((r) => r.kind));
     for (const k of kinds) this.pump(k);
