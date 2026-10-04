@@ -44,12 +44,9 @@ test-pipeline:
 e2e-pipeline-live:
     {{uv}} pytest pipeline/tests -m live
 
-# everything that runs offline: vitest, OPA, pytest
-test-all:
-    pnpm test
-    .tools/opa test policy
-    {{uv}} pytest pipeline/tests
-
-# the one offline gate: typecheck, vitest, script tests, pytest, OPA, dbt parse - runs ALL steps, prints PASS/FAIL, `just check --only opa,dbt-parse`
+# the one offline gate: typecheck, vitest, script tests, board harness, pytest, OPA, dbt parse, Biome ratchet - runs ALL steps, prints PASS/FAIL, `just check --only opa,dbt-parse`
 check *args:
     node scripts/check.mjs {{args}}
+
+# `test-all` used to run 3 of those steps and stop at the first red one; it is `check` now
+alias test-all := check
