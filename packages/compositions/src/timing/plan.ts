@@ -187,6 +187,13 @@ export function computeTimingPlan(input: TimingPlanInput): TimingPlan {
   const orders = hysteresis
     ? stickyOrders(P, entities, ordAt, hysteresis)
     : periods.map((_, i) => rankOrder(Object.fromEntries(entities.map((e) => [e, ordAt(e, i)])), entities));
+  // The race ends on the truth. The moving average and the hysteresis can hold an entity on top while
+  // another has the larger final value (a title decided in the last period by less than the margin),
+  // and the ending crowns orders[last][0] ("NO. 1 AT THE END"). So the last period's #1 is the
+  // largest raw final value; a tie keeps the order the viewer already sees, and the rest is untouched.
+  const lastOrder = orders[P - 1] as string[];
+  const champion = rankOrder(Object.fromEntries(entities.map((e) => [e, value(e, P - 1)])), lastOrder)[0];
+  if (champion !== undefined && champion !== lastOrder[0]) orders[P - 1] = [champion, ...lastOrder.filter((e) => e !== champion)];
   const orderAt = (i: number) => (orders[i] as string[]).slice(0, topN);
 
   const raw: number[] = [0];

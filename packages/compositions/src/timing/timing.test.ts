@@ -82,6 +82,23 @@ describe("ordering: moving average and hysteresis", () => {
     expect(real[0]?.[0]).toBe("a");
     expect(real[5]?.[0]).toBe("b");
   });
+
+  it("the race ends on the truth: the last period's #1 has the largest final value, whatever the smoothing held", () => {
+    // a title decided in the final period by less than the 6 % hysteresis margin: the ending crowns
+    // orders.at(-1)[0] ("NO. 1 AT THE END"), so a sticky order would crown the runner-up
+    const values = { a: [100, 140, 180, 220, 230], b: [90, 130, 170, 215, 236], c: [80, 120, 160, 200, 210] };
+    const periods = ["r1", "r2", "r3", "r4", "r5"];
+    const champion = "b";
+    for (const opts of [{}, { rankSmooth: 1 }, { hysteresis: { rel: 0.2, abs: 0 } }, { hysteresis: null }]) {
+      const p = computeTimingPlan({ periods, entities: Object.keys(values), values, opts });
+      expect(p.orders.at(-1)?.[0], JSON.stringify(opts)).toBe(champion);
+      // only the crown moves; the rest of the final order keeps its relative order
+      expect(p.orders.at(-1)?.filter((e) => e !== champion), JSON.stringify(opts)).toEqual(p.orders.at(-2)?.filter((e) => e !== champion));
+    }
+    // a tie at the end keeps the order the viewer already sees (no gratuitous swap)
+    const tie = computeTimingPlan({ periods, entities: ["a", "b"], values: { a: [5, 6, 7, 8, 9], b: [1, 2, 3, 4, 9] } });
+    expect(tie.orders.at(-1)?.[0]).toBe("a");
+  });
 });
 
 describe("TIMING.md", () => {
