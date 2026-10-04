@@ -1,4 +1,4 @@
-/** The programme the fronts play: shared by both themes, so neither front chunk pulls in the other. */
+/** The programme the Front plays (routes/FrontPhotoFinish.tsx FirstShort; Photo Finish is the only theme, ADR 009). */
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { api, type ProjectDetail, type ProjectWithJobs, qk } from "../api";
