@@ -113,9 +113,16 @@ export function compositionState(
   return load === "ready" ? "built" : load === "missing" ? "unavailable" : "loading";
 }
 
-/** Why Produce is disabled by the composition, or null when it is not. */
-export const produceBlockReason = (state: CompositionState): string | null =>
-  state === "not-built" ? "No player for this use case yet; Produce needs a built composition." : null;
+/**
+ * Why Produce is disabled, or null when nothing blocks it: an unbuilt composition, or a co-pilot draft in
+ * flight (a draft may store new props under the chain). A disabled Produce always carries its reason.
+ */
+export const produceBlockReason = (state: CompositionState, drafting = false): string | null =>
+  state === "not-built"
+    ? "No player for this use case yet; Produce needs a built composition."
+    : drafting
+      ? "The co-pilot is drafting; Produce once the draft ends."
+      : null;
 
 /** The control room and the gate page both offer "Schedule in Calendar": gate allows, nothing running, not on the calendar yet. */
 export const scheduleOffered = (
@@ -178,3 +185,21 @@ export function reusedRenderOf(
 
 /** The sentence shown for a reused render. */
 export const REUSED_RENDER_TEXT = "Reused the existing render (inputs unchanged)";
+
+/** The props JSON editor's draft: the text being edited, the stored text it was opened on, and that version. */
+export type PropsDraft = { text: string; base: string; version: number };
+
+/**
+ * Rebase the JSON draft onto the latest stored props (the co-pilot can store a version while the owner
+ * types). An untouched draft follows the new props; an edited one is never replaced, and `stale` names the
+ * version that landed underneath so the editor can say a save would supersede it.
+ */
+export function rebasePropsDraft(
+  draft: PropsDraft,
+  latest: { text: string; version: number },
+): { draft: PropsDraft; stale: number | null } {
+  if (latest.version === draft.version) return { draft, stale: null };
+  if (draft.text === draft.base)
+    return { draft: { text: latest.text, base: latest.text, version: latest.version }, stale: null };
+  return { draft, stale: latest.version };
+}

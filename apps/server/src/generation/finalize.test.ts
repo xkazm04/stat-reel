@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -19,6 +20,10 @@ let fin: GenerationFinalizer;
 let queue: GenerationQueue;
 const fixtures = path.join(appPaths.fixtures, "generation");
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from("fake still")]);
+const put = (file: string, content: string | Buffer) => {
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, content);
+};
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "statreel-fin-"));
@@ -95,6 +100,51 @@ describe("finalize visual_options", () => {
     writeFileSync(body.result.renders.stills["3"] as string, "not a png");
     await expect(fin.finalize(job, body)).rejects.toThrow(/not a PNG/);
     void p;
+  });
+});
+
+describe("finalize: logo library promotion", () => {
+  const sha = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
+  /** A Commons-verified fetch_asset row in the server-written ledger, plus the file the session sees in work/. */
+  function fetched(p: ReturnType<typeof jobPaths>, name: string, content: string, rowContent = content) {
+    put(path.join(p.work, "assets", "logos", name), content);
+    put(path.join(p.dir, "fetched-assets.json"), JSON.stringify([{ entity: "Ferrari", kind: "logo", file: `assets/logos/${name}`, sha256: sha(rowContent), verified_by: "commons-api" }]));
+  }
+  const library = () => JSON.parse(readFileSync(path.join(dir, "assets", "logos", "LEDGER.json"), "utf8")) as { sha256: string; library_file: string }[];
+  // library_file is repo-relative (data/assets/logos/...); the test data root stands for data/
+  const fileSha = (rel: string) => sha(readFileSync(path.join(dir, rel.replace(/^data\//, ""))));
+
+  it("two different files with one name both keep their own bytes: every library row's file matches its sha256", async () => {
+    const a = runningJob();
+    fetched(a.p, "ferrari.png", "first ferrari mark");
+    await fin.finalize(a.job, a.body);
+    queue.finish(a.job.id, "done");
+    queue.enqueue({ type: "visual_options", case_id: CASE_A, force: true });
+    const b = queue.claim();
+    if (!b) throw new Error("no second job");
+    const pb = jobPaths(b.id, dir);
+    cpSync(path.join(fixtures, "visual_options"), pb.work, { recursive: true });
+    writeFileSync(pb.caseJson, JSON.stringify({ data_status: "new-source" }));
+    const stills: Record<string, string> = {};
+    for (const n of [1, 2, 3]) {
+      const f = path.join(pb.dir, "render", `v${n}-stills`, "still-00554.png");
+      put(f, PNG);
+      stills[String(n)] = f;
+    }
+    fetched(pb, "ferrari.png", "second, different ferrari mark");
+    await fin.finalize(b, { outputs: [], result: { renders: { stills } } });
+    const rows = library();
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.library_file)).size).toBe(2);
+    for (const r of rows) expect(fileSha(r.library_file)).toBe(r.sha256);
+  });
+
+  it("a file changed in work/ after fetch_asset is not promoted under the verified row", async () => {
+    const { job, p, body } = runningJob();
+    fetched(p, "ferrari.png", "rewritten by the session", "what fetch_asset downloaded");
+    await fin.finalize(job, body);
+    expect(existsSync(path.join(dir, "assets", "logos", "ferrari.png"))).toBe(false);
+    expect(existsSync(path.join(dir, "assets", "logos", "LEDGER.json"))).toBe(false);
   });
 });
 

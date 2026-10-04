@@ -115,9 +115,11 @@ export function stageRefs(o: StageRefsOptions): RefsManifest {
   const ledger = path.join(o.dataRoot, "assets", "logos", "LEDGER.json");
   if (existsSync(ledger)) {
     add(ledger, path.join("logos", "LEDGER.json"), "logo-ledger", "data:assets/logos/LEDGER.json");
-    const rows = JSON.parse(readFileSync(ledger, "utf8")) as { file?: string }[];
+    const rows = JSON.parse(readFileSync(ledger, "utf8")) as { file?: string; library_file?: string }[];
     for (const r of Array.isArray(rows) ? rows : []) {
-      const f = r.file ? path.resolve(o.dataRoot, "assets", "logos", path.basename(r.file)) : "";
+      // `library_file` is where finalize put this row's bytes (a name collision gets a hash suffix); `file` is the job-relative name
+      const name = r.library_file ?? r.file;
+      const f = name ? path.resolve(o.dataRoot, "assets", "logos", path.basename(name)) : "";
       if (f && existsSync(f)) add(f, path.join("logos", path.basename(f)), "logo", "data:assets/logos");
     }
   }

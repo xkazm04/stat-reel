@@ -9,11 +9,12 @@ import type { EraAdjustedProps, HeatmapCell, Mode, UseCase } from "@statreel/sch
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { api, errorText, type ProjectDetail, qk } from "../api";
+import { api, errorText, type ProjectDetail, qk, serverError } from "../api";
 import { LicChip, StatusChip } from "../components/glyphs";
 import { Empty } from "../components/ui";
 import { cellOf, factGroup } from "../logic";
 import { fmtValue, kindLong } from "../display";
+import { type PropsDraft, rebasePropsDraft } from "../studio-logic";
 
 function Dataset({ usecase, cell }: { usecase: UseCase | undefined; cell: HeatmapCell | undefined }) {
   if (!usecase) return <p className="sum-p">Use case not in the registry.</p>;
@@ -171,8 +172,19 @@ function Readable({
 
 function JsonEdit({ detail, onDone }: { detail: ProjectDetail; onDone: () => void }) {
   const qc = useQueryClient();
-  const initial = detail.props ? JSON.stringify(detail.props.props, null, 2) : "";
-  const [text, setText] = useState(initial);
+  const latest = {
+    text: detail.props ? JSON.stringify(detail.props.props, null, 2) : "",
+    version: detail.props?.version ?? 0,
+  };
+  const [held, setHeld] = useState<PropsDraft>(() => ({
+    text: latest.text,
+    base: latest.text,
+    version: latest.version,
+  }));
+  // new props (a co-pilot draft) never replace text the owner is editing; an untouched draft follows them
+  const { draft, stale } = rebasePropsDraft(held, latest);
+  const text = draft.text;
+  const setText = (t: string) => setHeld({ ...draft, text: t });
   const [errors, setErrors] = useState<string[] | null>(null);
   const save = useMutation({
     mutationFn: (body: unknown) => api.setProps(detail.project.id, body),
@@ -216,12 +228,27 @@ function JsonEdit({ detail, onDone }: { detail: ProjectDetail; onDone: () => voi
         >
           {save.isPending ? "Validating" : "Save props"}
         </button>
-        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setText(initial)}>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => setHeld({ text: latest.text, base: latest.text, version: latest.version })}
+        >
           Reset
         </button>
         <span className="label">Every figure is checked against the fact it cites</span>
       </div>
-      {save.isError ? <p className="joberr">{errorText(save.error)}</p> : null}
+      {stale !== null ? (
+        <p className="joberr joberr--refused" role="status" data-testid="props-json-stale">
+          Props v{stale} were stored while you edited v{draft.version}
+          {detail.props ? ` (by ${detail.props.created_by})` : ""}. Save stores your text as a newer version over it;
+          Reset loads v{stale}.
+        </p>
+      ) : null}
+      {save.isError ? (
+        <p className="joberr" title={errorText(save.error)}>
+          Could not save: {serverError(save.error)}
+        </p>
+      ) : null}
       {errors ? (
         <ul className="json__errs" role="alert">
           {errors.map((e) => (
@@ -281,7 +308,7 @@ export function PropsPanel({
       </div>
       <div className="col-body">
         {mode === "json" ? (
-          <JsonEdit key={detail.props?.version ?? 0} detail={detail} onDone={() => setMode("read")} />
+          <JsonEdit detail={detail} onDone={() => setMode("read")} />
         ) : props ? (
           <Readable props={props} detail={detail} onOpenScript={onOpenScript} />
         ) : (

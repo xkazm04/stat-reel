@@ -28,12 +28,8 @@ export function httpCallbacks(base: string, fetchFn: typeof fetch = fetch): Serv
     cancelRender: async (id) => {
       await call("POST", `/api/jobs/${id}/cancel`);
     },
-    renderStatus: async (id) => {
-      const r = await call<{ jobs: { id: string; status: string; error?: string | null; result_json?: string | null }[] }>("GET", "/api/jobs");
-      const j = r.jobs.find((x) => x.id === id);
-      if (!j) throw new Error(`render job ${id} not found`);
-      return { status: j.status, error: j.error, result: j.result_json ? JSON.parse(j.result_json) : undefined };
-    },
+    // by id: the /api/jobs list is the newest 50 jobs, so a render with 50 newer jobs behind it was "not found"
+    renderStatus: (id) => call("GET", `/api/generation/renders/${encodeURIComponent(id)}`),
   };
 }
 

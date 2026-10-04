@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { compare, countByRule, formatReport, sortKeys } from "./biome-ratchet-core.mjs";
+import { compare, countByRule, formatReport, instrumentProblem, sortKeys } from "./biome-ratchet-core.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const baselinePath = path.join(repo, "scripts", "biome-baseline.json");
@@ -30,6 +30,11 @@ try {
   report = JSON.parse(r.stdout.slice(start));
 } catch {
   console.error(`biome ratchet: could not read biome's JSON report (exit ${r.status})\n${(r.stderr ?? "").slice(0, 2000)}${(r.stdout ?? "").slice(0, 500)}`);
+  process.exit(2);
+}
+const blind = instrumentProblem(report);
+if (blind) {
+  console.error(blind);
   process.exit(2);
 }
 const current = countByRule(report);

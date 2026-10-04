@@ -5,8 +5,11 @@ import { createWriteStream, existsSync, mkdirSync, renameSync, rmSync } from "no
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1")), "..");
+// fileURLToPath, not URL.pathname: the pathname keeps %20 / %C3%AB, so a checkout under "John Doe" got its
+// OPA in a literal "John%20Doe" tree that check.mjs (which resolves the real root) never looks in.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tools = path.join(root, ".tools");
 mkdirSync(tools, { recursive: true });
 

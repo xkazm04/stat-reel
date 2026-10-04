@@ -114,11 +114,14 @@ export function ProduceAnnouncer({ detail }: { detail: ProjectDetail | undefined
   );
 }
 
-/** Latest failed/refused job of some kinds, error verbatim. */
+/**
+ * Latest failed/refused/cancelled job of some kinds, error verbatim. Not a live region: both screens mount
+ * ProduceAnnouncer, which voices the end once, politely ("Produce failed: ..."); an alert here voiced it twice.
+ */
 export function JobError({ job }: { job: Job | null }) {
   if (!job || (job.status !== "failed" && job.status !== "refused" && job.status !== "cancelled")) return null;
   return (
-    <p className={`joberr joberr--${job.status}`} role="alert">
+    <p className={`joberr joberr--${job.status}`}>
       <StatusChip
         status={job.status === "refused" ? "ask" : "blocked"}
         size={13}
@@ -180,8 +183,8 @@ export function useProduce(detail: ProjectDetail | undefined, usecaseComposition
   });
   const running = produceJob(detail);
   const llm = detail?.jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running"));
-  const blockReason = produceBlockReason(compositionState(usecaseComposition, "ready"));
-  const canProduce = !!detail?.props?.props && !!detail.script && !running && !llm && !blockReason;
+  const blockReason = produceBlockReason(compositionState(usecaseComposition, "ready"), !!llm);
+  const canProduce = !!detail?.props?.props && !!detail.script && !running && !blockReason;
   return { mutation, running, blockReason, canProduce };
 }
 

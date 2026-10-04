@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { activeStageText, produceOutcome, produceStages } from "./produce-stages";
 
@@ -114,5 +116,26 @@ describe("produceOutcome", () => {
       job("new", "render", "succeeded", "2026-10-04T10:00"),
     ];
     expect(produceOutcome(jobs, [row("new", true)])).toBe("Produce finished: ALLOW");
+  });
+});
+
+describe("the stepper follows the marks the server actually writes (apps/server/src/pipeline.ts)", () => {
+  // read from the producer, not copied: a moved mark in pipeline.ts turns this red
+  const source = readFileSync(resolve(__dirname, "../../../server/src/pipeline.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+  const marks = new Map<string, number>();
+  for (const m of source.matchAll(/ctx\.progress\(([\d.]+), "([a-z ]+)"\)/g)) marks.set(m[2] as string, Number(m[1]));
+  const reused = source.match(/ctx\.progress\(([\d.]+), `reused render \$\{/);
+
+  it("finds the render job's marks", () => {
+    for (const k of ["mastering", "checks", "gate"]) expect(marks.has(k), k).toBe(true);
+    expect(reused, "reused render mark").not.toBeNull();
+  });
+  it("puts each stored mark (no SSE note) on the stage the server is in", () => {
+    expect(states(run("render", marks.get("mastering") as number))).toBe(RENDER);
+    expect(states(run("render", marks.get("checks") as number))).toBe(CHECKS);
+    expect(states(run("render", marks.get("gate") as number))).toBe(GATE);
+    expect(states(run("render", Number(reused?.[1])))).toBe(GATE);
   });
 });

@@ -137,9 +137,17 @@ export function createLiveEngine(o: LiveEngineOptions): GenerationEngine {
         let resultSubtype = "";
         let graceTimer: NodeJS.Timeout | null = null;
         let stderrTail = "";
+        let jsonlBroken = false;
         const onLine = (line: string) => {
           if (!line.trim()) return;
-          appendFileSync(p.runJsonl, `${line}\n`);
+          // best effort like run.log and stderr.log: a throw here escapes the stream handler and kills the worker
+          // (the CLI child keeps running and spending); say it once in run.log instead
+          try {
+            appendFileSync(p.runJsonl, `${line}\n`);
+          } catch (e) {
+            if (!jsonlBroken) ctx.log(`run.jsonl not written (${e instanceof Error ? e.message : String(e)}); the stream continues`);
+            jsonlBroken = true;
+          }
           try {
             const raw = JSON.parse(line) as { type?: string; subtype?: string };
             if (raw.type === "result") resultSubtype = String(raw.subtype ?? "");
@@ -159,15 +167,17 @@ export function createLiveEngine(o: LiveEngineOptions): GenerationEngine {
             }
           }
         };
-        child.stdout.on("data", (d: Buffer) => {
-          buf += d.toString("utf8");
+        // setEncoding decodes across chunk boundaries (a per-chunk toString splits a multibyte character into U+FFFD)
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (d: string) => {
+          buf += d;
           for (let nl = buf.indexOf("\n"); nl >= 0; nl = buf.indexOf("\n")) {
             onLine(buf.slice(0, nl));
             buf = buf.slice(nl + 1);
           }
         });
-        child.stderr.on("data", (d: Buffer) => {
-          const s = d.toString("utf8");
+        child.stderr.on("data", (s: string) => {
           stderrTail = (stderrTail + s).slice(-2000);
           try { appendFileSync(p.stderrLog, s); } catch { /* best effort */ }
         });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LlmEvent } from "../api";
-import { activeLlmJob, isNearBottom, mergeEvents, toRows } from "./copilot-log";
+import { activeLlmJob, draftBlockReason, isNearBottom, mergeEvents, sessionJob, toRows } from "./copilot-log";
 
 const t = (text: string): LlmEvent => ({ type: "text", text });
 const call = (id: string): LlmEvent => ({ type: "tool_call", id, tool: "mcp__statreel__get_props", input: {} });
@@ -57,5 +57,48 @@ describe("helpers", () => {
       ]),
     ).toBeNull();
     expect(activeLlmJob([{ kind: "llm", status: "queued" }])?.kind).toBe("llm");
+  });
+});
+
+describe("draftBlockReason (the converse of useProduce's co-pilot guard)", () => {
+  it("blocks a draft or follow-up while a produce job is queued or running", () => {
+    for (const kind of ["audio", "render"])
+      for (const status of ["queued", "running"])
+        expect(draftBlockReason([{ kind, status }])).toMatch(/produce is running/i);
+  });
+  it("lets a draft start when no produce job is live", () => {
+    expect(draftBlockReason([])).toBeNull();
+    expect(
+      draftBlockReason([
+        { kind: "render", status: "succeeded" },
+        { kind: "audio", status: "failed" },
+        { kind: "llm", status: "running" },
+        { kind: "publish", status: "running" },
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe("sessionJob (the status chip speaks for the session on screen)", () => {
+  const llm = (status: string, sessionId: string) => ({
+    kind: "llm",
+    status,
+    params_json: JSON.stringify({ sessionId }),
+  });
+  // newest first, as ProjectDetail.jobs is ordered
+  const jobs = [
+    { kind: "render", status: "succeeded", params_json: "{}" },
+    llm("succeeded", "B"),
+    llm("failed", "A"),
+    llm("refused", "A"),
+  ];
+  it("takes the newest llm job of the chosen session, not the project's newest", () => {
+    expect(sessionJob(jobs, "A")?.status).toBe("failed");
+    expect(sessionJob(jobs, "B")?.status).toBe("succeeded");
+  });
+  it("is null for no session, an unknown session or an unreadable params row", () => {
+    expect(sessionJob(jobs, null)).toBeNull();
+    expect(sessionJob(jobs, "Z")).toBeNull();
+    expect(sessionJob([{ kind: "llm", status: "failed", params_json: "{not json" }], "A")).toBeNull();
   });
 });

@@ -85,3 +85,38 @@ export const isNearBottom = (scrollHeight: number, scrollTop: number, clientHeig
 export function activeLlmJob<J extends { kind: string; status: string }>(jobs: readonly J[]): J | null {
   return jobs.find((j) => j.kind === "llm" && (j.status === "queued" || j.status === "running")) ?? null;
 }
+
+/**
+ * Why the co-pilot may not start or continue a draft now, or null. A produce chain reads the latest props
+ * at each step: props a draft stores between the audio and the render carry no timing, so the render
+ * fails. useProduce already blocks a produce while a draft runs; this is the converse half of that rule.
+ */
+export function draftBlockReason(jobs: readonly { kind: string; status: string }[]): string | null {
+  const producing = jobs.some(
+    (j) => (j.kind === "audio" || j.kind === "render") && (j.status === "queued" || j.status === "running"),
+  );
+  return producing
+    ? "A produce is running; draft once it ends (new props would leave the render without timing)."
+    : null;
+}
+
+/**
+ * The newest llm job of one co-pilot session (its params name the session), else null. The panel's status
+ * chip reads this, so viewing an older session shows how THAT session ended, not the project's newest draft.
+ */
+export function sessionJob<J extends { kind: string; params_json: string }>(
+  jobs: readonly J[],
+  sessionId: string | null,
+): J | null {
+  if (!sessionId) return null;
+  return (
+    jobs.find((j) => {
+      if (j.kind !== "llm") return false;
+      try {
+        return (JSON.parse(j.params_json) as { sessionId?: unknown } | null)?.sessionId === sessionId;
+      } catch {
+        return false;
+      }
+    }) ?? null
+  );
+}

@@ -1,7 +1,7 @@
 // node --test scripts/  (vitest.config.ts only globs apps/ and packages/, so script tests use node:test)
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exitCode, formatTable, parseOnly, runSteps } from "./check-core.mjs";
+import { exitCode, formatTable, parseOnly, requirePopulation, runSteps } from "./check-core.mjs";
 
 const steps = ["a", "b", "c"].map((name) => ({ name }));
 
@@ -50,4 +50,25 @@ test("check.mjs declares the board harness as a named, selectable step with uniq
   assert.equal(new Set(names).size, names.length);
   assert.ok(names.includes("board"), "board harness tests must be a step of just check");
   assert.deepEqual(parseOnly(["--only", "board"], names), ["board"]);
+});
+
+test("a step whose runner passes on zero inputs fails when its population is empty", () => {
+  assert.equal(requirePopulation("x/*.test.mjs", ["x/a.test.mjs"]), null);
+  const r = requirePopulation("x/*.test.mjs", []);
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /no files match x\/\*\.test\.mjs/);
+});
+
+test("check.mjs node --test steps FAIL (not a vacuous PASS) when their test files are gone", async () => {
+  const { nodeTestStep } = await import("./check.mjs");
+  const r = nodeTestStep("scripts/no-such-dir", /\.test\.mjs$/);
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /no files match scripts\/no-such-dir/);
+});
+
+test("dbt-parse turns dbt warnings (deprecations, unused config paths) into a failing exit", async () => {
+  const { dbtParseArgs } = await import("./check.mjs");
+  const args = dbtParseArgs("T");
+  assert.ok(args.includes("--warn-error"), "a deprecation dbt only warns about must fail the step");
+  assert.deepEqual(args.slice(args.indexOf("--target-path"), args.indexOf("--target-path") + 2), ["--target-path", "T"]);
 });

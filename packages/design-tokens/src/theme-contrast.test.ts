@@ -87,6 +87,29 @@ describe("studio theme contrast (Photo Finish)", () => {
     });
   }
 
+  // On-colour pairs, derived from the naming rule instead of a hand list: every `--X-ink[-N]` token is
+  // text on the fills `--X`, `--X-N` and `--X-hover` (brand-ink on the brand fill, primary-ink on the
+  // primary button and its hover, screen-ink(-2) on the player frame grounds, status-go-ink on go).
+  const inkPairs = [...tokens.keys()].flatMap((ink) => {
+    const prefix = ink.match(/^(--.+)-ink(-\d+)?$/)?.[1];
+    if (!prefix) return [];
+    const fills = [...tokens.keys()].filter((g) => g !== ink && new RegExp(`^${prefix}(-\\d+|-hover)?$`).test(g));
+    return [{ ink, fills }];
+  });
+
+  it("finds the on-colour pairs (brand, primary, screen, status-go)", () => {
+    expect(inkPairs.map((p) => p.ink).sort()).toEqual(
+      expect.arrayContaining(["--color-brand-ink", "--color-primary-ink", "--color-screen-ink", "--color-screen-ink-2", "--status-go-ink"]),
+    );
+  });
+
+  for (const { ink, fills } of inkPairs) {
+    it(`${ink} is >= 4.5:1 on every fill it names (${fills.join(", ") || "none"})`, () => {
+      expect(fills.length, `${ink} has no --X / --X-N / --X-hover fill to sit on`).toBeGreaterThan(0);
+      for (const g of fills) expect(contrast(hex(ink), hex(g)), `${ink} on ${g}`).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
   it("the signal stroke is >= 3:1 on the sheet", () => {
     expect(contrast(hex("--color-signal"), hex("--color-bg"))).toBeGreaterThanOrEqual(3);
   });

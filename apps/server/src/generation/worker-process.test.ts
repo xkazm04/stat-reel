@@ -34,7 +34,7 @@ beforeEach(async () => {
     res.end(
       u.endsWith("/finalize") ? '{"recorded":1,"stub":true}'
         : u.endsWith("/render") ? '{"render_job_id":"r1"}'
-        : u === "/api/jobs" ? JSON.stringify({ jobs: [{ id: "r1", status: "succeeded", result_json: JSON.stringify({ stills: ["x.png"], output: "x.mp4" }) }] })
+        : u === "/api/generation/renders/r1" ? JSON.stringify({ status: "succeeded", result: { stills: ["x.png"], output: "x.mp4" } })
         : '{"ok":true}',
     );
   });
