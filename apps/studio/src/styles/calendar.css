@@ -666,3 +666,10 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* inside a card the header already divides: the first group label needs no rule of its own */
+.cal-slots .card__body > .slot-group:first-child {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
