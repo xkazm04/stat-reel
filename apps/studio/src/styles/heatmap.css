@@ -320,8 +320,8 @@ html.hm-layer-open {
   padding: 0 0 0 14px;
   border-left: 1px solid var(--color-line-strong);
   border-bottom: 1px solid var(--color-line-faint);
-  --lb-ground: var(--color-bg);
-  --glyph-ground: var(--color-bg);
+  --lb-ground: var(--card-bg);
+  --glyph-ground: var(--card-bg);
   transition: background-color var(--motion-fast) var(--ease-out);
 }
 .pf-hc:hover {
@@ -854,6 +854,15 @@ html.hm-layer-open {
   --lb-ground: var(--color-bg);
   --glyph-ground: var(--color-bg);
 }
+/* the layer's content sits on cards: hollow glyphs and lane-bar rings take the card's ground, not the sheet's */
+.hl--photofinish .card {
+  --lb-ground: var(--card-bg);
+  --glyph-ground: var(--card-bg);
+}
+.hl--photofinish .card[data-tone="well"] {
+  --lb-ground: var(--card-well-bg);
+  --glyph-ground: var(--card-well-bg);
+}
 .hl--photofinish .hl-bar {
   background: color-mix(in srgb, var(--color-bg) 94%, transparent);
 }
@@ -996,7 +1005,7 @@ html.hm-layer-open {
     position: sticky;
     left: 0;
     z-index: 5;
-    background: var(--color-bg);
+    background: var(--card-bg);
   }
   .pf-rowhead__meta {
     display: none;
