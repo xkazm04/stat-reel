@@ -46,6 +46,8 @@ export function StylesView({ names }: { names: ReadonlyMap<string, string> }) {
   const [open, setOpen] = useState<string | null>(null);
 
   if (styles.isError) return <Failure error={styles.error} what="The style library" />;
+  // every hero and design list comes from the board: a failed read would show styles with no designs at all
+  if (board.isError) return <Failure error={board.error} what="The board" onRetry={() => void board.refetch()} />;
   if (styles.isLoading || board.isLoading) return <Loading what="the style library" />;
   const listed = styles.data?.styles ?? [];
   if (!listed.length)

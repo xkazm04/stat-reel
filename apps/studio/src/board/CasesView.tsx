@@ -115,6 +115,9 @@ export function CasesView() {
   const kinds = useMemo(() => [...new Set(ideas.map((i) => i.kind))].sort(), [ideas]);
 
   if (cases.isError) return <Failure error={cases.error} what="The use cases" />;
+  // the lists below are built from all three: a failed one would silently drop its rows, not empty them honestly
+  if (hm.isError) return <Failure error={hm.error} what="The use case registry" onRetry={() => void hm.refetch()} />;
+  if (board.isError) return <Failure error={board.error} what="The board" onRetry={() => void board.refetch()} />;
   if (cases.isLoading || board.isLoading || hm.isLoading) return <Loading what="the use cases" />;
 
   const accepted = rows.filter((r) => r.verdict === "accepted");
@@ -490,6 +493,11 @@ function TopicPicker({ idea, asked }: { idea: CaseIdea; asked: boolean }) {
             : "Decides the heatmap row of this case's videos."}
       </span>
       {set.isError ? <span className="bd-style__err">{serverError(set.error)}</span> : null}
+      {topics.isError ? (
+        <span className="bd-style__err" role="alert">
+          The topic list did not load: {serverError(topics.error)}
+        </span>
+      ) : null}
     </div>
   );
 }

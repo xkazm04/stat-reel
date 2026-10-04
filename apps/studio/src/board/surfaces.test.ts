@@ -31,6 +31,20 @@ describe("board mutations", () => {
   });
 });
 
+describe("board reads", () => {
+  it("a view that builds its lists from a query says when that query failed (a failure is not an empty list)", () => {
+    const reads = /const (\w+) = (useBoard|useHeatmap|useCases|useStyles|useTopics)\(\)/g;
+    const silent: string[] = [];
+    // the tab views and the page; shared.tsx (case names -> ids) and JobBadge (a count) only look things up and degrade
+    const views = sources(".tsx").filter(([f]) => f.endsWith("View.tsx") || f === "BoardPage.tsx");
+    expect(views.length).toBeGreaterThanOrEqual(4);
+    for (const [file, src] of views) {
+      for (const m of src.matchAll(reads)) if (!src.includes(`${m[1]}.isError`)) silent.push(`${file}: ${m[1]} = ${m[2]}()`);
+    }
+    expect(silent).toEqual([]);
+  });
+});
+
 describe("decision keys", () => {
   it("every single-letter decision handler goes through plainPress (no auto-repeat, no modifier)", () => {
     const handlers = sources(".tsx").filter(([, src]) => /\b(decisionForKey|caseDecisionForKey)\(/.test(src));
