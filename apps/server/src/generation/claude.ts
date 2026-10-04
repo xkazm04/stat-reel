@@ -137,9 +137,17 @@ export function createLiveEngine(o: LiveEngineOptions): GenerationEngine {
         let resultSubtype = "";
         let graceTimer: NodeJS.Timeout | null = null;
         let stderrTail = "";
+        let jsonlBroken = false;
         const onLine = (line: string) => {
           if (!line.trim()) return;
-          appendFileSync(p.runJsonl, `${line}\n`);
+          // best effort like run.log and stderr.log: a throw here escapes the stream handler and kills the worker
+          // (the CLI child keeps running and spending); say it once in run.log instead
+          try {
+            appendFileSync(p.runJsonl, `${line}\n`);
+          } catch (e) {
+            if (!jsonlBroken) ctx.log(`run.jsonl not written (${e instanceof Error ? e.message : String(e)}); the stream continues`);
+            jsonlBroken = true;
+          }
           try {
             const raw = JSON.parse(line) as { type?: string; subtype?: string };
             if (raw.type === "result") resultSubtype = String(raw.subtype ?? "");

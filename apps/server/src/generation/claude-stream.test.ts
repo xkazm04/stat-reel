@@ -67,4 +67,22 @@ describe("live runner stream", () => {
     expect(readFileSync(p.runJsonl, "utf8")).not.toContain("�");
     expect(readFileSync(p.stderrLog, "utf8")).toBe("ä\n");
   });
+
+  it("a run.jsonl that cannot be written (locked, disk full) does not crash the worker; the run still settles and says so", async () => {
+    const uncaught: unknown[] = [];
+    const catcher = (e: unknown) => uncaught.push(e);
+    process.on("uncaughtException", catcher);
+    try {
+      const { p, lines, run, child } = start();
+      mkdirSync(p.runJsonl, { recursive: true }); // appendFileSync on a directory throws, like a locked file
+      child.stdout.write(resultLine("done"));
+      await tick();
+      child.emit("close", 0);
+      await expect(run).resolves.toMatchObject({ result: { cost_usd: 0.5, turns: 3 } });
+      expect(uncaught.map(String)).toEqual([]);
+      expect(lines.some((l) => /run\.jsonl/.test(l))).toBe(true);
+    } finally {
+      process.off("uncaughtException", catcher);
+    }
+  });
 });
