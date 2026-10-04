@@ -36,6 +36,7 @@ export const projectState = (status: string): ProjectState =>
 
 /** Job kind -> the owner's word for it: logic.ts owns the one table (logic.ts also has the present-tense verbs). */
 export { JOB_LABEL };
+
 const JOB_OUTCOME: Record<string, string> = { failed: "failed", refused: "refused" };
 
 /** Flag copy of a failed / refused job ("Render failed: ffmpeg died"); null for any other job state. */
