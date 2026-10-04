@@ -12,7 +12,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { asc, desc, eq } from "drizzle-orm";
-import type { BoardItem } from "./board";
+import { ArchivedError, type BoardItem, NotArchivedError, statusBeforeArchive } from "./board";
 import { boardStyles, caseIdeas, type Db, now } from "./db";
 import { TopicService } from "./topics";
 
@@ -264,7 +264,7 @@ export class CaseIdeas {
     if (!CASE_DECISIONS.includes(decision)) throw new Error(`decision must be one of ${CASE_DECISIONS.join(", ")}`);
     const cur = this.get(id);
     if (!cur) throw new Error(`unknown case idea ${id}`);
-    if (cur.status === "archived") throw new Error(`case idea ${id} is archived; it cannot be decided`);
+    if (cur.status === "archived") throw new ArchivedError("case idea", id, "restore it before deciding");
     this.db.update(caseIdeas).set({ status: decision === "accept" ? "accepted" : "rejected", decision, note: note?.trim() || null, decided_at: now() })
       .where(eq(caseIdeas.id, id)).run();
     return this.get(id)!;
@@ -274,7 +274,7 @@ export class CaseIdeas {
   undo(id: string): CaseIdea {
     const cur = this.get(id);
     if (!cur) throw new Error(`unknown case idea ${id}`);
-    if (cur.status === "archived") throw new Error(`case idea ${id} is archived`);
+    if (cur.status === "archived") throw new ArchivedError("case idea", id, "restore it before undoing");
     this.db.update(caseIdeas).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(caseIdeas.id, id)).run();
     return this.get(id)!;
   }
@@ -287,11 +287,25 @@ export class CaseIdeas {
     let n = 0;
     for (const id of ids) {
       const cur = this.get(id);
-      if (!cur) continue;
+      if (!cur || cur.status === "archived") continue; // the first reason stands
       this.db.update(caseIdeas).set({ status: "archived", archive_reason: reason }).where(eq(caseIdeas.id, id)).run();
       n++;
     }
     return n;
+  }
+
+  /**
+   * Back to the state the idea left (decision kept, so accepted / rejected / pending, see statusBeforeArchive). Legacy rows
+   * archived before archive_reason existed stored the reason in `note` only when the idea had none, so an undecided legacy
+   * idea with a note has that note cleared; a decided one keeps its note.
+   */
+  restore(id: string): CaseIdea {
+    const cur = this.get(id);
+    if (!cur) throw new Error(`unknown case idea ${id}`);
+    if (cur.status !== "archived") throw new NotArchivedError("case idea", id);
+    const legacyReasonNote = cur.archive_reason === null && cur.decision === null;
+    this.db.update(caseIdeas).set({ status: statusBeforeArchive(cur.decision), archive_reason: null, ...(legacyReasonNote ? { note: null } : {}) }).where(eq(caseIdeas.id, id)).run();
+    return this.get(id)!;
   }
 
   /** Decided ideas since an ISO time (exclusive), oldest first: the case loop's feedback feed. */

@@ -165,6 +165,8 @@ export const boardItems = sqliteTable("board_items", {
   decided_at: text("decided_at"),
   created_at: text("created_at").notNull(),
   case_idea_id: text("case_idea_id"),
+  /** why the item was archived (triage, or `superseded by <id>`); null while live. Archive never touches `note`. Added by addColumn. */
+  archive_reason: text("archive_reason"),
 });
 export const boardStyles = sqliteTable("board_styles", {
   id: text("id").primaryKey(),
@@ -364,6 +366,7 @@ export function openDb(file: string): Db {
   addColumn("board_items", "video", "text");
   addColumn("board_items", "duration_s", "real");
   addColumn("board_items", "case_idea_id", "text");
+  addColumn("board_items", "archive_reason", "text");
   addColumn("case_ideas", "beats_json", "text not null default '[]'");
   for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
   addColumn("case_ideas", "archive_reason", "text");

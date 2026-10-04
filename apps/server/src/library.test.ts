@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BoardService } from "./board";
+import { ArchivedError, BoardService, NotArchivedError } from "./board";
 import { openDb } from "./db";
 import { CaseIdeas, type NewCaseIdea, StyleLibrary, validateCaseIdea } from "./library";
 
@@ -11,7 +11,7 @@ const setup = () => {
   mkdirSync(path.join(root, "items"), { recursive: true });
   writeFileSync(path.join(root, "items", "a.png"), "png");
   const db = openDb(":memory:");
-  return { board: new BoardService(db, root), styles: new StyleLibrary(db), cases: new CaseIdeas(db) };
+  return { board: new BoardService(db, root), styles: new StyleLibrary(db), cases: new CaseIdeas(db), db };
 };
 const shot = (style: string, kase = "career-wins-race") => ({
   image: "items/a.png", width: 1080, height: 1920, title: `${style} on ${kase}`, use_case_id: kase, style: { id: style, name: style.toUpperCase() },
@@ -231,6 +231,38 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(cases.get(a.id)?.archive_reason).toBeNull();
     cases.archive([a.id], "off brief");
     expect(cases.list({ status: "archived" }).find((x) => x.id === a.id)?.archive_reason).toBe("off brief");
+  });
+
+  it("restores an archived idea to the state it left, keeping its decision note", () => {
+    const { cases } = setup();
+    const a = cases.create(idea);
+    const b = cases.create({ ...idea, title: "b" });
+    const c = cases.create({ ...idea, title: "c" });
+    cases.decide(a.id, "accept", "good");
+    cases.decide(b.id, "reject_short", "five years");
+    cases.archive([a.id, b.id, c.id], "tidy");
+    expect(cases.restore(a.id)).toMatchObject({ status: "accepted", decision: "accept", note: "good", archive_reason: null });
+    expect(cases.restore(b.id)).toMatchObject({ status: "rejected", decision: "reject_short", note: "five years", archive_reason: null });
+    expect(cases.restore(c.id)).toMatchObject({ status: "pending", decision: null, archive_reason: null });
+    expect(() => cases.restore(c.id)).toThrow(NotArchivedError);
+    expect(() => cases.restore("ci-nope")).toThrow(/unknown/);
+  });
+
+  it("a legacy undecided archived idea loses the note that was really its reason on restore", () => {
+    const { cases, db } = setup();
+    const a = cases.create(idea);
+    cases.archive([a.id], "x");
+    db.$client.prepare("update case_ideas set archive_reason = null, note = 'old reason' where id = ?").run(a.id);
+    expect(cases.restore(a.id)).toMatchObject({ status: "pending", note: null });
+  });
+
+  it("re-archiving keeps the first reason, and undo of an archived idea is a named error", () => {
+    const { cases } = setup();
+    const a = cases.create(idea);
+    cases.archive([a.id], "first");
+    expect(cases.archive([a.id], "second")).toBe(0);
+    expect(cases.get(a.id)?.archive_reason).toBe("first");
+    expect(() => cases.undo(a.id)).toThrow(ArchivedError);
   });
 
   it("refuses to decide an archived idea", () => {

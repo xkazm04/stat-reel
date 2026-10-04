@@ -48,12 +48,12 @@ describe("undo a decision (D.1)", () => {
     expect(await r.json()).toMatchObject({ status: "pending", decision: null, note: null, decided_at: null });
   });
 
-  it("404 for unknown ids, 400 for archived ones", async () => {
+  it("404 for unknown ids, 409 (archived) for archived ones", async () => {
     const { app, board, item } = setup();
     expect((await del(app, "/api/board/nope/decision")).status).toBe(404);
     expect((await del(app, "/api/cases/nope/decision")).status).toBe(404);
     board.archive([item.id], "off brief");
-    expect((await del(app, `/api/board/${item.id}/decision`)).status).toBe(400);
+    expect((await del(app, `/api/board/${item.id}/decision`)).status).toBe(409);
   });
 
   it("409 while a generation job for the item or case is running; queued jobs are cancelled first", async () => {

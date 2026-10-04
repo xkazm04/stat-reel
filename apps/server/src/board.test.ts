@@ -2,14 +2,15 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BoardService } from "./board";
+import { ArchivedError, BoardService, NotArchivedError } from "./board";
 import { openDb } from "./db";
 
 const setup = () => {
   const root = mkdtempSync(path.join(tmpdir(), "board-"));
   mkdirSync(path.join(root, "items"), { recursive: true });
   writeFileSync(path.join(root, "items", "a.png"), "png");
-  return { board: new BoardService(openDb(":memory:"), root), root };
+  const db = openDb(":memory:");
+  return { board: new BoardService(db, root), root, db };
 };
 const item = {
   image: "items/a.png", width: 1080, height: 1920, title: "Fangio 43 -> 1", summary: "Rank-led vertical opener",
@@ -93,7 +94,7 @@ describe("Board archive (off-brief items are hidden, never deleted)", () => {
     const b = board.create({ ...item, title: "keep" });
     expect(board.archive([a.id], "headline format, ADR 007")).toBe(1);
     expect(board.list().map((i) => i.id)).toEqual([b.id]);
-    expect(board.list({ status: "archived" })[0]).toMatchObject({ id: a.id, status: "archived", note: "headline format, ADR 007" });
+    expect(board.list({ status: "archived" })[0]).toMatchObject({ id: a.id, status: "archived", note: null, archive_reason: "headline format, ADR 007" });
     expect(existsSync(path.join(root, "items", "a.png"))).toBe(true);
   });
 
@@ -103,5 +104,72 @@ describe("Board archive (off-brief items are hidden, never deleted)", () => {
     board.decide(a.id, "accept");
     board.archive([a.id], "off-brief");
     expect(board.feedback()).toEqual([]);
+  });
+});
+
+describe("Board archive safety and restore (entity-lifecycle: archive-restore-semantics)", () => {
+  it("archive never overwrites the owner's decision note", () => {
+    const { board } = setup();
+    const a = board.create(item);
+    board.decide(a.id, "reject_style", "too many bars");
+    board.archive([a.id], "off-brief");
+    expect(board.get(a.id)).toMatchObject({ status: "archived", decision: "reject_style", note: "too many bars", archive_reason: "off-brief" });
+  });
+
+  it("re-archiving keeps the first reason", () => {
+    const { board } = setup();
+    const a = board.create(item);
+    expect(board.archive([a.id], "first")).toBe(1);
+    expect(board.archive([a.id], "second")).toBe(0);
+    expect(board.get(a.id)?.archive_reason).toBe("first");
+  });
+
+  it("refuses to decide or undo an archived item with a named error and changes nothing", () => {
+    const { board } = setup();
+    const a = board.create(item);
+    board.archive([a.id], "off");
+    expect(() => board.decide(a.id, "accept")).toThrow(ArchivedError);
+    expect(() => board.undo(a.id)).toThrow(ArchivedError);
+    expect(board.get(a.id)).toMatchObject({ status: "archived", decision: null });
+  });
+
+  it.each([
+    [null, "pending"],
+    ["accept", "accepted"],
+    ["reject_style", "rejected"],
+    ["reject_case", "rejected"],
+    ["reject_both", "rejected"],
+  ] as const)("restores an archived item with decision %s to %s, keeping its note", (decision, status) => {
+    const { board } = setup();
+    const a = board.create(item);
+    if (decision) board.decide(a.id, decision, "my note");
+    board.archive([a.id], "off");
+    expect(board.restore(a.id)).toMatchObject({ status, decision, archive_reason: null, note: decision ? "my note" : null });
+    expect(board.list().map((i) => i.id)).toContain(a.id);
+  });
+
+  it("refuses to restore a live or unknown item", () => {
+    const { board } = setup();
+    const a = board.create(item);
+    expect(() => board.restore(a.id)).toThrow(NotArchivedError);
+    expect(() => board.restore("bd-nope")).toThrow(/unknown/);
+  });
+
+  it("a legacy row (reason stored in note, no archive_reason) restores with that note cleared", () => {
+    const { board, db } = setup();
+    const a = board.create(item);
+    board.decide(a.id, "accept");
+    board.archive([a.id], "x");
+    // the old archive overwrote the note with the reason and wrote no archive_reason
+    db.$client.prepare("update board_items set archive_reason = null, note = 'headline format' where id = ?").run(a.id);
+    expect(board.restore(a.id)).toMatchObject({ status: "accepted", note: null, archive_reason: null });
+  });
+
+  it("a legacy superseded sibling (marker in note) is still found by restoreSiblings", () => {
+    const { board, db } = setup();
+    const a = board.create(item);
+    db.$client.prepare("update board_items set status = 'archived', decision = 'superseded', note = 'superseded by bd-win', archive_reason = null where id = ?").run(a.id);
+    expect(board.restoreSiblings("bd-win")).toEqual([a.id]);
+    expect(board.get(a.id)).toMatchObject({ status: "pending", decision: null, note: null });
   });
 });

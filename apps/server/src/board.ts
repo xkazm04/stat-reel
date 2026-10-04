@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import { boardItems, caseIdeas, type Db, now } from "./db";
 
 export const DECISIONS = ["accept", "reject_style", "reject_case", "reject_both"] as const;
@@ -29,6 +29,33 @@ const hydrate = (r: typeof boardItems.$inferSelect): BoardItem => {
   return { ...rest, proposed_case: parse(proposed_case_json), style: parse(style_json), source: parse(source_json) };
 };
 
+/** The entity is archived, so the operation is refused; the owner restores it first. Mapped to 409 by app.ts mapError. */
+export class ArchivedError extends Error {
+  constructor(what: string, id: string, op: string) {
+    super(`${what} ${id} is archived; ${op}`);
+    this.name = "ArchivedError";
+  }
+}
+/** Restore of something that is not archived: nothing to bring back. Mapped to 409. */
+export class NotArchivedError extends Error {
+  constructor(what: string, id: string) {
+    super(`${what} ${id} is not archived`);
+    this.name = "NotArchivedError";
+  }
+}
+
+/**
+ * The state an archived entity returns to (archive-restore-semantics: restore brings it back whole). Archive only flips
+ * `status`; the decision survives it, so the pre-archive status is derived from it, with no second status column to drift:
+ * accept -> accepted, any reject_* -> rejected, no decision (or the sibling marker `superseded`, which is not an owner
+ * decision) -> pending.
+ */
+export function statusBeforeArchive(decision: string | null): "pending" | "accepted" | "rejected" {
+  if (decision === "accept") return "accepted";
+  if (decision?.startsWith("reject")) return "rejected";
+  return "pending";
+}
+
 export class BoardService {
   /** `root` is data/board: images live under it and are served at /files/board/<image>. */
   constructor(private readonly db: Db, private readonly root: string) {}
@@ -49,7 +76,7 @@ export class BoardService {
       id: `bd-${randomUUID().slice(0, 8)}`, image: i.image.split(path.sep).join("/"), video, duration_s: video ? (i.duration_s ?? null) : null, width: i.width ?? null, height: i.height ?? null,
       title: i.title, summary: i.summary ?? null, use_case_id: i.use_case_id ?? null,
       proposed_case_json: i.proposed_case ? JSON.stringify(i.proposed_case) : null, style_json: i.style ? JSON.stringify(i.style) : null,
-      source_json: i.source ? JSON.stringify(i.source) : null, status: "pending", decision: null, note: null, decided_at: null, created_at: now(), case_idea_id: i.case_idea_id ?? null,
+      source_json: i.source ? JSON.stringify(i.source) : null, status: "pending", decision: null, note: null, decided_at: null, created_at: now(), case_idea_id: i.case_idea_id ?? null, archive_reason: null,
     };
     this.db.insert(boardItems).values(row).run();
     return hydrate(row);
@@ -62,15 +89,37 @@ export class BoardService {
     return rows.filter((r) => filter.status === "archived" || filter.status === "all" || r.status !== "archived").map(hydrate);
   }
 
-  /** Hide off-brief items (ADR 007): status archived, reason in the note; files and history are kept. */
+  /**
+   * Hide off-brief items (ADR 007): status archived, the reason in its own `archive_reason` column so the owner's decision
+   * note survives; files and history are kept. An already-archived item is skipped (its first reason stands). Returns the count archived.
+   */
   archive(ids: string[], reason: string): number {
     let n = 0;
     for (const id of ids) {
-      if (!this.get(id)) continue;
-      this.db.update(boardItems).set({ status: "archived", note: reason }).where(eq(boardItems.id, id)).run();
+      const cur = this.get(id);
+      if (!cur || cur.status === "archived") continue;
+      this.db.update(boardItems).set({ status: "archived", archive_reason: reason }).where(eq(boardItems.id, id)).run();
       n++;
     }
     return n;
+  }
+
+  /**
+   * Bring an archived item back to the state it left: decided items keep their decision (see statusBeforeArchive), a superseded
+   * sibling returns to pending with the marker cleared. Legacy rows (archived before archive_reason existed) have the reason in
+   * `note`, because archive overwrote it, so restore clears that note; the owner's original note is unrecoverable for them.
+   */
+  restore(id: string): BoardItem {
+    const cur = this.get(id);
+    if (!cur) throw new Error(`unknown board item ${id}`);
+    if (cur.status !== "archived") throw new NotArchivedError("board item", id);
+    const superseded = cur.decision === "superseded";
+    this.db.update(boardItems).set({
+      status: statusBeforeArchive(cur.decision), archive_reason: null,
+      ...(superseded ? { decision: null, decided_at: null } : {}),
+      ...(superseded || cur.archive_reason === null ? { note: null } : {}),
+    }).where(eq(boardItems.id, id)).run();
+    return this.get(id)!;
   }
 
   get(id: string): BoardItem | undefined {
@@ -80,7 +129,9 @@ export class BoardService {
 
   decide(id: string, decision: Decision, note?: string): BoardItem {
     if (!DECISIONS.includes(decision)) throw new Error(`decision must be one of ${DECISIONS.join(", ")}`);
-    if (!this.get(id)) throw new Error(`unknown board item ${id}`);
+    const cur = this.get(id);
+    if (!cur) throw new Error(`unknown board item ${id}`);
+    if (cur.status === "archived") throw new ArchivedError("board item", id, "restore it before deciding");
     this.db.update(boardItems).set({ status: decision === "accept" ? "accepted" : "rejected", decision, note: note?.trim() || null, decided_at: now() })
       .where(eq(boardItems.id, id)).run();
     return this.get(id)!;
@@ -95,7 +146,7 @@ export class BoardService {
   undoDecision(id: string): { item: BoardItem; restored_ids: string[] } {
     const cur = this.get(id);
     if (!cur) throw new Error(`unknown board item ${id}`);
-    if (cur.status === "archived") throw new Error(`board item ${id} is archived`);
+    if (cur.status === "archived") throw new ArchivedError("board item", id, "restore it before undoing");
     this.db.update(boardItems).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(boardItems.id, id)).run();
     return { item: this.get(id)!, restored_ids: this.restoreSiblings(id) };
   }
@@ -112,17 +163,22 @@ export class BoardService {
     for (const r of this.db.select().from(boardItems).where(eq(boardItems.case_idea_id, acc.case_idea_id)).all()) {
       if (r.id === acceptedId || r.status !== "pending") continue;
       if (hydrate(r).source?.job_id !== jobId) continue;
-      this.db.update(boardItems).set({ status: "archived", decision: "superseded", note: `superseded by ${acceptedId}` }).where(eq(boardItems.id, r.id)).run();
+      this.db.update(boardItems).set({ status: "archived", decision: "superseded", archive_reason: `superseded by ${acceptedId}` }).where(eq(boardItems.id, r.id)).run();
       ids.push(r.id);
     }
     return ids;
   }
 
-  /** The inverse of `supersedeSiblings`, matched by the note: back to pending with decision and note cleared. */
+  /**
+   * The inverse of `supersedeSiblings`, matched by the archive reason (or by the note, which is where rows superseded before
+   * archive_reason existed carry it): back to pending with the marker cleared. A sibling the owner already restored is no
+   * longer archived, so it is not touched twice.
+   */
   restoreSiblings(acceptedId: string): string[] {
-    const note = `superseded by ${acceptedId}`;
-    const rows = this.db.select({ id: boardItems.id }).from(boardItems).where(and(eq(boardItems.status, "archived"), eq(boardItems.decision, "superseded"), eq(boardItems.note, note))).all();
-    for (const r of rows) this.db.update(boardItems).set({ status: "pending", decision: null, note: null, decided_at: null }).where(eq(boardItems.id, r.id)).run();
+    const reason = `superseded by ${acceptedId}`;
+    const rows = this.db.select({ id: boardItems.id }).from(boardItems)
+      .where(and(eq(boardItems.status, "archived"), eq(boardItems.decision, "superseded"), or(eq(boardItems.archive_reason, reason), eq(boardItems.note, reason)))).all();
+    for (const r of rows) this.db.update(boardItems).set({ status: "pending", decision: null, note: null, archive_reason: null, decided_at: null }).where(eq(boardItems.id, r.id)).run();
     return rows.map((r) => r.id);
   }
 

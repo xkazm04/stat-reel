@@ -116,13 +116,37 @@ describe("accepting a variant (D.2 transitions 3 and 5)", () => {
     const r = await j(await call("POST", `/api/board/${v2!.id}/decision`, { decision: "accept" }));
     expect(r.item).toMatchObject({ id: v2!.id, status: "accepted", image_url: expect.stringContaining("/files/board/") });
     expect(r.archived_ids.sort()).toEqual([v1!.id, v3!.id].sort());
-    expect(board.get(v1!.id)).toMatchObject({ status: "archived", decision: "superseded", note: `superseded by ${v2!.id}` });
+    expect(board.get(v1!.id)).toMatchObject({ status: "archived", decision: "superseded", note: null, archive_reason: `superseded by ${v2!.id}` });
     expect((await j(await call("GET", "/api/board"))).items.map((i: { id: string }) => i.id)).toEqual([v2!.id]);
 
     const undo = await j(await call("DELETE", `/api/board/${v2!.id}/decision`));
     expect(undo).toMatchObject({ status: "pending" });
     expect(undo.restored_ids.sort()).toEqual([v1!.id, v3!.id].sort());
     expect(board.get(v3!.id)).toMatchObject({ status: "pending", decision: null, note: null });
+  });
+
+  it("a decision POSTed to an archived sibling is a 409 and does not strand the superseded marker", async () => {
+    const c = cases.create(idea);
+    await accept(c.id);
+    const [v1, v2] = variants(c.id);
+    await call("POST", `/api/board/${v2!.id}/decision`, { decision: "accept" });
+    const r = await call("POST", `/api/board/${v1!.id}/decision`, { decision: "reject_style" });
+    expect(r.status).toBe(409);
+    expect(board.get(v1!.id)).toMatchObject({ status: "archived", decision: "superseded" });
+  });
+
+  it("restoring a superseded sibling by hand returns it to pending; undoing the winner then leaves it alone", async () => {
+    const c = cases.create(idea);
+    await accept(c.id);
+    const [v1, v2, v3] = variants(c.id);
+    await call("POST", `/api/board/${v2!.id}/decision`, { decision: "accept" });
+    const r = await call("POST", `/api/board/${v1!.id}/restore`);
+    expect(r.status).toBe(200);
+    expect(board.get(v1!.id)).toMatchObject({ status: "pending", decision: null, archive_reason: null });
+    const undo = await j(await call("DELETE", `/api/board/${v2!.id}/decision`));
+    expect(undo.restored_ids).toEqual([v3!.id]);
+    expect((await call("POST", `/api/board/${v2!.id}/restore`)).status).toBe(409);
+    expect((await call("POST", "/api/board/bd-nope/restore")).status).toBe(404);
   });
 
   it("an archived sibling of another job or another case is left alone", async () => {

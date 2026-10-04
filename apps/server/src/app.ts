@@ -21,7 +21,7 @@ import { type ProjectService, StalePropsError } from "./projects";
 import type { Tools } from "./tools";
 import { metricsOverview } from "./metrics";
 import type { CalendarService } from "./calendar";
-import { type BoardService, DECISIONS, type Decision } from "./board";
+import { ArchivedError, type BoardService, DECISIONS, type Decision, NotArchivedError } from "./board";
 import { CASE_DECISIONS, type CaseDecision, type CaseIdeas, MIN_SPAN_YEARS, type StyleLibrary, type StyleOverride } from "./library";
 import type { Db } from "./db";
 import { TopicService } from "./topics";
@@ -52,6 +52,7 @@ const TYPES: Record<string, string> = { ".mp4": "video/mp4", ".png": "image/png"
 export function mapError(e: unknown, fallback: 400 | 500): { status: number; body: { error: string; [k: string]: unknown } } {
   if (e instanceof HTTPException) return { status: e.status, body: { error: e.message } };
   if (e instanceof QueueConflict) return { status: 409, body: { error: e.message, job: e.job } };
+  if (e instanceof ArchivedError || e instanceof NotArchivedError) return { status: 409, body: { error: e.message } };
   if (e instanceof StalePropsError) return { status: 409, body: { error: e.message } };
   if (e instanceof FinalizeError) return { status: e.status, body: { error: e.message } };
   if (e instanceof Refusal) return { status: 422, body: { error: e.message } };
@@ -192,6 +193,15 @@ export function buildApp(d: AppDeps) {
       return c.json({ archived: d.board.archive(b.ids ?? [], b.reason.trim()) });
     } catch (e) { return bad(c, e); }
   });
+  app.post("/api/board/:id/restore", (c) => {
+    const id = c.req.param("id");
+    if (!d.board.get(id)) return c.json({ error: "not found" }, 404);
+    try {
+      const item = d.board.restore(id);
+      d.bus.emit({ type: "board.decided", id: item.id, decision: item.decision });
+      return c.json(withUrls(item));
+    } catch (e) { return bad(c, e); }
+  });
   app.post("/api/board/:id/decision", async (c) => {
     try {
       const b = (await c.req.json()) as { decision: Decision; note?: string };
@@ -236,6 +246,15 @@ export function buildApp(d: AppDeps) {
       const b = (await c.req.json()) as { ids: string[]; reason: string };
       if (!b.reason?.trim()) throw new Error("archiving needs a reason");
       return c.json({ archived: d.cases.archive(b.ids ?? [], b.reason.trim()) });
+    } catch (e) { return bad(c, e); }
+  });
+  app.post("/api/cases/:id/restore", (c) => {
+    const id = c.req.param("id");
+    if (!d.cases.get(id)) return c.json({ error: "not found" }, 404);
+    try {
+      const idea = d.cases.restore(id);
+      d.bus.emit({ type: "cases.decided", id: idea.id, decision: idea.decision });
+      return c.json(idea);
     } catch (e) { return bad(c, e); }
   });
   app.post("/api/cases/:id/decision", async (c) => {
