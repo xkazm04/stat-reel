@@ -105,6 +105,15 @@ describe("BurnedCaptions", () => {
     expect(BurnedCaptions({ cues: empty, t: 0.5, format: "landscape", theme: videoTheme })).toBeNull();
   });
 
+  it("renders a words-less cue (annotation sidecar shape) line by line with unique keys", () => {
+    const twice: Cue[] = [{ start_s: 0, end_s: 2, lines: ["Lap 44", "Lap 44"], words: [] }];
+    const el = BurnedCaptions({ cues: twice, t: 1, format: "vertical", theme: videoTheme });
+    const lines = elements(el).filter((e) => e.props.style?.whiteSpace === "nowrap");
+    expect(lines.map((l) => text(l))).toEqual(["Lap 44", "Lap 44"]);
+    const keys = lines.map((l) => (l as unknown as { key: string | null }).key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it("highlights nothing in a pause between words", () => {
     const hi = elements(render(0.9)).filter((e) => e.props.style?.color === videoTheme.captionActive);
     expect(hi).toHaveLength(0);

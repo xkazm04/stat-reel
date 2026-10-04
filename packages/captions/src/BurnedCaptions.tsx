@@ -93,8 +93,9 @@ export function BurnedCaptions({ cues, t, format, theme }: BurnedCaptionsProps):
                 ))}
               </div>
             ))
-          : cue.lines.map((line) => (
-              <div key={line} style={{ whiteSpace: "nowrap" }}>
+          : // a cue holds at most two lines (CueSchema) and repeats are legal ("Lap 44" twice): the slot is the identity
+            cue.lines.map((line, slot) => (
+              <div key={slot === 0 ? "top" : "bottom"} style={{ whiteSpace: "nowrap" }}>
                 {line}
               </div>
             ))}
