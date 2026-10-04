@@ -1755,7 +1755,7 @@ html.bd-modal-open {
   color: var(--color-text-muted);
 }
 .bd-style__mark--locked {
-  color: var(--color-signal);
+  color: var(--color-brand);
 }
 .bd-style__mark--accepted {
   color: var(--status-go);
@@ -2180,7 +2180,7 @@ html.bd-modal-open {
 
 /* Dropped keystroke while a decision is in flight (board-triage-first): visible, never silent. */
 .bd-busy {
-  color: var(--color-signal);
+  color: var(--color-brand);
   font-weight: 600;
 }
 

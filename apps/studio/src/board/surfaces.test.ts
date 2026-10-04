@@ -38,3 +38,19 @@ describe("decision keys", () => {
     expect(handlers.filter(([, src]) => !src.includes("plainPress(")).map(([f]) => f)).toEqual([]);
   });
 });
+
+const css = (): [string, string][] => sources(".css");
+/** `selector { body }` pairs of a stylesheet (comments already stripped; nested @media blocks keep their inner rules). */
+const rules = (src: string): { sel: string; body: string }[] =>
+  [...src.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: (m[1] ?? "").trim(), body: m[2] ?? "" }));
+
+describe("board stylesheets", () => {
+  it("never paints text in --color-signal (a 3:1 stroke token); text in the signal hue is --color-brand", () => {
+    const hits = css().flatMap(([f, src]) =>
+      rules(src)
+        .filter((r) => /(^|[;\s])color:\s*var\(--color-signal\)/.test(r.body))
+        .map((r) => `${f} ${r.sel}`),
+    );
+    expect(hits).toEqual([]);
+  });
+});

@@ -21,7 +21,7 @@
   gap: 2px;
 }
 .bd-toast__err {
-  color: var(--color-signal);
+  color: var(--color-brand);
   font-weight: 600;
 }
 .bd-toast kbd {

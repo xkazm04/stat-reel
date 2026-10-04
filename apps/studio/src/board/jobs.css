@@ -222,7 +222,7 @@
 }
 .jlog__live {
   font-family: var(--font-mono);
-  color: var(--color-signal);
+  color: var(--color-brand);
 }
 .jlog__err {
   margin: 0;
