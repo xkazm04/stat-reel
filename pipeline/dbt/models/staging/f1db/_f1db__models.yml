@@ -14,11 +14,11 @@ models:
       - name: race_id
         data_tests:
           - not_null
-          - relationships: {to: ref('stg_f1db__races'), field: race_id}
+          - relationships: {arguments: {to: ref('stg_f1db__races'), field: race_id}}
       - name: driver_id
         data_tests:
           - not_null
-          - relationships: {to: ref('stg_f1db__drivers'), field: driver_id}
+          - relationships: {arguments: {to: ref('stg_f1db__drivers'), field: driver_id}}
   - name: stg_f1db__constructors
     columns:
       - name: constructor_id
@@ -26,7 +26,8 @@ models:
   - name: stg_f1db__season_driver_standings
     data_tests:
       - dbt_utils_free_unique_combination:
-          columns: [season, driver_id]
+          arguments:
+            columns: [season, driver_id]
     columns:
       - name: driver_id
         data_tests: [not_null]
@@ -35,8 +36,8 @@ models:
       - name: race_id
         data_tests:
           - not_null
-          - relationships: {to: ref('stg_f1db__races'), field: race_id}
+          - relationships: {arguments: {to: ref('stg_f1db__races'), field: race_id}}
       - name: driver_id
         data_tests:
           - not_null
-          - relationships: {to: ref('stg_f1db__drivers'), field: driver_id}
+          - relationships: {arguments: {to: ref('stg_f1db__drivers'), field: driver_id}}

@@ -180,7 +180,8 @@ models:
       Source F1DB (CC BY 4.0), attribution required.
     data_tests:
       - dbt_utils_free_unique_combination:
-          columns: [race_id, player_id]
+          arguments:
+            columns: [race_id, player_id]
     columns:
       - {name: fact_key, description: "Stable id of this race-win fact; cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: race_id, description: "f1db race id."}
@@ -206,7 +207,8 @@ models:
       Source F1DB (CC BY 4.0), attribution required.
     data_tests:
       - dbt_utils_free_unique_combination:
-          columns: [fact_key]
+          arguments:
+            columns: [fact_key]
     columns:
       - {name: fact_key, description: "Stable id of this fact (always f1db:data-as-of); cite it as <fact_key>#<column>.", data_tests: [unique, not_null]}
       - {name: latest_race_date, description: "Date of the latest race with results: the data is as of this day."}
