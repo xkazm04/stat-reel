@@ -6,6 +6,7 @@
 import type { UseCase } from "@statreel/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { api, type Job, type ProjectDetail, qk, type RenderRow } from "../api";
 import { StatusChip } from "../components/glyphs";
 import { latestRender, renderPolicy, useHeatmap, useProject } from "../data";
@@ -13,6 +14,7 @@ import { activeJob, pct } from "../display";
 import { useJobProgress } from "../events";
 import { compositionState, produceBlockReason, verdictView } from "../studio-logic";
 import { denyHint } from "./deny-hints";
+import { activeStageText, produceOutcome, produceStages } from "./produce-stages";
 
 export function useStudio() {
   const { projectId } = useParams({ from: "/studio/$projectId" });
@@ -40,22 +42,74 @@ const JOB_WORD: Record<string, string> = {
   metrics: "Metrics",
 };
 
-/** One job with its live SSE progress (falls back to the stored progress). */
+/**
+ * One job with its live SSE progress (falls back to the stored progress). A produce job (audio or
+ * render) also shows the stage stepper, derived from the job row so it is right when the page opens
+ * mid-job; SSE notes only refine it. Not a live region: ticks every second or so would flood a screen
+ * reader, so the finish is announced once by ProduceAnnouncer instead.
+ */
 export function JobLine({ job, projectId }: { job: Job; projectId: string }) {
   const live = useJobProgress(projectId).get(job.id);
   const p = live?.progress ?? job.progress;
+  const produce = PRODUCE.has(job.kind);
+  const stages = produce ? produceStages({ ...job, progress: p }, live?.note) : [];
+  const stageText = activeStageText(stages);
+  const now = Math.round(Math.max(0, Math.min(1, p ?? 0)) * 100);
   return (
-    <div className="jobline" role="status">
+    <div className={`jobline${produce ? " jobline--steps" : ""}`}>
       <span className="jobline__k">
         {JOB_WORD[job.kind] ?? job.kind} · {job.status}
       </span>
-      <span className="bar-track">
+      <span
+        className="bar-track"
+        role="progressbar"
+        aria-label={`${JOB_WORD[job.kind] ?? job.kind} progress`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={now}
+        aria-valuetext={stageText ? `${stageText}, ${now} %` : `${now} %`}
+      >
         <span className="bar-fill" style={{ width: pct(p) }} />
       </span>
       <span className="mono">
         {pct(p)}
         {live?.note ? ` · ${live.note}` : ""}
       </span>
+      {produce ? (
+        <ol className="stepper" aria-label="Produce stages">
+          {stages.map((s) => (
+            <li
+              key={s.id}
+              className={`stepper__s stepper__s--${s.state}`}
+              aria-current={s.state === "active" ? "step" : undefined}
+            >
+              {s.label}
+              <span className="sr-only"> ({s.state})</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The one persistent polite live region for a produce: empty while it runs (no per-tick chatter), then one
+ * sentence when it ends ("Produce finished: ALLOW" / "DENY", or the failure). It stays mounted when the job
+ * row disappears, which is why the old role=status on the job line never announced the finish.
+ */
+export function ProduceAnnouncer({ detail }: { detail: ProjectDetail | undefined }) {
+  const running = !!produceJob(detail);
+  const was = useRef(running);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    if (running) setMsg("");
+    else if (was.current) setMsg(produceOutcome(detail?.jobs ?? [], detail?.renders ?? []) ?? "");
+    was.current = running;
+  }, [running, detail]);
+  return (
+    <div className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="produce-announcer">
+      {msg}
     </div>
   );
 }

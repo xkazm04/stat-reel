@@ -21,7 +21,17 @@ import { Copilot } from "./Copilot";
 import { Monitor } from "./Monitor";
 import { PropsPanel } from "./PropsPanel";
 import { usePlayerClock } from "./playerClock";
-import { DenyReason, JobError, JobLine, lastJobOf, PublicationStatus, useProduce, useStudio, Verdict } from "./shared";
+import {
+  DenyReason,
+  JobError,
+  JobLine,
+  lastJobOf,
+  ProduceAnnouncer,
+  PublicationStatus,
+  useProduce,
+  useStudio,
+  Verdict,
+} from "./shared";
 import { Tracks } from "./Tracks";
 
 const ScriptModal = lazy(() => import("./ScriptModal").then((m) => ({ default: m.ScriptModal })));
@@ -72,6 +82,7 @@ export function ControlRoom() {
 
   return (
     <div className="room-wrap">
+      <ProduceAnnouncer detail={detail} />
       <div className="stagebar">
         <div className="stagebar__next">
           <span className="label">Next</span>

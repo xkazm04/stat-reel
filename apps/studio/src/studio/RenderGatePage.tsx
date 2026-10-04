@@ -15,7 +15,7 @@ import { latestRender, renderChecks, renderFile, renderPolicy, useManifest } fro
 import { checkRows, fileUrl, relTime } from "../logic";
 import { scheduleOffered } from "../studio-logic";
 import { hasCaptionSidecar, hasChecks, isNewerRender } from "./render-gate";
-import { DenyReason, JobError, JobLine, lastJobOf, useProduce, useStudio, Verdict } from "./shared";
+import { DenyReason, JobError, JobLine, lastJobOf, ProduceAnnouncer, useProduce, useStudio, Verdict } from "./shared";
 
 export function RenderGatePage() {
   const { detail, usecase } = useStudio();
@@ -39,6 +39,7 @@ export function RenderGatePage() {
 
   return (
     <div className="rg">
+      <ProduceAnnouncer detail={detail} />
       <div className="rg__bar">
         {running ? (
           <JobLine job={running} projectId={pid} />

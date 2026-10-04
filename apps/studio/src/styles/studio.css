@@ -1989,3 +1989,43 @@ button.tl-b {
   gap: 8px;
   margin: 10px 0 0;
 }
+
+/* produce-stage-stepper: the stage list under a produce job's bar. Colours are tokens; state is also a glyph
+   and sr-only text, never colour alone. The job line wraps so the stepper takes its own row. */
+.jobline--steps {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.stepper {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.stepper__s::before {
+  display: inline-block;
+  width: 1.2em;
+}
+.stepper__s--done {
+  color: var(--status-go);
+}
+.stepper__s--done::before {
+  content: "\2713";
+}
+.stepper__s--active {
+  color: var(--status-data-ready);
+  font-weight: 700;
+}
+.stepper__s--active::before {
+  content: "\25CF";
+}
+.stepper__s--pending {
+  color: var(--color-text-dim);
+}
+.stepper__s--pending::before {
+  content: "\25CB";
+}
