@@ -8,6 +8,7 @@ import { jobPaths } from "./paths";
 import { dataProvenance, renderPrompt } from "./prompt";
 
 const cfg = (o: object = {}): GenerationConfig => GenerationConfigSchema.parse(o);
+const WEB_ON = { search: true, fetch: true };
 const build = (o: object = {}, type: "visual_options" | "generate_video" = "visual_options") => buildClaudeArgs({ config: cfg(o), type, mcpConfigPath: "/x/mcp.json" });
 const after = (args: string[], flag: string, n = 1) => args.slice(args.indexOf(flag) + 1, args.indexOf(flag) + 1 + n);
 
@@ -35,7 +36,7 @@ describe("buildClaudeArgs (flags verified against claude 2.1.288)", () => {
 
   it("the prompt and case text are never on argv (only fixed server text)", () => {
     const args = build({ cli: { extraArgs: ["--effort", "high"] } });
-    const prompt = renderPrompt({ id: "gj-0123abcd", type: "visual_options" } as never, { data_status: "staged", title: "SECRET-CASE-TITLE" });
+    const prompt = renderPrompt({ id: "gj-0123abcd", type: "visual_options" } as never, { data_status: "staged", title: "SECRET-CASE-TITLE" }, WEB_ON);
     expect(prompt).toContain("gj-0123abcd");
     for (const a of args) {
       expect(a.includes("SECRET-CASE-TITLE")).toBe(false);
@@ -113,7 +114,7 @@ describe("buildClaudeArgs (flags verified against claude 2.1.288)", () => {
 describe("prompt rendering and logs", () => {
   it("fills every placeholder and embeds the rules", () => {
     for (const type of ["visual_options", "generate_video"] as const) {
-      const t = renderPrompt({ id: "gj-0123abcd", type } as never, { data_status: "new-source" });
+      const t = renderPrompt({ id: "gj-0123abcd", type } as never, { data_status: "new-source" }, WEB_ON);
       expect(t).not.toMatch(/\{\{[A-Z_]+\}\}/);
       expect(t).toContain("side reveals that alternate left and right");
       expect(t).toContain("refs/MANIFEST.json");
@@ -121,9 +122,31 @@ describe("prompt rendering and logs", () => {
       expect(t).toContain("mcp__statreel__validate_generation_output");
       expect(t).toMatch(/stop and end the session/);
     }
-    expect(renderPrompt({ id: "gj-0123abcd", type: "visual_options" } as never, { data_status: "new-source" })).toContain("**sample**");
-    expect(renderPrompt({ id: "gj-0123abcd", type: "visual_options" } as never, { data_status: "staged" })).toContain("**real**");
+    expect(renderPrompt({ id: "gj-0123abcd", type: "visual_options" } as never, { data_status: "new-source" }, WEB_ON)).toContain("**sample**");
+    expect(renderPrompt({ id: "gj-0123abcd", type: "visual_options" } as never, { data_status: "staged" }, WEB_ON)).toContain("**real**");
     expect(dataProvenance("generate_video", "new-source")).toBe("real");
+  });
+
+  it("the prompt names only the web tools the run is given (buildClaudeArgs follows the same config)", () => {
+    for (const type of ["visual_options", "generate_video"] as const) {
+      const job = { id: "gj-0123abcd", type } as never;
+      const on = renderPrompt(job, { data_status: "staged" }, WEB_ON);
+      expect(on).toContain("WebSearch and WebFetch");
+      for (const [web, has, lacks] of [
+        [{ search: true, fetch: false }, "WebSearch", "WebFetch"],
+        [{ search: false, fetch: true }, "WebFetch", "WebSearch"],
+      ] as const) {
+        const t = renderPrompt(job, { data_status: "staged" }, web);
+        expect(t).toContain(has);
+        expect(t).not.toContain(lacks);
+      }
+      const off = renderPrompt(job, { data_status: "staged" }, { search: false, fetch: false });
+      expect(off).not.toMatch(/WebSearch|WebFetch/);
+      expect(off).toMatch(/off for this run/);
+      expect(off).toContain("mcp__statreel__fetch_asset");
+      // the tool list the CLI gets agrees with the prompt
+      expect(buildClaudeArgs({ config: cfg({ web: { search: false, fetch: false } }), type, mcpConfigPath: "/x" }).join(" ")).not.toMatch(/WebSearch|WebFetch/);
+    }
   });
 
   it("MCP config points at the running server", () => {

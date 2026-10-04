@@ -54,7 +54,7 @@ export type StageRefsOptions = {
   dataRoot: string;
   registryRoot?: string;
   subjects?: readonly (readonly [string, boolean])[];
-  /** JSON Schema of DataRaceProps once T9 provides it */
+  /** JSON Schema of DataRaceProps (the live engine passes dataRacePropsJsonSchema); absent = listed as pending */
   propsJsonSchema?: () => unknown;
   now?: () => string;
 };

@@ -291,6 +291,14 @@ describe("worker", () => {
     expect(fired).toBe(0);
   });
 
+  it("a timeout longer than a Node timer can hold (~24.8 days) never fires early", async () => {
+    let fired = 0;
+    const t = armTimeout(GenerationConfigSchema.parse({ timeoutMin: 1_000_000 }), "visual_options", () => fired++);
+    await sleep(30);
+    if (t) clearTimeout(t);
+    expect(fired).toBe(0);
+  });
+
   it("invalid outputs fail as validation", async () => {
     const j = queue.enqueue(vo(CASE_A)).job;
     const w = worker({ engine: { name: "empty", run: async () => ({}) } });

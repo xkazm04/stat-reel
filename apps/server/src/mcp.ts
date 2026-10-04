@@ -9,7 +9,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isFailedToolResult } from "@statreel/llm";
 import { z } from "zod";
-import type { GenerationMcpTools } from "./generation/mcp-tools";
+import { FetchAssetInput } from "./generation/assets";
+import { type GenerationMcpTools, TimingInput } from "./generation/mcp-tools";
 import type { Tools } from "./tools";
 import { MAX_FRAMES, toolShapes } from "./tool-schemas";
 
@@ -59,15 +60,13 @@ export function buildGenerationMcpServer(tools: Tools, gen: GenerationMcpTools):
 
 /** Generation-session tools (ADR 010). Only offered on /mcp/generation, and only when the server has the generation queue. */
 function registerGenerationTools(s: McpServer, gen: GenerationMcpTools): void {
+  // the published schema IS the handler's validator (registry mcp-tools/tool-schema-design): one object, no copy to drift
   s.registerTool("fetch_asset", {
     description: "The ONLY way to save a file from the web. Server-side download of one image (logo, flag, emblem, icon) into the job folder: https, allowlisted hosts (Wikimedia), PNG/SVG/WEBP, size and count caps. For Commons files the licence and author are read from the Commons API. Returns {file, licence, trademark} or {error}.",
-    inputSchema: {
-      job_id: z.string(), url: z.string(), kind: z.enum(["logo", "flag", "emblem", "icon"]), entity: z.string(),
-      source_page: z.string().optional(), licence: z.string().optional(), author: z.string().optional(),
-    },
+    inputSchema: FetchAssetInput.shape,
   }, async (i) => text(await gen.fetch_asset(i)));
   s.registerTool("get_generation_context", { description: "The case, the accepted visual, the props schema and the rules of a running generation job.", inputSchema: { job_id: z.string() } }, async (i) => text(await gen.get_generation_context(i)));
-  s.registerTool("compute_timing_plan", { description: "Compute the timing plan (period-to-frame knots, event start frames) for a generation job; writes out/timing-plan.json and returns its sha256.", inputSchema: { job_id: z.string(), periods: z.any().optional(), entities: z.any().optional(), values: z.any().optional(), events: z.any().optional(), opts: z.any().optional() } }, async (i) => text(await gen.compute_timing_plan(i)));
+  s.registerTool("compute_timing_plan", { description: "Compute the timing plan (period-to-frame knots, event start frames) for a generation job; writes out/timing-plan.json and returns its sha256.", inputSchema: { job_id: z.string(), ...TimingInput.shape } }, async (i) => text(await gen.compute_timing_plan(i)));
   s.registerTool("validate_generation_output", { description: "Run exactly the finalize validation on the job's outputs (no render) and return the errors verbatim. Repeat until there are none, then stop.", inputSchema: { job_id: z.string() } }, async (i) => text(await gen.validate_generation_output(i)));
 }
 

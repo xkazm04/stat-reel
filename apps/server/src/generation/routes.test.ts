@@ -105,6 +105,16 @@ describe("/api/generation", () => {
     expect((await app.request("/api/generation/jobs/gj-00000000")).status).toBe(404);
   });
 
+  it("the detail's log tail of a multi-MB log is its last 200 whole lines", async () => {
+    const { job } = await json(await enqueue());
+    const p = jobPaths(job.id, dir);
+    mkdirSync(p.dir, { recursive: true });
+    const lines = Array.from({ length: 3000 }, (_, i) => `line ${i} Räikkönen ${"x".repeat(1500)}`);
+    writeFileSync(p.runLog, `${lines.join("\n")}\n`);
+    const d = await json(await app.request(`/api/generation/jobs/${job.id}`));
+    expect(d.log_tail).toEqual(lines.slice(-200));
+  });
+
   it("incremental log with X-Next-Offset", async () => {
     const { job } = await json(await enqueue());
     const p = jobPaths(job.id, dir);
@@ -116,6 +126,32 @@ describe("/api/generation", () => {
     const r2 = await app.request(`/api/generation/jobs/${job.id}/log?offset=8`);
     expect(await r2.text()).toBe("");
     expect(r2.headers.get("x-next-offset")).toBe("8");
+  });
+
+  it("the incremental log ends each read on a whole line, so a 1 MB read never splits a character or a line", async () => {
+    const { job } = await json(await enqueue());
+    const p = jobPaths(job.id, dir);
+    mkdirSync(p.dir, { recursive: true });
+    // 999,999 ASCII bytes, then a line that starts with "ä": the 1 MB read cap lands between its two bytes
+    const line = "äkkinen, Räikkönen and Pérez in run.log\n";
+    const text = `${"a".repeat(999_998)}\n${line.repeat(5000)}`;
+    writeFileSync(p.runLog, text);
+    let got = "";
+    let offset = 0;
+    for (let i = 0; i < 5; i++) {
+      const r = await app.request(`/api/generation/jobs/${job.id}/log?offset=${offset}`);
+      const chunk = await r.text();
+      expect(chunk).not.toContain("�");
+      if (chunk) expect(chunk.endsWith("\n")).toBe(true);
+      got += chunk;
+      offset = Number(r.headers.get("x-next-offset"));
+    }
+    expect(got).toBe(text);
+    // a line still being written is held back until its newline arrives
+    writeFileSync(p.runLog, `${text}partial`);
+    const r = await app.request(`/api/generation/jobs/${job.id}/log?offset=${offset}`);
+    expect(await r.text()).toBe("");
+    expect(Number(r.headers.get("x-next-offset"))).toBe(offset);
   });
 
   it("list filters and worker status / config", async () => {

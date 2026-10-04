@@ -3,7 +3,7 @@
  * `registerGenerationRoutes`. The server only writes the queue (enqueue / cancel / retry) and serves
  * reads and worker callbacks; it never runs a job.
  */
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
 import type { HttpBindings } from "@hono/node-server";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -40,10 +40,26 @@ export const defaultGate: NonNullable<GenerationRouteDeps["gate"]> = (req) =>
 const RenderBody = z.object({ kind: z.enum(["stills", "video"]), props_path: z.string().min(1), frames: z.array(z.number().int().nonnegative()).max(12).optional() });
 const FinalizeBody = z.object({ outputs: z.array(z.string()).max(500), result: z.record(z.unknown()).optional() });
 
+/** Bytes read for the detail's log tail: 200 run.log lines are at most ~420 KB (each line is clipped at 2 KB). */
+const TAIL_BYTES = 512 * 1024;
+
+/**
+ * The last `n` lines, reading only the file's last TAIL_BYTES (the studio polls the detail every 2 s while a
+ * job runs; reading a multi-MB log whole took ~16 ms of the event loop per poll). A line cut by the window is dropped.
+ */
 const tail = (file: string, n: number): string[] => {
   if (!existsSync(file)) return [];
-  const lines = readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean);
-  return lines.slice(-n);
+  const fd = openSync(file, "r");
+  try {
+    const size = fstatSync(fd).size;
+    const len = Math.min(size, TAIL_BYTES);
+    const buf = Buffer.alloc(len);
+    readSync(fd, buf, 0, len, size - len);
+    const from = len < size ? buf.indexOf(0x0a) + 1 : 0;
+    return buf.subarray(from).toString("utf8").split(/\r?\n/).filter(Boolean).slice(-n);
+  } finally {
+    closeSync(fd);
+  }
 };
 
 export function registerGenerationRoutes(app: Hono<{ Bindings: HttpBindings }>, d: GenerationRouteDeps): void {
@@ -92,8 +108,12 @@ export function registerGenerationRoutes(app: Hono<{ Bindings: HttpBindings }>, 
         const start = Math.min(offset, size);
         const buf = Buffer.alloc(Math.min(size - start, 1_000_000));
         readSync(fd, buf, 0, buf.length, start);
-        body = buf.toString("utf8");
-        next = start + buf.length;
+        // end on a whole line: the 1 MB cap (or a line the worker is still appending) must not split a UTF-8
+        // character into two U+FFFD; the cut bytes are read again from `next`. A newline-free full read is sent as is.
+        const nl = buf.lastIndexOf(0x0a);
+        const end = nl >= 0 ? nl + 1 : buf.length < 1_000_000 ? 0 : buf.length;
+        body = buf.subarray(0, end).toString("utf8");
+        next = start + end;
       } finally {
         closeSync(fd);
       }

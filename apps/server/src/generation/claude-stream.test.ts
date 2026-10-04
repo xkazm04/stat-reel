@@ -21,6 +21,14 @@ vi.mock("node:child_process", async (importOriginal) => ({
   },
 }));
 
+const staged: { propsJsonSchema?: () => unknown }[] = [];
+vi.mock("./refs", () => ({
+  stageRefs: (o: { propsJsonSchema?: () => unknown }) => {
+    staged.push(o);
+    return { entries: [], golden_paths: [], pending: o.propsJsonSchema ? [] : ["data-race-props.schema.json"] };
+  },
+}));
+
 const { createLiveEngine } = await import("./claude");
 const { jobPaths } = await import("./paths");
 
@@ -47,6 +55,18 @@ function start() {
 
 const resultLine = (text: string) => `${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: text, session_id: "s", total_cost_usd: 0.5, num_turns: 3 })}\n`;
 const tick = () => new Promise((r) => setTimeout(r, 20));
+
+describe("live engine staging", () => {
+  it("stages the DataRaceProps JSON Schema into refs/ (T9 has landed: nothing is pending)", async () => {
+    const p = jobPaths(JOB.id, dir);
+    mkdirSync(p.work, { recursive: true });
+    const engine = createLiveEngine({ config: GenerationConfigSchema.parse({}), dataRoot: dir, apiBase: "http://127.0.0.1:1", bin: "claude" });
+    const out = await engine.stage?.(JOB, p, { data_status: "staged" });
+    expect(staged).toHaveLength(1);
+    expect(JSON.stringify(staged[0]?.propsJsonSchema?.())).toContain("timing_plan_sha256");
+    expect(out).toMatchObject({ refs: { pending: [] } });
+  });
+});
 
 describe("live runner stream", () => {
   it("a multibyte character split across two stdout chunks reaches run.jsonl and run.log intact", async () => {

@@ -12,7 +12,7 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { type GenerationConfig, type GenerationJobType, DOMAIN_RE, MODEL_ID_RE, extraArgsProblem, perTypeValue } from "@statreel/schemas";
+import { type GenerationConfig, type GenerationJobType, DOMAIN_RE, dataRacePropsJsonSchema, MODEL_ID_RE, extraArgsProblem, perTypeValue } from "@statreel/schemas";
 import { parseStreamLine, resolveClaudeBin, type LlmEvent } from "@statreel/llm";
 import { killTree } from "../proc";
 import { type GenerationEngine, GenerationError, type RunContext } from "./engine";
@@ -111,8 +111,9 @@ export function createLiveEngine(o: LiveEngineOptions): GenerationEngine {
 
     /** Reference docs + prompt.md + the job's mcp.json (SPEC D.5). A missing rule source fails the job. */
     async stage(job, p, caseData) {
-      const manifest = stageRefs({ paths: p, repoRoot, dataRoot: o.dataRoot });
-      const prompt = renderPrompt(job, caseData);
+      // the props schema is a file in refs/ as well as in get_generation_context (T9 landed; nothing is "pending")
+      const manifest = stageRefs({ paths: p, repoRoot, dataRoot: o.dataRoot, propsJsonSchema: dataRacePropsJsonSchema });
+      const prompt = renderPrompt(job, caseData, o.config.web);
       writePrompt(p, prompt);
       writeJobMcpConfig(p, o.apiBase);
       return { refs: { count: manifest.entries.length, golden_paths: manifest.golden_paths, pending: manifest.pending } };
