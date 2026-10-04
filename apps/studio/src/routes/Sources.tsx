@@ -41,6 +41,7 @@ export function SourcesPage() {
   const [verdict, setVerdict] = useState<string>("all");
   const sources = (src.data?.sources ?? []) as Extra[];
   const caps = src.data?.capabilities ?? [];
+  const shownCaps = caps.filter((c) => sport === "all" || c.sport === sport);
   const bySport = sources.filter((s) => sport === "all" || s.sport === sport || s.sport === "all");
   const shown = verdict === "manual" ? bySport.filter((s) => s.access === "manual") : filterByVerdict(bySport, verdict);
   const v = verdictCounts(sources);
@@ -96,6 +97,7 @@ export function SourcesPage() {
               ))}
             </div>
               </div>
+            {shown.length ? (
             <div className="table-wrap">
               <table className="tbl tbl--sources">
                 <thead>
@@ -161,12 +163,21 @@ export function SourcesPage() {
                 </tbody>
               </table>
             </div>
+            ) : (
+              <div className="card__pad">
+                <Empty title="No source to show">
+                  {sources.length
+                    ? "No registry entry matches this sport and verdict; pick All sports or All verdicts."
+                    : "The registry returned no source."}
+                </Empty>
+              </div>
+            )}
             </Card>
           </Defer>
 
           <Defer tier={2} id="sources:caps" visible minHeight={200}>
-            <Card title="Tested capabilities" tag={caps.length} actions={<span>{caps.filter((c) => c.status === "pass").length} pass</span>} pad="none">
-            {caps.length ? (
+            <Card title="Tested capabilities" tag={shownCaps.length} actions={<span>{shownCaps.filter((c) => c.status === "pass").length} pass</span>} pad="none">
+            {shownCaps.length ? (
               <div className="table-wrap">
                 <table className="tbl">
                   <thead>
@@ -182,9 +193,7 @@ export function SourcesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {caps
-                      .filter((c) => sport === "all" || c.sport === sport)
-                      .map((c) => (
+                    {shownCaps.map((c) => (
                         <tr key={`${c.sport}|${c.kind}|${c.source_id}`}>
                           <td>{c.sport}</td>
                           <td>{kindLong(c.kind)}</td>
@@ -207,10 +216,16 @@ export function SourcesPage() {
               </div>
             ) : (
               <div className="card__pad">
+                {caps.length ? (
+                  <Empty title={`No capability tested for ${sport}`}>
+                    The other sports have tested capabilities; pick All sports to see them.
+                  </Empty>
+                ) : (
                 <Empty title="No capability tested yet">
                 Run <span className="mono">just transform</span>: until a capability passes, every cell on the rights
                 grid says "not tested" and stays Blocked.
               </Empty>
+                )}
               </div>
             )}
             </Card>
