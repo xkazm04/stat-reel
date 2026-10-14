@@ -213,6 +213,11 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.match(validateCaseIdea({ ...ok, topic: "knitting" }).join(), /topic must be one of/);
   assert.deepEqual(validateCaseIdea({ ...ok, topic: "energy" }), []);
   assert.match(validateCaseIdea({ ...ok, tension: { expectation: "e", reality: "", strength: "x" } }).join(), /tension/);
+  const strong = { expectation: "e", reality: "r", strength: "strong" };
+  assert.match(validateCaseIdea({ ...ok, tension: strong }).join(), /tension.counter is required/);
+  assert.deepEqual(validateCaseIdea({ ...ok, tension: { ...strong, counter: { provenance: "constructed", case: "rules changed" } } }), []);
+  assert.match(validateCaseIdea({ ...ok, tension: { ...strong, counter: { provenance: "absent", case: "searched" } } }).join(), /YYYY-MM-DD/);
+  assert.match(validateCaseIdea({ ...ok, tension: { ...strong, counter: { provenance: "guess", case: "x" } } }).join(), /needs provenance/);
   assert.match(validateCaseIdea({ ...ok, sources: [{ name: "x" }] }).join(), /needs name, url and license/);
   assert.equal(titleKey("The Wins Record, hand to hand"), titleKey("wins record hand-to-hand"));
   // data-less brainstorm: a guess and a feasibility instead of verified sources

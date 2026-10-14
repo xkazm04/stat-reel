@@ -167,7 +167,7 @@ const idea: NewCaseIdea = {
   domain: "f1", arc: "Fangio, Clark, Stewart, Prost, Schumacher, Hamilton: six holders in 75 years",
   insight: "Records last longer each time: Prost held it 7 years, Schumacher 13",
   why_lasts: "Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987",
-  tension: { expectation: "records fall often", reality: "only six holders since 1950", strength: "strong" },
+  tension: { expectation: "records fall often", reality: "only six holders since 1950", strength: "strong", counter: { provenance: "constructed", case: "records fall often because rules change" } },
   beats: [{ at: "1957", what: "Fangio 24" }, { at: "1968", what: "Clark 25" }, { at: "1987", what: "Prost 28" }, { at: "2001", what: "Schumacher 52" }],
   timeline: { unit: "race", from: 1, to: 1150, years_from: 1950, years_to: 2026 },
   sources: [{ name: "F1DB", url: "https://github.com/f1db/f1db", license: "CC-BY-4.0", registry_id: "f1db", class: "primary", confidence: "high" }],
@@ -181,6 +181,15 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(c).toMatchObject({ status: "pending", span_years: 76, domain: "f1", data_status: "staged" });
     expect(c.tension.strength).toBe("strong");
     expect(cases.list().map((x) => x.id)).toEqual([c.id]);
+  });
+
+  it("steel-man: a strong tension needs a marked counter-case; absent must be dated", () => {
+    const { counter: _c, ...bare } = idea.tension;
+    expect(validateCaseIdea({ ...idea, tension: bare }).join()).toMatch(/tension.counter is required/);
+    expect(validateCaseIdea({ ...idea, tension: { ...bare, strength: "moderate" } })).toEqual([]);
+    expect(validateCaseIdea({ ...idea, tension: { ...bare, counter: { provenance: "found" as never, case: " " } } }).join()).toMatch(/needs provenance/);
+    expect(validateCaseIdea({ ...idea, tension: { ...bare, counter: { provenance: "absent", case: "searched sports press for a claim records are stable" } } }).join()).toMatch(/YYYY-MM-DD/);
+    expect(validateCaseIdea({ ...idea, tension: { ...bare, counter: { provenance: "absent", case: "searched sports press", searched: "2026-10-14" } } })).toEqual([]);
   });
 
   it("refuses an idea shorter than a decade, without tension or without sources", () => {

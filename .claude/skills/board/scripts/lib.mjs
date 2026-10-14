@@ -468,6 +468,15 @@ export function beatProblems(c) {
   return e;
 }
 
+/** Steel-man of the tension (mirrors the server's counterProblems): a strong tension must carry the strongest case against it, marked found / constructed / absent (dated). */
+export function counterProblems(t) {
+  const k = t?.counter;
+  if (!k) return t?.strength === "strong" ? ["tension.counter is required for a strong tension: the strongest case against it {provenance: found|constructed|absent, case, searched}"] : [];
+  if (!["found", "constructed", "absent"].includes(k.provenance) || !String(k.case ?? "").trim()) return ["tension.counter needs provenance (found|constructed|absent) and a case: what the opposition says, or what was searched for"];
+  if (k.provenance === "absent" && !/^\d{4}-\d{2}-\d{2}$/.test(k.searched ?? "")) return ["tension.counter 'absent' needs searched: YYYY-MM-DD, the date of the search that found no opposition"];
+  return [];
+}
+
 /** Shortest keep-watching rationale (path-over-conclusion); shorter cannot walk through moments by name and date. */
 export const MIN_RATIONALE_CHARS = 40;
 const RATIONALE_YEAR = /\b(1[5-9]\d\d|20\d\d)\b/g;
@@ -495,6 +504,7 @@ export function validateCaseIdea(c) {
   for (const k of ["title", "pitch", "arc", "insight", "why_lasts"]) if (!c[k] || !String(c[k]).trim()) e.push(`${k} is required`);
   const t = c.tension;
   if (!t?.expectation?.trim() || !t?.reality?.trim() || !["strong", "moderate", "weak"].includes(t?.strength)) e.push("tension {expectation, reality, strength: strong|moderate|weak} is required");
+  e.push(...counterProblems(t));
   if (!Array.isArray(c.beats) || c.beats.filter((b) => b?.at && b?.what).length < MIN_BEATS) e.push(`beats: at least ${MIN_BEATS} dated turns {at, what}`);
   if (!CASE_DOMAINS.includes(c.domain)) e.push(`domain must be one of ${CASE_DOMAINS.join(", ")}`);
   if (!CASE_TOPICS.includes(c.topic)) e.push(`topic must be one of ${CASE_TOPICS.join(", ")} (the controlled topic list)`);

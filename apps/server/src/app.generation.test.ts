@@ -15,7 +15,7 @@ import { JobRunner } from "./jobs";
 const idea: NewCaseIdea = {
   title: "The wins record changes hands", pitch: "Who held the all-time wins record", domain: "f1", arc: "six holders in 75 years",
   insight: "Records last longer each time", why_lasts: "Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987",
-  tension: { expectation: "records fall often", reality: "only six holders since 1950", strength: "strong" },
+  tension: { expectation: "records fall often", reality: "only six holders since 1950", strength: "strong", counter: { provenance: "constructed", case: "records fall often because rules change" } },
   beats: [{ at: "1957", what: "a" }, { at: "1968", what: "b" }, { at: "1987", what: "c" }, { at: "2001", what: "d" }],
   timeline: { unit: "race", from: 1, to: 1150, years_from: 1950, years_to: 2026 },
   sources: [{ name: "F1DB", url: "https://github.com/f1db/f1db", license: "CC-BY-4.0" }], data_status: "staged",

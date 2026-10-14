@@ -45,6 +45,11 @@ The data moved, but nothing worth watching happened. The accepted cases share fo
    it, and number at most 15; the check fails the case otherwise.
 4. **A tension.** What a viewer expects versus what the data shows. Its strength is how checkable
    the claim is, not how big it sounds. "No tension" is an honest answer; do not inflate one.
+   A `strong` tension must also carry `counter`: the strongest case against it, in the words its
+   believers would use. Search for a real opposing argument first (`provenance: "found"`); if you can
+   only write one yourself, mark it `"constructed"`; if you looked and none exists, say what you looked
+   for with `"absent"` and `searched: "YYYY-MM-DD"`. If the counter-case survives, grade the tension
+   `moderate`, not `strong`.
 5. **Universal.** A viewer outside the domain gets it in five seconds.
    `why_lasts` is the keep-watching rationale: at least two dated turns and two named entities, not "keeps changing"; the check fails the case otherwise.
 6. **Plausibly makeable.** Guess where the data lives; no proof needed yet (see below).

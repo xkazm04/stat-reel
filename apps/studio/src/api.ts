@@ -305,7 +305,7 @@ export type CaseIdea = {
   arc: string;
   insight: string;
   why_lasts: string;
-  tension: { expectation: string; reality: string; strength: "strong" | "moderate" | "weak" };
+  tension: { expectation: string; reality: string; strength: "strong" | "moderate" | "weak"; counter?: { provenance: "found" | "constructed" | "absent"; case: string; searched?: string } };
   unknowns: string[];
   /** dated turns of the story (>= 4) */
   beats: { at: string; what: string }[];

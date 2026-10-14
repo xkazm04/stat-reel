@@ -213,7 +213,19 @@ export type CaseSource = {
 /** What the viewer expects vs what the data shows over time; strength = how checkable, not how big. */
 /** A dated moment where the story turns; >= 4 spread over the span is what makes a case last. */
 export type CaseBeat = { at: string; what: string };
-export type CaseTension = { expectation: string; reality: string; strength: "strong" | "moderate" | "weak" };
+export type CaseTension = { expectation: string; reality: string; strength: "strong" | "moderate" | "weak"; counter?: CaseCounter };
+/** The strongest case against the tension (steel-man): found beats constructed; "absent" is a dated search that came back empty. */
+export type CaseCounter = { provenance: "found" | "constructed" | "absent"; case: string; searched?: string };
+export const COUNTER_PROVENANCE = ["found", "constructed", "absent"] as const;
+
+/** A "strong" tension must carry its steel-man; any counter present must be marked and, when absent, dated. */
+export function counterProblems(t: Partial<CaseTension> | undefined): string[] {
+  const k = t?.counter;
+  if (!k) return t?.strength === "strong" ? ["tension.counter is required for a strong tension: the strongest case against it {provenance: found|constructed|absent, case, searched}"] : [];
+  if (!COUNTER_PROVENANCE.includes(k.provenance) || !k.case?.trim()) return ["tension.counter needs provenance (found|constructed|absent) and a case: what the opposition says, or what was searched for"];
+  if (k.provenance === "absent" && !/^\d{4}-\d{2}-\d{2}$/.test(k.searched ?? "")) return ["tension.counter 'absent' needs searched: YYYY-MM-DD, the date of the search that found no opposition"];
+  return [];
+}
 export type NewCaseIdea = {
   title: string; pitch: string; domain: CaseDomain; arc: string; insight: string; why_lasts: string;
   tension: CaseTension; beats: CaseBeat[]; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
@@ -252,6 +264,7 @@ export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
   if (!c.tension?.expectation?.trim() || !c.tension?.reality?.trim() || !["strong", "moderate", "weak"].includes(c.tension?.strength ?? "")) {
     e.push("tension {expectation, reality, strength: strong|moderate|weak} is required - what the viewer expects vs what the data shows");
   }
+  e.push(...counterProblems(c.tension));
   if (!Array.isArray(c.beats) || c.beats.filter((b) => b?.at && b?.what).length < MIN_BEATS) {
     e.push(`beats: name at least ${MIN_BEATS} dated turns of the story {at, what} - a case without them cannot last`);
   }
