@@ -166,7 +166,7 @@ const idea: NewCaseIdea = {
   title: "The wins record changes hands", pitch: "Who held the all-time wins record, race by race",
   domain: "f1", arc: "Fangio, Clark, Stewart, Prost, Schumacher, Hamilton: six holders in 75 years",
   insight: "Records last longer each time: Prost held it 7 years, Schumacher 13",
-  why_lasts: "75 seasons, six handovers spread across the whole run",
+  why_lasts: "Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987",
   tension: { expectation: "records fall often", reality: "only six holders since 1950", strength: "strong" },
   beats: [{ at: "1957", what: "Fangio 24" }, { at: "1968", what: "Clark 25" }, { at: "1987", what: "Prost 28" }, { at: "2001", what: "Schumacher 52" }],
   timeline: { unit: "race", from: 1, to: 1150, years_from: 1950, years_to: 2026 },
@@ -191,6 +191,14 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(validateCaseIdea({ ...idea, sources: [{ name: "x", url: "", license: "" }] }).join()).toMatch(/needs name, url and license/);
     expect(validateCaseIdea({ ...idea, domain: "weather" as never }).join()).toMatch(/domain/);
     expect(validateCaseIdea(idea)).toEqual([]);
+  });
+
+  it("wants the keep-watching rationale to name dated turns and entities (path-over-conclusion)", () => {
+    const why = (w: string) => validateCaseIdea({ ...idea, why_lasts: w }).join();
+    expect(why("A fascinating topic that keeps changing all the way through the video")).toMatch(/why_lasts/);
+    expect(why("Fangio leads until 1957, then Clark and Prost trade the lead")).toMatch(/why_lasts/);
+    expect(why("Seventy-five seasons, six handovers, one collapse in 1987 and a comeback in 2001")).toMatch(/why_lasts/);
+    expect(why("Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987")).toBe("");
   });
 
   it("counts only beats inside the timeline, wants them spread, and caps them (accelerator events)", () => {

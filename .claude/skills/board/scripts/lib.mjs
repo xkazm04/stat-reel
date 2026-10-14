@@ -468,6 +468,27 @@ export function beatProblems(c) {
   return e;
 }
 
+/** Shortest keep-watching rationale (path-over-conclusion); shorter cannot walk through moments by name and date. */
+export const MIN_RATIONALE_CHARS = 40;
+const RATIONALE_YEAR = /\b(1[5-9]\d\d|20\d\d)\b/g;
+
+/**
+ * The keep-watching rationale (path-over-conclusion): `why_lasts` must walk through the moments by name and date,
+ * not call the topic interesting. Mechanical form: long enough, at least two dated moments, at least two named
+ * entities (capitalised words past the first). A rationale that only says "keeps changing" fails.
+ */
+export function rationaleProblems(c) {
+  const r = String(c.why_lasts ?? "").trim();
+  if (!r) return [];
+  const e = [];
+  const years = new Set(r.match(RATIONALE_YEAR) ?? []);
+  const names = new Set((r.replace(/^\S+\s*/, "").match(/\b[A-Z][\p{L}'-]{2,}/gu) ?? []).map((n) => n.toLowerCase()));
+  if (r.length < MIN_RATIONALE_CHARS || years.size < 2 || names.size < 2) {
+    e.push("why_lasts: walk through the moments that keep a viewer watching - at least two dated turns and two named entities (\"X leads until 2007, Y passes it in 2011\"), not that the topic is interesting");
+  }
+  return e;
+}
+
 export function validateCaseIdea(c) {
   const e = [];
   if (!c || typeof c !== "object") return ["not an object"];
@@ -482,6 +503,7 @@ export function validateCaseIdea(c) {
   if (!tl || typeof tl.years_from !== "number" || typeof tl.years_to !== "number" || !tl.unit || typeof tl.from !== "number" || typeof tl.to !== "number") e.push("timeline {unit, from, to, years_from, years_to} (numbers) is required");
   else if (tl.years_to - tl.years_from < MIN_SPAN_YEARS) e.push(`timeline covers ${tl.years_to - tl.years_from} years; needs at least ${MIN_SPAN_YEARS}`);
   e.push(...beatProblems(c));
+  e.push(...rationaleProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !String(c.method ?? "").trim()) e.push(`a ${c.kind} case needs method: how it is computed or measured`);
   if (c.data_status === "guess") {

@@ -194,7 +194,7 @@ test("rejectedCases lists only cases rejected more than accepted", async () => {
 test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources)", async () => {
   const { validateCaseIdea, titleKey } = await import("../scripts/lib.mjs");
   const ok = {
-    title: "t", pitch: "p", arc: "a", insight: "i", why_lasts: "w", domain: "music", topic: "music", data_status: "new-source",
+    title: "t", pitch: "p", arc: "a", insight: "i", why_lasts: "Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987", domain: "music", topic: "music", data_status: "new-source",
     tension: { expectation: "e", reality: "r", strength: "moderate" },
     beats: [{ at: "1960", what: "a" }, { at: "1970", what: "b" }, { at: "1985", what: "c" }, { at: "2005", what: "d" }],
     timeline: { unit: "year", from: 1960, to: 2020, years_from: 1960, years_to: 2020 },
@@ -207,6 +207,8 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.match(validateCaseIdea({ ...ok, beats: at(1930, 1940, 1950, 1955, 1970) }).join(), /inside 1960-2020/);
   assert.match(validateCaseIdea({ ...ok, beats: at(1961, 1962, 1963, 1964, 1965) }).join(), /spread them/);
   assert.match(validateCaseIdea({ ...ok, beats: at(...Array.from({ length: 16 }, (_, i) => 1960 + i * 3)) }).join(), /keep the 15/);
+  assert.match(validateCaseIdea({ ...ok, why_lasts: "A fascinating topic that keeps changing all the way through" }).join(), /why_lasts/);
+  assert.match(validateCaseIdea({ ...ok, why_lasts: "Fangio leads until 1957, then Clark and Prost trade the lead" }).join(), /why_lasts/);
   assert.match(validateCaseIdea({ ...ok, topic: undefined }).join(), /topic must be one of/);
   assert.match(validateCaseIdea({ ...ok, topic: "knitting" }).join(), /topic must be one of/);
   assert.deepEqual(validateCaseIdea({ ...ok, topic: "energy" }), []);

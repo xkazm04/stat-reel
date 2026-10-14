@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { checkCases } from "../scripts/check-cases.mjs";
 
 const ok = {
-  title: "Who rules the hardwood", pitch: "p", arc: "a", insight: "i", why_lasts: "w", domain: "sports", topic: "basketball", data_status: "guess",
+  title: "Who rules the hardwood", pitch: "p", arc: "a", insight: "i", why_lasts: "Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987", domain: "sports", topic: "basketball", data_status: "guess",
   tension: { expectation: "e", reality: "r", strength: "moderate" },
   beats: [{ at: "1960", what: "a" }, { at: "1970", what: "b" }, { at: "1985", what: "c" }, { at: "2005", what: "d" }],
   timeline: { unit: "year", from: 1960, to: 2020, years_from: 1960, years_to: 2020 },

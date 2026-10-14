@@ -46,6 +46,7 @@ The data moved, but nothing worth watching happened. The accepted cases share fo
 4. **A tension.** What a viewer expects versus what the data shows. Its strength is how checkable
    the claim is, not how big it sounds. "No tension" is an honest answer; do not inflate one.
 5. **Universal.** A viewer outside the domain gets it in five seconds.
+   `why_lasts` is the keep-watching rationale: at least two dated turns and two named entities, not "keeps changing"; the check fails the case otherwise.
 6. **Plausibly makeable.** Guess where the data lives; no proof needed yet (see below).
 
 Three kinds of case are welcome (`kind`):
@@ -95,7 +96,7 @@ Write `variant-1/cases.json`, a JSON array of {{count}} objects:
   "topic": "music",
   "arc": "What the viz reveals as time runs, start to end.",
   "insight": "The thing the viewer did not know before.",
-  "why_lasts": "Why 60-90 s of this stays interesting all the way through.",
+  "why_lasts": "Walk the 60-90 s by name and date: Britain leads until 1977, Sweden passes it in 1999, Korea arrives in 2012.",
   "kind": "observed",
   "method": null,
   "tension": {"expectation": "the US always dominated", "reality": "the UK, Sweden and Korea take turns", "strength": "moderate"},

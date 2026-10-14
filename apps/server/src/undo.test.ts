@@ -11,7 +11,7 @@ import { CaseIdeas, type NewCaseIdea } from "./library";
 
 const idea: NewCaseIdea = {
   title: "The wins record changes hands", pitch: "Who held the all-time wins record", domain: "f1", arc: "six holders in 75 years",
-  insight: "Records last longer each time", why_lasts: "75 seasons, six handovers",
+  insight: "Records last longer each time", why_lasts: "Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987",
   tension: { expectation: "records fall often", reality: "only six holders since 1950", strength: "strong" },
   beats: [{ at: "1957", what: "a" }, { at: "1968", what: "b" }, { at: "1987", what: "c" }, { at: "2001", what: "d" }],
   timeline: { unit: "race", from: 1, to: 1150, years_from: 1950, years_to: 2026 },

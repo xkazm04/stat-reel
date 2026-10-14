@@ -22,7 +22,7 @@ test.describe.configure({ mode: "serial" });
 const PNG_1X1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", "base64");
 
 const caseBody = (title: string, o: { data_status: string; sources: object[]; topic?: string }) => ({
-  title, pitch: "A decade-long e2e probe", domain: "f1", arc: "rise and fall", insight: "probe", why_lasts: "probe",
+  title, pitch: "A decade-long e2e probe", domain: "f1", arc: "rise and fall", insight: "probe", why_lasts: "Fangio leads until 1957, Clark passes him in 1968, Prost collapses in 1987",
   tension: { expectation: "steady", reality: "volatile", strength: "moderate" },
   beats: [1, 2, 3, 4].map((n) => ({ at: `20${10 + n}`, what: `turn ${n}` })),
   timeline: { unit: "year", from: 2010, to: 2024, years_from: 2010, years_to: 2024 },

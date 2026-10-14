@@ -175,6 +175,26 @@ export function beatProblems(c: Partial<NewCaseIdea>): string[] {
   }
   return e;
 }
+/** Shortest keep-watching rationale (path-over-conclusion); shorter cannot walk through moments by name and date. */
+export const MIN_RATIONALE_CHARS = 40;
+const RATIONALE_YEAR = /\b(1[5-9]\d\d|20\d\d)\b/g;
+
+/**
+ * The keep-watching rationale (path-over-conclusion): `why_lasts` must walk through the moments by name and date,
+ * not call the topic interesting. Mechanical form: long enough, at least two dated moments, at least two named
+ * entities (capitalised words past the first). A rationale that only says "keeps changing" fails.
+ */
+export function rationaleProblems(c: Partial<NewCaseIdea>): string[] {
+  const r = String(c.why_lasts ?? "").trim();
+  if (!r) return [];
+  const e: string[] = [];
+  const years = new Set(r.match(RATIONALE_YEAR) ?? []);
+  const names = new Set((r.replace(/^\S+\s*/, "").match(/\b[A-Z][\p{L}'-]{2,}/gu) ?? []).map((n) => n.toLowerCase()));
+  if (r.length < MIN_RATIONALE_CHARS || years.size < 2 || names.size < 2) {
+    e.push("why_lasts: walk through the moments that keep a viewer watching - at least two dated turns and two named entities (\"X leads until 2007, Y passes it in 2011\"), not that the topic is interesting");
+  }
+  return e;
+}
 /**
  * observed: the data as it happened. what-if: a computed scenario (cross-era comparison, an injury
  * that did not happen) - always labelled a simulation, method stated. influence: key persons
@@ -244,6 +264,7 @@ export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
     e.push(`timeline covers ${t.years_to - t.years_from} years; an approved case needs at least ${MIN_SPAN_YEARS} (a decade or all time)`);
   }
   e.push(...beatProblems(c));
+  e.push(...rationaleProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !c.method?.trim()) {
     e.push(`a ${c.kind} case needs method: how the ${c.kind === "what-if" ? "scenario is computed" : "influence is measured"}`);
