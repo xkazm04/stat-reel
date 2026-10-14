@@ -418,7 +418,7 @@ labelled empty state (ADR 005's real-data-only rule).
   "build": {"git_sha": "…", "composition": "EraAdjustedSlope@1.2.0", "props_sha256": "…", "renderer": "remotion@4.x"},
   "data": {"models": ["mart_era_adjusted"], "license_class": "legal",
            "sources": [{"id": "f1db", "snapshot": "2026-09-29T18:00:00Z", "license": "CC-BY-4.0", "license_class": "legal", "verdict": "legal", "attribution": "Data: F1DB (CC BY 4.0)"}]},
-  "audio": [{"kind": "tts", "provider": "elevenlabs", "request_id": "…", "model_id": "…", "voice_id": "…", "plan_tier": "creator", "generated_at": "…", "sha256": "…", "c2pa": true},
+  "audio": [{"kind": "tts", "provider": "elevenlabs", "request_id": "…", "model_id": "…", "voice_id": "…", "plan_tier": "creator", "generated_at": "…", "sha256": "…", "c2pa": "unknown"},
             {"kind": "music", "provider": "elevenlabs", "model_id": "music_v2", "prompt_sha256": "…", "plan_tier": "creator", "sha256": "…"}],
   "fonts": [{"family": "Barlow Condensed", "license": "OFL-1.1", "sha256": "…"}],
   "captions": {"burned_in": true, "sidecar": ["captions.srt"], "max_cps": 18.4},
