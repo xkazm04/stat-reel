@@ -253,7 +253,7 @@ describe("rule 4: non-revealing titles", () => {
     expect(codes(r)).toContain("reveals-winner");
     expect(codes(withHook("Will Juniper take the lead?"))).toContain("reveals-winner");
   });
-  it.each(["wins", "dominates", "takes over", "#1", "number one", "first place", "champion", "record"])(
+  it.each(["wins", "dominates", "takes over", "#1", "number one", "first place", "champion", "record", "dominated", "dominant", "overtook", "unbeaten", "undefeated", "crowned", "never lost"])(
     "rejects the reveal word '%s'",
     (w) => {
       expect(codes(withTitle(`Who ${w} the park`))).toContain("reveal-word");

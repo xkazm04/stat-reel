@@ -56,6 +56,14 @@ export const REVEAL_DENYLIST = [
   "#1",
   "number one",
   "first place",
+  "dominated",
+  "dominating",
+  "dominant",
+  "overtook",
+  "unbeaten",
+  "undefeated",
+  "crowned",
+  "never lost",
 ] as const;
 
 const FORBIDDEN_TRANSITION_KEY = /(^|_)(transition|enter|exit)s?($|_)/i;
