@@ -25,8 +25,8 @@ For each of the top 10 entities, look for a transparent logo (SVG or PNG), prefe
 ## Task
 1. Call `mcp__statreel__get_generation_context` with `job_id: "{{JOB_ID}}"` for the props schema.
 2. Call `mcp__statreel__compute_timing_plan` first; it writes `{{OUT_DIR}}/timing-plan.json` and `TIMING.md`.
-3. Produce {{VARIANTS}} DISTINCT looks of the **mid-video frame at 45 % of the timeline**, as {{VARIANTS}} `DataRaceProps` variants. Vary the look (palette, chart form, background treatment), not the data. Write:
+3. Produce {{VARIANTS}} DISTINCT looks of the **mid-video frame at 45 % of the timeline**, as {{VARIANTS}} `DataRaceProps` variants. Vary the look through what the props carry: the entity colour set, the unit label and the axis, never the data. The chart form is fixed (a ranked bar race); no props field carries a form or a background, so do not invent one. Give every entity its own identity colour and never colour by a category that makes two leading entities alike. Write:
    - `{{OUT_DIR}}/variants/v1.props.json` ... `v{{VARIANTS}}.props.json`
-   - `{{OUT_DIR}}/variants/v1.md` ... `v{{VARIANTS}}.md`: the style name on the first line (as a `# heading`) and a rationale of at most 80 words.
+   - `{{OUT_DIR}}/variants/v1.md` ... `v{{VARIANTS}}.md`: the style name on the first line (as a `# heading`) and a rationale of at most 80 words. In each rationale state the story's move in one line (who crosses whom, what accumulates, what appears at once) and say whether the ranked bar race shows that move at its event moment or hides it (a newcomer that is only a dot, an event that is a sliver), so the owner can pick another form.
 4. Call `mcp__statreel__validate_generation_output` with `job_id: "{{JOB_ID}}"`. Fix every error it returns, exactly as stated, and call it again. Repeat until it returns no errors.
 5. When validation returns no errors, **stop and end the session** with one short sentence. Do not do extra work after a clean validation.
