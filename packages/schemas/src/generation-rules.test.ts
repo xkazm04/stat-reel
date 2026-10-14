@@ -495,6 +495,31 @@ describe("rule 5: the ending is fixed", () => {
   });
 });
 
+describe("rule 5: the ending crowns the largest final value", () => {
+  it("rejects a plan whose final #1 is not the entity with the largest final value in the props", () => {
+    const r = run((p) => {
+      const es = p.entities as { values: (number | null)[] }[];
+      // the plan crowns entity 0 (planned from other numbers); the props now show entity 1 ahead at the end
+      const second = es[1] as { values: (number | null)[] };
+      second.values[second.values.length - 1] = 1e6;
+      return undefined;
+    });
+    expect(codes(r)).toContain("winner-not-final-leader");
+    expect(rules(r)).toContain(5);
+  });
+  it("accepts the crowned entity when it ties for the largest final value", () => {
+    const r = run((p) => {
+      const es = p.entities as { values: (number | null)[] }[];
+      const first = es[0] as { values: (number | null)[] };
+      const second = es[1] as { values: (number | null)[] };
+      const n = first.values.length;
+      second.values[n - 1] = first.values[n - 1] as number;
+      return undefined;
+    });
+    expect(codes(r)).not.toContain("winner-not-final-leader");
+  });
+});
+
 describe("rule 6: card lifespan", () => {
   it("accepts 105 and 135 and the default", () => {
     for (const life of [105, 120, 135])

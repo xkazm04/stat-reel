@@ -6,7 +6,7 @@
  *   2  timing plan first: sha256 matches, card frames come from the plan, knots are monotone
  *   3  top-10 with logos: <= 10 entities, ledger row per logo file, wordmark fallback, unique colours
  *   4  non-revealing title and hook
- *   5  fixed ending: the props cannot override or reorder it
+ *   5  fixed ending: the props cannot override or reorder it; it crowns the entity with the largest final value
  *   6  event cards: life_frames 105-135
  *
  * It works on UNPARSED input (anything an LLM wrote) and never throws. Rule 0 reports zod schema issues.
@@ -276,6 +276,25 @@ function rule5(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): vo
       if (k !== "facts") add("ending-override", `spotlight.${k}`, `spotlight only takes facts[]; '${k}' would change the fixed ending`);
     const n = arr(p.spotlight.facts).length;
     if (n < 1 || n > 2) add("spotlight-facts", "spotlight.facts", `spotlight.facts needs 1-2 entries, has ${n}`);
+  }
+  // The spotlight crowns plan.orders[last][0] and prints that entity's props value. The plan is computed from a
+  // separate input than the props values, so the two can disagree; the card then names a #1 the data does not show.
+  const crowned = plan && Array.isArray(plan.orders) ? plan.orders[plan.orders.length - 1]?.[0] : undefined;
+  if (crowned !== undefined) {
+    const finals = arr(p.entities)
+      .filter(isObj)
+      .map((e) => {
+        const v = arr(e.values)[arr(e.values).length - 1];
+        return { id: str(e.id), v: typeof v === "number" ? v : 0 }; // the planner masks a missing value to 0
+      });
+    const top = Math.max(...finals.map((x) => x.v));
+    const mine = finals.find((x) => x.id === crowned);
+    if (mine && finals.length > 0 && mine.v < top)
+      add(
+        "winner-not-final-leader",
+        "timing_plan.orders",
+        `the ending crowns '${crowned}' (final value ${mine.v}) but '${finals.find((x) => x.v === top)?.id}' has the largest final value (${top}): recompute the plan from the props values`,
+      );
   }
   if (plan?.sections) {
     const s = plan.sections;
