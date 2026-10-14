@@ -218,6 +218,15 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(validateCaseIdea({ ...idea, beats: ["a", "b", "c", "d"].map((w) => ({ at: `Round ${w}`, what: w })) })).toEqual([]);
   });
 
+  it("scores universality from the peak cast when one is supplied (recognizable cast)", () => {
+    const c = (...k: boolean[]) => k.map((known, i) => ({ name: `E${i}`, known }));
+    expect(validateCaseIdea({ ...idea, cast: c(true, true, false) })).toEqual([]);
+    expect(validateCaseIdea({ ...idea, cast: c(true, false, false) }).join()).toMatch(/only 1 of 3/);
+    expect(validateCaseIdea({ ...idea, cast: c(true) }).join()).toMatch(/2-10 entities/);
+    expect(validateCaseIdea({ ...idea, cast: c(...Array(11).fill(true)) }).join()).toMatch(/2-10 entities/);
+    expect(validateCaseIdea({ ...idea })).toEqual([]);
+  });
+
   it("accepts a data-less brainstorm (guess) with a feasibility instead of verified sources", () => {
     const { cases } = setup();
     const g = cases.create({ ...idea, data_status: "guess", sources: [], data_guess: "UN population tables, probably", feasibility: "likely" });

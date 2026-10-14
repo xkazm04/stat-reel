@@ -209,6 +209,10 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.match(validateCaseIdea({ ...ok, beats: at(...Array.from({ length: 16 }, (_, i) => 1960 + i * 3)) }).join(), /keep the 15/);
   assert.match(validateCaseIdea({ ...ok, why_lasts: "A fascinating topic that keeps changing all the way through" }).join(), /why_lasts/);
   assert.match(validateCaseIdea({ ...ok, why_lasts: "Fangio leads until 1957, then Clark and Prost trade the lead" }).join(), /why_lasts/);
+  const cast = (...k) => k.map((known, i) => ({ name: "E" + i, known }));
+  assert.deepEqual(validateCaseIdea({ ...ok, cast: cast(true, true, false) }), []);
+  assert.match(validateCaseIdea({ ...ok, cast: cast(true, false, false) }).join(), /only 1 of 3/);
+  assert.match(validateCaseIdea({ ...ok, cast: cast(true) }).join(), /2-10 entities/);
   assert.match(validateCaseIdea({ ...ok, topic: undefined }).join(), /topic must be one of/);
   assert.match(validateCaseIdea({ ...ok, topic: "knitting" }).join(), /topic must be one of/);
   assert.deepEqual(validateCaseIdea({ ...ok, topic: "energy" }), []);

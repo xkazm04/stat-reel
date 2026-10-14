@@ -147,6 +147,27 @@ export const MAX_BEATS = 15;
 export const MIN_BEAT_COVERAGE = 0.5;
 const BEAT_YEAR = /\b(1[5-9]\d\d|20\d\d)\b/;
 
+/** Peak-cast bounds (the DATA_RACE_LIMITS entity range) and the share that must be recognisable without a caption. */
+export const MIN_CAST = 2;
+export const MAX_CAST = 10;
+export const MIN_CAST_KNOWN = 0.5;
+
+/**
+ * The peak cast against the universality claim (recognizable-cast): a case that supplies its cast must name
+ * 2-10 entities and flag each as recognisable-without-a-caption or not; fewer than half known fails.
+ * An absent cast passes (size and record ladders have no cast; the object is the draw).
+ */
+export function castProblems(c: Partial<NewCaseIdea>): string[] {
+  if (c.cast === undefined || c.cast === null) return [];
+  const cast = Array.isArray(c.cast) ? c.cast.filter((x) => x?.name && String(x.name).trim()) : [];
+  if (cast.length < MIN_CAST || cast.length > MAX_CAST) return [`cast: name ${MIN_CAST}-${MAX_CAST} entities on screen at the peak moment (${cast.length} given)`];
+  const known = cast.filter((x) => x.known === true).length;
+  if (known / cast.length < MIN_CAST_KNOWN) {
+    return [`cast: only ${known} of ${cast.length} peak entities would be recognised without a caption; reframe around a recognisable anchor or drop the cast if scale is the draw`];
+  }
+  return [];
+}
+
 /**
  * Beats against the timeline (accelerator-events): beats dated before years_from are intro material, not
  * on-screen events, so only in-span beats count toward the minimum; a beat whose `at` names no year is
@@ -213,6 +234,8 @@ export type CaseSource = {
 /** What the viewer expects vs what the data shows over time; strength = how checkable, not how big. */
 /** A dated moment where the story turns; >= 4 spread over the span is what makes a case last. */
 export type CaseBeat = { at: string; what: string };
+/** One entity on screen at the peak; `known`: a general viewer in the target market names it without a caption. */
+export type CaseCastEntry = { name: string; known: boolean };
 export type CaseTension = { expectation: string; reality: string; strength: "strong" | "moderate" | "weak"; counter?: CaseCounter };
 /** The strongest case against the tension (steel-man): found beats constructed; "absent" is a dated search that came back empty. */
 export type CaseCounter = { provenance: "found" | "constructed" | "absent"; case: string; searched?: string };
@@ -228,7 +251,7 @@ export function counterProblems(t: Partial<CaseTension> | undefined): string[] {
 }
 export type NewCaseIdea = {
   title: string; pitch: string; domain: CaseDomain; arc: string; insight: string; why_lasts: string;
-  tension: CaseTension; beats: CaseBeat[]; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
+  tension: CaseTension; beats: CaseBeat[]; cast?: CaseCastEntry[] | null; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
   evidence?: string[]; data_status: DataStatus; source?: Record<string, unknown> | null;
   kind?: CaseKind;
   /** what-if / influence: how the scenario or the influence is computed, in one or two sentences */
@@ -249,7 +272,7 @@ export type CaseIdea = Omit<NewCaseIdea, "source"> & {
 const parse = <T>(s: string | null, d: T): T => (s ? (JSON.parse(s) as T) : d);
 const hydrate = (r: typeof caseIdeas.$inferSelect): CaseIdea => ({
   id: r.id, title: r.title, pitch: r.pitch, domain: r.domain as CaseDomain, arc: r.arc, insight: r.insight, why_lasts: r.why_lasts,
-  tension: parse(r.tension_json, { expectation: "", reality: "", strength: "weak" } as CaseTension), unknowns: parse(r.unknowns_json, []), beats: parse(r.beats_json, []),
+  tension: parse(r.tension_json, { expectation: "", reality: "", strength: "weak" } as CaseTension), unknowns: parse(r.unknowns_json, []), beats: parse(r.beats_json, []), cast: parse(r.cast_json, null),
   timeline: parse(r.timeline_json, {} as CaseTimeline), span_years: r.span_years, chart_ideas: parse(r.chart_ideas_json, []),
   requires: parse(r.requires_json, []), sources: parse(r.sources_json, []), evidence: parse(r.evidence_json, []),
   data_status: r.data_status as DataStatus, source: parse(r.source_json, null), status: r.status,
@@ -278,6 +301,7 @@ export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
   }
   e.push(...beatProblems(c));
   e.push(...rationaleProblems(c));
+  e.push(...castProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !c.method?.trim()) {
     e.push(`a ${c.kind} case needs method: how the ${c.kind === "what-if" ? "scenario is computed" : "influence is measured"}`);
@@ -307,7 +331,7 @@ export class CaseIdeas {
     const row = {
       id: `ci-${randomUUID().slice(0, 8)}`, title: c.title.trim(), pitch: c.pitch.trim(), domain: c.domain, arc: c.arc.trim(),
       insight: c.insight.trim(), why_lasts: c.why_lasts.trim(), tension_json: JSON.stringify(c.tension),
-      unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), timeline_json: JSON.stringify(c.timeline),
+      unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), cast_json: c.cast ? JSON.stringify(c.cast) : null, timeline_json: JSON.stringify(c.timeline),
       span_years: c.timeline.years_to - c.timeline.years_from, chart_ideas_json: JSON.stringify(c.chart_ideas ?? []),
       requires_json: JSON.stringify(c.requires ?? []), sources_json: JSON.stringify(c.sources ?? []), evidence_json: JSON.stringify(c.evidence ?? []),
       topic: c.topic ?? null, kind: c.kind ?? "observed", method: c.method?.trim() || null, data_guess: c.data_guess?.trim() || null, feasibility: c.feasibility ?? null,

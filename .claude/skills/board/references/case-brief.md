@@ -50,7 +50,11 @@ The data moved, but nothing worth watching happened. The accepted cases share fo
    only write one yourself, mark it `"constructed"`; if you looked and none exists, say what you looked
    for with `"absent"` and `searched: "YYYY-MM-DD"`. If the counter-case survives, grade the tension
    `moderate`, not `strong`.
-5. **Universal.** A viewer outside the domain gets it in five seconds.
+5. **Universal.** A viewer outside the domain gets it in five seconds. Score it from the cast, not the
+   topic label: list the entities on screen at the peak in `cast` as `{name, known}`, `known` meaning a
+   general viewer in the target market names it without a caption. At least half must be known (2-10
+   entities); the check fails the case otherwise. A niche dataset is reframed around a recognisable anchor
+   (a famous rivalry, one legend's record). Omit `cast` only when scale is the draw (tallest, biggest).
    `why_lasts` is the keep-watching rationale: at least two dated turns and two named entities, not "keeps changing"; the check fails the case otherwise.
 6. **Plausibly makeable.** Guess where the data lives; no proof needed yet (see below).
 

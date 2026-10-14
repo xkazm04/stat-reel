@@ -498,6 +498,23 @@ export function rationaleProblems(c) {
   return e;
 }
 
+/** Peak-cast bounds and recognisable share (recognizable-cast); mirror of apps/server/src/library.ts. */
+export const MIN_CAST = 2;
+export const MAX_CAST = 10;
+export const MIN_CAST_KNOWN = 0.5;
+
+/** An absent cast passes; a supplied one names 2-10 peak entities and at least half must be known without a caption. */
+export function castProblems(c) {
+  if (c.cast === undefined || c.cast === null) return [];
+  const cast = Array.isArray(c.cast) ? c.cast.filter((x) => x?.name && String(x.name).trim()) : [];
+  if (cast.length < MIN_CAST || cast.length > MAX_CAST) return [`cast: name ${MIN_CAST}-${MAX_CAST} entities on screen at the peak moment (${cast.length} given)`];
+  const known = cast.filter((x) => x.known === true).length;
+  if (known / cast.length < MIN_CAST_KNOWN) {
+    return [`cast: only ${known} of ${cast.length} peak entities would be recognised without a caption; reframe around a recognisable anchor or drop the cast if scale is the draw`];
+  }
+  return [];
+}
+
 export function validateCaseIdea(c) {
   const e = [];
   if (!c || typeof c !== "object") return ["not an object"];
@@ -514,6 +531,7 @@ export function validateCaseIdea(c) {
   else if (tl.years_to - tl.years_from < MIN_SPAN_YEARS) e.push(`timeline covers ${tl.years_to - tl.years_from} years; needs at least ${MIN_SPAN_YEARS}`);
   e.push(...beatProblems(c));
   e.push(...rationaleProblems(c));
+  e.push(...castProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !String(c.method ?? "").trim()) e.push(`a ${c.kind} case needs method: how it is computed or measured`);
   if (c.data_status === "guess") {

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CASE_DOMAINS, CASE_KINDS, CASE_TOPICS, DATA_STATUSES, FEASIBILITY, MIN_BEATS, MIN_SPAN_YEARS } from "../scripts/lib.mjs";
+import { CASE_DOMAINS, CASE_KINDS, CASE_TOPICS, DATA_STATUSES, FEASIBILITY, MAX_CAST, MIN_BEATS, MIN_CAST, MIN_SPAN_YEARS } from "../scripts/lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../../../..");
@@ -31,6 +31,8 @@ test("case enums and floors match apps/server/src/library.ts (the server re-vali
   assert.deepEqual(FEASIBILITY, constArray(lib, "FEASIBILITY"));
   assert.equal(MIN_SPAN_YEARS, constNumber(lib, "MIN_SPAN_YEARS"));
   assert.equal(MIN_BEATS, constNumber(lib, "MIN_BEATS"));
+  assert.equal(MIN_CAST, constNumber(lib, "MIN_CAST"));
+  assert.equal(MAX_CAST, constNumber(lib, "MAX_CAST"));
 });
 
 /** Topic keys of TOPIC_SEED in seed order: `["key", "Label"]` entries and `{ key: "x"` literals (the reserved fallback is a constant, not a literal). */
