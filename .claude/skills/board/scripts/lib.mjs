@@ -433,6 +433,41 @@ export const FEASIBILITY = ["likely", "possible", "hard"];
 export const MIN_SPAN_YEARS = 10;
 export const MIN_BEATS = 4;
 
+/** Most beats a case may name; past this the video is a caption reel (accelerator-events). */
+export const MAX_BEATS = 15;
+/** Parsed beats must cover at least this share of the timeline, or the story is bunched in one stretch. */
+export const MIN_BEAT_COVERAGE = 0.5;
+const BEAT_YEAR = /\b(1[5-9]\d\d|20\d\d)\b/;
+
+/**
+ * Beats against the timeline (accelerator-events): beats dated before years_from are intro material, not
+ * on-screen events, so only in-span beats count toward the minimum; a beat whose `at` names no year is
+ * kept (it cannot be judged); and the dated in-span beats must spread over the span instead of bunching.
+ */
+export function beatProblems(c) {
+  const beats = (Array.isArray(c.beats) ? c.beats : []).filter((b) => b?.at && b?.what);
+  const tl = c.timeline;
+  if (!tl || typeof tl.years_from !== "number" || typeof tl.years_to !== "number") return [];
+  const e = [];
+  if (beats.length > MAX_BEATS) e.push(`beats: ${beats.length} named; keep the ${MAX_BEATS} that explain the largest moves`);
+  const years = [];
+  let undated = 0;
+  for (const b of beats) {
+    const m = BEAT_YEAR.exec(String(b.at));
+    if (!m) { undated++; continue; }
+    const y = Number(m[1]);
+    if (y >= tl.years_from && y <= tl.years_to) years.push(y);
+  }
+  if (years.length + undated < MIN_BEATS && beats.length >= MIN_BEATS) {
+    e.push(`beats: only ${years.length + undated} fall inside ${tl.years_from}-${tl.years_to}; beats before the start are intro material and do not count`);
+  }
+  const span = tl.years_to - tl.years_from;
+  if (years.length >= 2 && span > 0 && (Math.max(...years) - Math.min(...years)) / span < MIN_BEAT_COVERAGE) {
+    e.push(`beats: dated ${Math.min(...years)}-${Math.max(...years)} cover under ${MIN_BEAT_COVERAGE * 100}% of ${tl.years_from}-${tl.years_to}; spread them over the span`);
+  }
+  return e;
+}
+
 export function validateCaseIdea(c) {
   const e = [];
   if (!c || typeof c !== "object") return ["not an object"];
@@ -446,6 +481,7 @@ export function validateCaseIdea(c) {
   const tl = c.timeline;
   if (!tl || typeof tl.years_from !== "number" || typeof tl.years_to !== "number" || !tl.unit || typeof tl.from !== "number" || typeof tl.to !== "number") e.push("timeline {unit, from, to, years_from, years_to} (numbers) is required");
   else if (tl.years_to - tl.years_from < MIN_SPAN_YEARS) e.push(`timeline covers ${tl.years_to - tl.years_from} years; needs at least ${MIN_SPAN_YEARS}`);
+  e.push(...beatProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !String(c.method ?? "").trim()) e.push(`a ${c.kind} case needs method: how it is computed or measured`);
   if (c.data_status === "guess") {

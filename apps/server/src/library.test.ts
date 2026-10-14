@@ -193,6 +193,14 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(validateCaseIdea(idea)).toEqual([]);
   });
 
+  it("counts only beats inside the timeline, wants them spread, and caps them (accelerator events)", () => {
+    const at = (...ys: number[]) => ys.map((y, i) => ({ at: String(y), what: `turn ${i}` }));
+    expect(validateCaseIdea({ ...idea, beats: at(1930, 1935, 1940, 1945, 1960) }).join()).toMatch(/inside 1950-2026/);
+    expect(validateCaseIdea({ ...idea, beats: at(1951, 1952, 1953, 1954, 1955, 1956) }).join()).toMatch(/spread them/);
+    expect(validateCaseIdea({ ...idea, beats: at(...Array.from({ length: 16 }, (_, i) => 1950 + i * 4)) }).join()).toMatch(/keep the 15/);
+    expect(validateCaseIdea({ ...idea, beats: ["a", "b", "c", "d"].map((w) => ({ at: `Round ${w}`, what: w })) })).toEqual([]);
+  });
+
   it("accepts a data-less brainstorm (guess) with a feasibility instead of verified sources", () => {
     const { cases } = setup();
     const g = cases.create({ ...idea, data_status: "guess", sources: [], data_guess: "UN population tables, probably", feasibility: "likely" });

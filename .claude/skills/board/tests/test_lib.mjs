@@ -203,6 +203,10 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.deepEqual(validateCaseIdea(ok), []);
   assert.match(validateCaseIdea({ ...ok, timeline: { ...ok.timeline, years_from: 2015 } }).join(), /at least 10/);
   assert.match(validateCaseIdea({ ...ok, beats: ok.beats.slice(1) }).join(), /beats/);
+  const at = (...ys) => ys.map((y, i) => ({ at: String(y), what: "t" + i }));
+  assert.match(validateCaseIdea({ ...ok, beats: at(1930, 1940, 1950, 1955, 1970) }).join(), /inside 1960-2020/);
+  assert.match(validateCaseIdea({ ...ok, beats: at(1961, 1962, 1963, 1964, 1965) }).join(), /spread them/);
+  assert.match(validateCaseIdea({ ...ok, beats: at(...Array.from({ length: 16 }, (_, i) => 1960 + i * 3)) }).join(), /keep the 15/);
   assert.match(validateCaseIdea({ ...ok, topic: undefined }).join(), /topic must be one of/);
   assert.match(validateCaseIdea({ ...ok, topic: "knitting" }).join(), /topic must be one of/);
   assert.deepEqual(validateCaseIdea({ ...ok, topic: "energy" }), []);

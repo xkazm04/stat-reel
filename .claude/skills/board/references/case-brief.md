@@ -40,7 +40,9 @@ The data moved, but nothing worth watching happened. The accepted cases share fo
 2. **A cast and a race.** Entities that compete, overtake, rise and fall: countries, artists, teams,
    genres, cities, companies, players. Or a quantity whose shape changes dramatically.
 3. **At least four beats.** Dated turns of the story, spread over the span: a lead changes, an era
-   begins, a record falls, a collapse happens. If you cannot name four, the case cannot last.
+   begins, a record falls, a collapse happens. If you cannot name four, the case cannot last. Beats must
+   fall inside the timeline (earlier ones are intro material and do not count), cover at least half of
+   it, and number at most 15; the check fails the case otherwise.
 4. **A tension.** What a viewer expects versus what the data shows. Its strength is how checkable
    the claim is, not how big it sounds. "No tension" is an honest answer; do not inflate one.
 5. **Universal.** A viewer outside the domain gets it in five seconds.
