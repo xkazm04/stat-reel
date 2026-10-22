@@ -69,6 +69,8 @@ export const DATA_RACE_LIMITS = {
   lifeFramesDefault: 120,
   lifeFramesMin: 105,
   lifeFramesMax: 135,
+  /** frames of a card's side reveal; two cards closer than this would enter at once (rule 6) */
+  cardEnterFrames: 14,
   factTextMaxChars: 48,
   /** shown as a burned badge when data_provenance is "sample" (spec D.6) */
   sampleBadgeText: "SAMPLE DATA · DESIGN PREVIEW",

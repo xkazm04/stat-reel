@@ -7,7 +7,7 @@
  *   3  top-10 with logos: <= 10 entities, ledger row per logo file, wordmark fallback, unique colours
  *   4  non-revealing title and hook
  *   5  fixed ending: the props cannot override or reorder it; it crowns the entity with the largest final value
- *   6  event cards: life_frames 105-135
+ *   6  event cards: life_frames 105-135, and no two cards enter at once
  *
  * It works on UNPARSED input (anything an LLM wrote) and never throws. Rule 0 reports zod schema issues.
  */
@@ -307,7 +307,11 @@ function rule5(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): vo
   }
 }
 
-/** Rule 6: each event card lives 105-135 frames (default 120). */
+/**
+ * Rule 6: each event card lives 105-135 frames (default 120), and no two cards enter at once. Two
+ * events on one period get one start frame from the plan, so both side reveals would run together;
+ * the pile only reads as one object when each newer card lands on a settled one.
+ */
 function rule6(p: Loose, out: RuleViolation[]): void {
   arr(p.events).forEach((raw, i) => {
     const life = (raw as Loose | undefined)?.life_frames;
@@ -320,6 +324,22 @@ function rule6(p: Loose, out: RuleViolation[]): void {
         message: `life_frames ${String(life)} is outside ${DATA_RACE_LIMITS.lifeFramesMin}-${DATA_RACE_LIMITS.lifeFramesMax} (default ${DATA_RACE_LIMITS.lifeFramesDefault})`,
       });
   });
+  const starts = arr(p.events)
+    .map((raw, i) => ({ i, id: str((raw as Loose | undefined)?.id), frame: (raw as Loose | undefined)?.start_frame }))
+    .filter((e): e is { i: number; id: string; frame: number } => typeof e.frame === "number" && Number.isFinite(e.frame))
+    .sort((a, b) => a.frame - b.frame);
+  for (let k = 1; k < starts.length; k++) {
+    const a = starts[k - 1] as (typeof starts)[number];
+    const b = starts[k] as (typeof starts)[number];
+    const gap = b.frame - a.frame;
+    if (gap < DATA_RACE_LIMITS.cardEnterFrames)
+      out.push({
+        rule: 6,
+        code: "card-entrances-overlap",
+        path: `events[${b.i}].start_frame`,
+        message: `events '${a.id}' and '${b.id}' start ${gap} frames apart; a card takes ${DATA_RACE_LIMITS.cardEnterFrames} frames to enter, so both would enter at once: merge them into one card or move one to another period`,
+      });
+  }
 }
 
 /**

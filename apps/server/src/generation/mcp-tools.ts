@@ -61,7 +61,7 @@ export const GENERATION_RULES = [
   `3. At most ${DATA_RACE_LIMITS.maxEntities} entities (say why in entity_count_reason when fewer). Each has a unique colour and a logo: an asset file saved with fetch_asset (path under assets/, with a ledger row in out/assets.json) or {kind: "wordmark"} listed in missing_logos.`,
   `4. title <= ${DATA_RACE_LIMITS.titleMaxChars} chars, one line; hook ends with "?". Neither may name the final #1 (or an alias) or use: ${REVEAL_DENYLIST.join(", ")}. Event titles <= ${DATA_RACE_LIMITS.eventTitleMaxChars} chars.`,
   `5. The ending (winner spotlight ${ENDING_FRAMES.spotlight} + like & subscribe ${ENDING_FRAMES.like} + Powered by StatReel ${ENDING_FRAMES.powered} frames) is rendered by the composition; props only give spotlight.facts[] (1-2, fact-ref'd).`,
-  `6. Event cards live life_frames = ${DATA_RACE_LIMITS.lifeFramesDefault} by default (${DATA_RACE_LIMITS.lifeFramesMin}-${DATA_RACE_LIMITS.lifeFramesMax} allowed).`,
+  `6. Event cards live life_frames = ${DATA_RACE_LIMITS.lifeFramesDefault} by default (${DATA_RACE_LIMITS.lifeFramesMin}-${DATA_RACE_LIMITS.lifeFramesMax} allowed); no two events on the same period, or both cards would enter at once.`,
   `Format: vertical 1080x1920, ${DATA_RACE_FPS} fps, ${DATA_RACE_DURATION_S.min}-${DATA_RACE_DURATION_S.max} s, no narration.`,
   'Data: a case whose data is new-source or guess may only carry data_provenance "sample" (labelled SAMPLE DATA); a video needs "real" with a fact ref (<row fact_key>#<column>) for every number.',
 ];

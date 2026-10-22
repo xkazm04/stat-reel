@@ -82,7 +82,7 @@ const easeOutCubic = (x: number): number => 1 - (1 - clamp01(x)) ** 3;
 const easeInCubic = (x: number): number => clamp01(x) ** 3;
 
 export const CARD = {
-  enterFrames: 14,
+  enterFrames: DATA_RACE_LIMITS.cardEnterFrames,
   exitFrames: 12,
   /** push-back per depth (spec D.8 rule 6) */
   push: { x: 24, y: -62, scale: 0.06, brightness: 0.12 },

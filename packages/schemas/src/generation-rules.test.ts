@@ -532,6 +532,27 @@ describe("rule 6: card lifespan", () => {
     expect(codes(r)).toContain("life-frames");
     expect(rules(r)).toContain(6);
   });
+  // move the merger onto a frame `gap` after the launch, in the plan and the props alike
+  const near = (gap: number) =>
+    run((p, plan) => {
+      const pe = plan.events[1] as TimingPlan["events"][number];
+      pe.frame = 300 + gap;
+      set(ev(p, 1), "start_frame", 300 + gap);
+      set(p, "timing_plan_sha256", planSha256(plan));
+      return plan;
+    });
+  it("rejects two events on one start frame: both cards would enter at once", () => {
+    const r = near(0);
+    expect(codes(r)).toEqual(["card-entrances-overlap"]);
+    expect(rules(r)).toEqual([6]);
+    expect(formatViolations(r.violations).join("\n")).toMatch(/'launch' and 'merger' start 0 frames apart/);
+  });
+  it("rejects a second card that starts inside the first card's entrance", () => {
+    expect(codes(near(DATA_RACE_LIMITS.cardEnterFrames - 1))).toEqual(["card-entrances-overlap"]);
+  });
+  it("accepts a second card once the first has entered (the pile still stacks)", () => {
+    expect(near(DATA_RACE_LIMITS.cardEnterFrames).ok).toBe(true);
+  });
 });
 
 describe("render props and schema export", () => {
