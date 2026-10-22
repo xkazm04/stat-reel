@@ -188,6 +188,8 @@ export const caseIdeas = sqliteTable("case_ideas", {
   beats_json: text("beats_json").notNull(),
   /** the peak cast [{name, known}] (recognizable-cast); null when the case does not supply one. Added by addColumn. */
   cast_json: text("cast_json"),
+  /** the repeatable template {template, instances} (series-repeatability); null for a one-off. Added by addColumn. */
+  series_json: text("series_json"),
   timeline_json: text("timeline_json").notNull(),
   span_years: real("span_years").notNull(),
   chart_ideas_json: text("chart_ideas_json").notNull(),
@@ -374,6 +376,7 @@ export function openDb(file: string): Db {
   for (const c of ["kind", "method", "data_guess", "feasibility"]) addColumn("case_ideas", c, "text");
   addColumn("case_ideas", "archive_reason", "text");
   addColumn("case_ideas", "cast_json", "text");
+  addColumn("case_ideas", "series_json", "text");
   addColumn("generation_jobs", "cost_usd", "real");
   addColumn("generation_jobs", "turns", "integer");
   addColumn("llm_sessions", "cost_usd", "real");

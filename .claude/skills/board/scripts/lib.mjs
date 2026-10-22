@@ -515,6 +515,26 @@ export function castProblems(c) {
   return [];
 }
 
+/** Further instances a declared series must name (series-repeatability); mirror of apps/server/src/library.ts. */
+export const MIN_SERIES_INSTANCES = 3;
+
+/** An absent series passes (a one-off); a declared one names its template and 3+ further instances, distinct from the case and each other. */
+export function seriesProblems(c) {
+  if (c.series === undefined || c.series === null) return [];
+  const s = c.series;
+  if (!String(s?.template ?? "").trim()) return ["series.template: name the repeatable template this case is one instance of (the data shape every episode shares)"];
+  const key = (x) => String(x).toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const seen = new Set([key(c.title ?? "")]);
+  let distinct = 0;
+  for (const x of Array.isArray(s.instances) ? s.instances : []) {
+    const k = key(x ?? "");
+    if (k && !seen.has(k)) distinct++;
+    if (k) seen.add(k);
+  }
+  if (distinct < MIN_SERIES_INSTANCES) return [`series.instances: name at least ${MIN_SERIES_INSTANCES} further episodes on the same data shape, other than this case (${distinct} distinct given); drop series for a one-off`];
+  return [];
+}
+
 export function validateCaseIdea(c) {
   const e = [];
   if (!c || typeof c !== "object") return ["not an object"];
@@ -532,6 +552,7 @@ export function validateCaseIdea(c) {
   e.push(...beatProblems(c));
   e.push(...rationaleProblems(c));
   e.push(...castProblems(c));
+  e.push(...seriesProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !String(c.method ?? "").trim()) e.push(`a ${c.kind} case needs method: how it is computed or measured`);
   if (c.data_status === "guess") {

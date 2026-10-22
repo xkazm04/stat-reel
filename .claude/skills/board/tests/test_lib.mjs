@@ -213,6 +213,11 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.deepEqual(validateCaseIdea({ ...ok, cast: cast(true, true, false) }), []);
   assert.match(validateCaseIdea({ ...ok, cast: cast(true, false, false) }).join(), /only 1 of 3/);
   assert.match(validateCaseIdea({ ...ok, cast: cast(true) }).join(), /2-10 entities/);
+  const series = (template, ...instances) => ({ template, instances });
+  assert.deepEqual(validateCaseIdea({ ...ok, series: series("country share of a global chart", "films", "books", "video games") }), []);
+  assert.match(validateCaseIdea({ ...ok, series: series("country share of a global chart", "films", "books") }).join(), /at least 3 further/);
+  assert.match(validateCaseIdea({ ...ok, series: series("country share of a global chart", "T", "films", "Films") }).join(), /1 distinct/);
+  assert.match(validateCaseIdea({ ...ok, series: series("", "films", "books", "games") }).join(), /series.template/);
   assert.match(validateCaseIdea({ ...ok, topic: undefined }).join(), /topic must be one of/);
   assert.match(validateCaseIdea({ ...ok, topic: "knitting" }).join(), /topic must be one of/);
   assert.deepEqual(validateCaseIdea({ ...ok, topic: "energy" }), []);

@@ -310,6 +310,7 @@ export type CaseIdea = {
   /** dated turns of the story (>= 4) */
   beats: { at: string; what: string }[];
   cast?: { name: string; known: boolean }[] | null;
+  series?: { template: string; instances: string[] } | null;
   timeline: { unit: string; from: number; to: number; years_from: number; years_to: number };
   span_years: number;
   chart_ideas: string[];

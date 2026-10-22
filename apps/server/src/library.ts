@@ -168,6 +168,30 @@ export function castProblems(c: Partial<NewCaseIdea>): string[] {
   return [];
 }
 
+/** Further instances a declared series must name besides the case itself. */
+export const MIN_SERIES_INSTANCES = 3;
+
+/**
+ * The template a case belongs to (series-repeatability): a case that declares a series must name the template
+ * (the data shape every episode shares) and at least 3 further instances, distinct from the case and each other.
+ * An absent series passes (an event-driven one-off). A series never excuses a weak case; every instance is judged alone.
+ */
+export function seriesProblems(c: Partial<NewCaseIdea>): string[] {
+  if (c.series === undefined || c.series === null) return [];
+  const s = c.series;
+  if (!String(s?.template ?? "").trim()) return ["series.template: name the repeatable template this case is one instance of (the data shape every episode shares)"];
+  const key = (x: unknown) => String(x).toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const seen = new Set([key(c.title ?? "")]);
+  let distinct = 0;
+  for (const x of Array.isArray(s.instances) ? s.instances : []) {
+    const k = key(x ?? "");
+    if (k && !seen.has(k)) distinct++;
+    if (k) seen.add(k);
+  }
+  if (distinct < MIN_SERIES_INSTANCES) return [`series.instances: name at least ${MIN_SERIES_INSTANCES} further episodes on the same data shape, other than this case (${distinct} distinct given); drop series for a one-off`];
+  return [];
+}
+
 /**
  * Beats against the timeline (accelerator-events): beats dated before years_from are intro material, not
  * on-screen events, so only in-span beats count toward the minimum; a beat whose `at` names no year is
@@ -236,6 +260,8 @@ export type CaseSource = {
 export type CaseBeat = { at: string; what: string };
 /** One entity on screen at the peak; `known`: a general viewer in the target market names it without a caption. */
 export type CaseCastEntry = { name: string; known: boolean };
+/** The repeatable template a case is one episode of, and further episodes on the same data shape. */
+export type CaseSeries = { template: string; instances: string[] };
 export type CaseTension = { expectation: string; reality: string; strength: "strong" | "moderate" | "weak"; counter?: CaseCounter };
 /** The strongest case against the tension (steel-man): found beats constructed; "absent" is a dated search that came back empty. */
 export type CaseCounter = { provenance: "found" | "constructed" | "absent"; case: string; searched?: string };
@@ -251,7 +277,7 @@ export function counterProblems(t: Partial<CaseTension> | undefined): string[] {
 }
 export type NewCaseIdea = {
   title: string; pitch: string; domain: CaseDomain; arc: string; insight: string; why_lasts: string;
-  tension: CaseTension; beats: CaseBeat[]; cast?: CaseCastEntry[] | null; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
+  tension: CaseTension; beats: CaseBeat[]; cast?: CaseCastEntry[] | null; series?: CaseSeries | null; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
   evidence?: string[]; data_status: DataStatus; source?: Record<string, unknown> | null;
   kind?: CaseKind;
   /** what-if / influence: how the scenario or the influence is computed, in one or two sentences */
@@ -272,7 +298,7 @@ export type CaseIdea = Omit<NewCaseIdea, "source"> & {
 const parse = <T>(s: string | null, d: T): T => (s ? (JSON.parse(s) as T) : d);
 const hydrate = (r: typeof caseIdeas.$inferSelect): CaseIdea => ({
   id: r.id, title: r.title, pitch: r.pitch, domain: r.domain as CaseDomain, arc: r.arc, insight: r.insight, why_lasts: r.why_lasts,
-  tension: parse(r.tension_json, { expectation: "", reality: "", strength: "weak" } as CaseTension), unknowns: parse(r.unknowns_json, []), beats: parse(r.beats_json, []), cast: parse(r.cast_json, null),
+  tension: parse(r.tension_json, { expectation: "", reality: "", strength: "weak" } as CaseTension), unknowns: parse(r.unknowns_json, []), beats: parse(r.beats_json, []), cast: parse(r.cast_json, null), series: parse(r.series_json, null),
   timeline: parse(r.timeline_json, {} as CaseTimeline), span_years: r.span_years, chart_ideas: parse(r.chart_ideas_json, []),
   requires: parse(r.requires_json, []), sources: parse(r.sources_json, []), evidence: parse(r.evidence_json, []),
   data_status: r.data_status as DataStatus, source: parse(r.source_json, null), status: r.status,
@@ -302,6 +328,7 @@ export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
   e.push(...beatProblems(c));
   e.push(...rationaleProblems(c));
   e.push(...castProblems(c));
+  e.push(...seriesProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !c.method?.trim()) {
     e.push(`a ${c.kind} case needs method: how the ${c.kind === "what-if" ? "scenario is computed" : "influence is measured"}`);
@@ -331,7 +358,7 @@ export class CaseIdeas {
     const row = {
       id: `ci-${randomUUID().slice(0, 8)}`, title: c.title.trim(), pitch: c.pitch.trim(), domain: c.domain, arc: c.arc.trim(),
       insight: c.insight.trim(), why_lasts: c.why_lasts.trim(), tension_json: JSON.stringify(c.tension),
-      unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), cast_json: c.cast ? JSON.stringify(c.cast) : null, timeline_json: JSON.stringify(c.timeline),
+      unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), cast_json: c.cast ? JSON.stringify(c.cast) : null, series_json: c.series ? JSON.stringify(c.series) : null, timeline_json: JSON.stringify(c.timeline),
       span_years: c.timeline.years_to - c.timeline.years_from, chart_ideas_json: JSON.stringify(c.chart_ideas ?? []),
       requires_json: JSON.stringify(c.requires ?? []), sources_json: JSON.stringify(c.sources ?? []), evidence_json: JSON.stringify(c.evidence ?? []),
       topic: c.topic ?? null, kind: c.kind ?? "observed", method: c.method?.trim() || null, data_guess: c.data_guess?.trim() || null, feasibility: c.feasibility ?? null,

@@ -74,6 +74,14 @@ Three kinds of case are welcome (`kind`):
 Propose **{{count}} use cases** in your lane. They must be genuinely different stories, not one
 dataset sliced {{count}} ways.
 
+**A series goes in `series`, not in more cases.** When a case is one instance of a repeatable template
+(every sport's all-time record changing hands, every chart's country share), add
+`series: {template, instances}`: the template is the data shape every episode shares, and `instances`
+names at least three further episodes on that shape, other than this case. The owner reads it as a
+small tie-breaker, never as a reason to accept a weak case: every episode is judged on its own. A
+sibling episode of an accepted case is not a repeat of it. Omit `series` for a one-off whose timing is
+the value (a record just broken); the check fails a series that names fewer than three further episodes.
+
 ## Data: guess, do not prove
 
 This is **brainstorming**. Do not spend your time verifying datasets, licences or URLs. The owner
@@ -110,6 +118,7 @@ Write `variant-1/cases.json`, a JSON array of {{count}} objects:
   "method": null,
   "tension": {"expectation": "the US always dominated", "reality": "the UK, Sweden and Korea take turns", "strength": "moderate"},
   "beats": [{"at": "1964", "what": "British invasion"}, {"at": "1977", "what": "..."}, {"at": "1999", "what": "..."}, {"at": "2012", "what": "..."}],
+  "series": {"template": "which countries make a global chart, decade by decade", "instances": ["box-office films", "bestselling novels", "video game hits"]},
   "timeline": {"unit": "year", "from": 1960, "to": 2025, "years_from": 1960, "years_to": 2025},
   "chart_ideas": ["country share streamgraph", "map filling by decade"],
   "requires": ["chart positions by artist origin"],

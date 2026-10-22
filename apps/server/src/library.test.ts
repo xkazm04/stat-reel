@@ -227,6 +227,19 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(validateCaseIdea({ ...idea })).toEqual([]);
   });
 
+  it("checks a declared series and keeps it (series repeatability)", () => {
+    const s = (template: string, ...instances: string[]) => ({ template, instances });
+    const ok = s("an all-time record changing hands", "MotoGP wins record", "Grand Slam titles record", "World Cup goals record");
+    expect(validateCaseIdea({ ...idea, series: ok })).toEqual([]);
+    expect(validateCaseIdea({ ...idea, series: s("records", "a", "b") }).join()).toMatch(/at least 3 further/);
+    expect(validateCaseIdea({ ...idea, series: s("records", idea.title, "a", "b") }).join()).toMatch(/2 distinct/);
+    expect(validateCaseIdea({ ...idea, series: s("records", "a", "A", "b") }).join()).toMatch(/2 distinct/);
+    expect(validateCaseIdea({ ...idea, series: s(" ", "a", "b", "c") }).join()).toMatch(/series.template/);
+    const { cases } = setup();
+    expect(cases.create({ ...idea, series: ok }).series).toEqual(ok);
+    expect(cases.create({ ...idea, title: "Another record" }).series).toBeNull();
+  });
+
   it("accepts a data-less brainstorm (guess) with a feasibility instead of verified sources", () => {
     const { cases } = setup();
     const g = cases.create({ ...idea, data_status: "guess", sources: [], data_guess: "UN population tables, probably", feasibility: "likely" });
