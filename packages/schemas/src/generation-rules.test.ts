@@ -163,6 +163,22 @@ describe("rule 2: timing plan first", () => {
     });
     expect(codes(r2)).toContain("start-frame");
   });
+  it("rejects a card whose dated label disagrees with the clock period it appears under", () => {
+    const r = run((p) => {
+      ev(p, 1).date_label = "2012";
+      return undefined;
+    });
+    expect(codes(r)).toContain("date-label-period");
+    expect(rules(r)).toEqual([2]);
+  });
+  it("accepts a finer date label in the same year, and a label with no year", () => {
+    const r = run((p) => {
+      ev(p, 0).date_label = "MAR 2013";
+      ev(p, 1).date_label = "SUMMER";
+      return undefined;
+    });
+    expect(codes(r)).not.toContain("date-label-period");
+  });
   it("rejects non-monotone knots", () => {
     const r = run((p, plan) => {
       const bad = { ...plan, knots: plan.knots.map((k, i) => (i === 5 ? ([plan.knots[4]?.[0] ?? 0, 5] as [number, number]) : k)) };

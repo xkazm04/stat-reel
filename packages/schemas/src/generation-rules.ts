@@ -111,6 +111,8 @@ function rule1(p: Loose, out: RuleViolation[]): void {
   });
 }
 
+const yearOf = (s: string): string | undefined => s.match(/\b(?:1[5-9]|20)\d\d\b/)?.[0];
+
 /** Rule 2: timing plan first. */
 function rule2(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): void {
   const add = (code: string, path: string, message: string) => out.push({ rule: 2, code, path, message });
@@ -160,6 +162,13 @@ function rule2(p: Loose, plan: TimingPlan | undefined, out: RuleViolation[]): vo
       add("start-frame", `events[${i}].start_frame`, `event '${id}' starts at ${String(e.start_frame)}; the plan says ${pe.frame}`);
     else if (pe.frame >= s.timeline_end)
       add("event-after-timeline", `events[${i}].start_frame`, `event '${id}' starts at ${pe.frame}, after the timeline ends (${s.timeline_end})`);
+    // the card's dated label sits at the period the plan placed it: a year that disagrees with the clock is a false date on the frame
+    if (pe) {
+      const cardYear = yearOf(str(e.date_label));
+      const clockYear = yearOf(str(arr(p.periods)[pe.period]));
+      if (cardYear && clockYear && cardYear !== clockYear)
+        add("date-label-period", `events[${i}].date_label`, `event '${id}' is dated ${cardYear} but the plan places it at period ${str(arr(p.periods)[pe.period])}: the card's date must match the clock it appears under`);
+    }
   });
   // entities must be the ones the plan ordered
   const ids = arr(p.entities).map((e) => (isObj(e) ? str(e.id) : ""));
