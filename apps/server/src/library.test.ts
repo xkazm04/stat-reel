@@ -240,6 +240,20 @@ describe("Case ideas (use cases proposed as text, behind the owner's gate)", () 
     expect(cases.create({ ...idea, title: "Another record" }).series).toBeNull();
   });
 
+  it("grounds a what-if on a real baseline and bounds its reach (speculative grounding)", () => {
+    const wi = { ...idea, kind: "what-if" as const, method: "hold the pre-event growth rate" };
+    const tl = (o: Partial<NewCaseIdea["timeline"]>) => ({ ...idea.timeline, ...o });
+    expect(validateCaseIdea(wi)).toEqual([]);
+    expect(validateCaseIdea({ ...wi, branch_year: idea.timeline.years_from + 30, timeline: tl({ years_to: idea.timeline.years_from + 60 }) })).toEqual([]);
+    expect(validateCaseIdea({ ...wi, branch_year: idea.timeline.years_from + 15 }).join()).toMatch(/only 15 years of real baseline/);
+    expect(validateCaseIdea({ ...wi, branch_year: idea.timeline.years_from + 30, timeline: tl({ years_to: idea.timeline.years_from + 100 }) }).join()).toMatch(/more than 2x/);
+    expect(validateCaseIdea({ ...wi, branch_year: idea.timeline.years_from + 15, timeline: tl({ unit: "month", years_to: idea.timeline.years_from + 35 }) }).join()).not.toMatch(/real baseline|more than 2x/);
+    expect(validateCaseIdea({ ...idea, branch_year: idea.timeline.years_from + 30 }).join()).toMatch(/only a what-if/);
+    const { cases } = setup();
+    expect(cases.create({ ...wi, branch_year: idea.timeline.years_from + 30 }).branch_year).toBe(idea.timeline.years_from + 30);
+    expect(cases.create({ ...idea, title: "Another observed" }).branch_year).toBeNull();
+  });
+
   it("accepts a data-less brainstorm (guess) with a feasibility instead of verified sources", () => {
     const { cases } = setup();
     const g = cases.create({ ...idea, data_status: "guess", sources: [], data_guess: "UN population tables, probably", feasibility: "likely" });

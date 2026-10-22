@@ -74,6 +74,12 @@ Three kinds of case are welcome (`kind`):
 Propose **{{count}} use cases** in your lane. They must be genuinely different stories, not one
 dataset sliced {{count}} ways.
 
+**A what-if declares where the real data ends.** Add `branch_year` (a whole year inside the timeline) to a
+`what-if` case: at least 20 years of real baseline before it (10 when the series is monthly or finer),
+a speculative stretch no longer than twice that baseline, and nothing past 2100. The video shows the real
+series beside the speculative one and labels the stretch SPECULATIVE. Omit `branch_year` only while the
+case is not yet shaped; the check refuses it on any kind but `what-if`.
+
 **A series goes in `series`, not in more cases.** When a case is one instance of a repeatable template
 (every sport's all-time record changing hands, every chart's country share), add
 `series: {template, instances}`: the template is the data shape every episode shares, and `instances`

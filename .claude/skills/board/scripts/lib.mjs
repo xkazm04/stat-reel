@@ -535,6 +535,35 @@ export function seriesProblems(c) {
   return [];
 }
 
+/** Real baseline a what-if must stand on before its branch year (speculative-grounding; mirror of apps/server/src/library.ts); about 10 when the series is monthly or finer. */
+export const MIN_BASELINE_YEARS = 20;
+export const MIN_BASELINE_YEARS_FINE = 10;
+/** The speculative stretch may run at most this many times the real baseline, and never past MAX_PROJECTION_YEAR. */
+export const MAX_REACH_RATIO = 2;
+export const MAX_PROJECTION_YEAR = 2100;
+
+/**
+ * Speculative grounding: a what-if case that declares branch_year (the last year of real data) must stand on a real
+ * baseline of 20 years (10 for monthly or finer series), reach no further than twice that baseline, and stop at 2100.
+ * An absent branch_year passes (the case is not yet shaped); a branch_year on any other kind is refused.
+ */
+export function speculationProblems(c) {
+  if (c.branch_year === undefined || c.branch_year === null) return [];
+  if (c.kind !== "what-if") return ["branch_year: only a what-if case has a branch point; drop it for an observed or influence case"];
+  const t = c.timeline;
+  if (!Number.isInteger(c.branch_year) || !t || typeof t.years_from !== "number" || typeof t.years_to !== "number") return ["branch_year: a whole year inside the timeline is required"];
+  if (c.branch_year <= t.years_from || c.branch_year >= t.years_to) return [`branch_year ${c.branch_year} must fall inside ${t.years_from}-${t.years_to}, with speculation after it`];
+  const fine = /month|week|day|hour|quarter/i.test(t.unit ?? "");
+  const floor = fine ? MIN_BASELINE_YEARS_FINE : MIN_BASELINE_YEARS;
+  const baseline = c.branch_year - t.years_from;
+  const e = [];
+  if (baseline < floor) e.push(`branch_year: only ${baseline} years of real baseline before ${c.branch_year}; a what-if needs at least ${floor}`);
+  const horizon = t.years_to - c.branch_year;
+  if (baseline > 0 && horizon > MAX_REACH_RATIO * baseline) e.push(`branch_year: the speculative stretch (${horizon} years) runs more than ${MAX_REACH_RATIO}x the ${baseline}-year real baseline; shorten it`);
+  if (t.years_to > MAX_PROJECTION_YEAR) e.push(`timeline: speculation stops at ${MAX_PROJECTION_YEAR}`);
+  return e;
+}
+
 export function validateCaseIdea(c) {
   const e = [];
   if (!c || typeof c !== "object") return ["not an object"];
@@ -553,6 +582,7 @@ export function validateCaseIdea(c) {
   e.push(...rationaleProblems(c));
   e.push(...castProblems(c));
   e.push(...seriesProblems(c));
+  e.push(...speculationProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !String(c.method ?? "").trim()) e.push(`a ${c.kind} case needs method: how it is computed or measured`);
   if (c.data_status === "guess") {

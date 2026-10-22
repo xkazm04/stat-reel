@@ -192,6 +192,35 @@ export function seriesProblems(c: Partial<NewCaseIdea>): string[] {
   return [];
 }
 
+/** Real baseline a what-if must stand on before its branch year (speculative-grounding); about 10 when the series is monthly or finer. */
+export const MIN_BASELINE_YEARS = 20;
+export const MIN_BASELINE_YEARS_FINE = 10;
+/** The speculative stretch may run at most this many times the real baseline, and never past MAX_PROJECTION_YEAR. */
+export const MAX_REACH_RATIO = 2;
+export const MAX_PROJECTION_YEAR = 2100;
+
+/**
+ * Speculative grounding: a what-if case that declares branch_year (the last year of real data) must stand on a real
+ * baseline of 20 years (10 for monthly or finer series), reach no further than twice that baseline, and stop at 2100.
+ * An absent branch_year passes (the case is not yet shaped); a branch_year on any other kind is refused.
+ */
+export function speculationProblems(c: Partial<NewCaseIdea>): string[] {
+  if (c.branch_year === undefined || c.branch_year === null) return [];
+  if (c.kind !== "what-if") return ["branch_year: only a what-if case has a branch point; drop it for an observed or influence case"];
+  const t = c.timeline;
+  if (!Number.isInteger(c.branch_year) || !t || typeof t.years_from !== "number" || typeof t.years_to !== "number") return ["branch_year: a whole year inside the timeline is required"];
+  if (c.branch_year <= t.years_from || c.branch_year >= t.years_to) return [`branch_year ${c.branch_year} must fall inside ${t.years_from}-${t.years_to}, with speculation after it`];
+  const fine = /month|week|day|hour|quarter/i.test(t.unit ?? "");
+  const floor = fine ? MIN_BASELINE_YEARS_FINE : MIN_BASELINE_YEARS;
+  const baseline = c.branch_year - t.years_from;
+  const e: string[] = [];
+  if (baseline < floor) e.push(`branch_year: only ${baseline} years of real baseline before ${c.branch_year}; a what-if needs at least ${floor}`);
+  const horizon = t.years_to - c.branch_year;
+  if (baseline > 0 && horizon > MAX_REACH_RATIO * baseline) e.push(`branch_year: the speculative stretch (${horizon} years) runs more than ${MAX_REACH_RATIO}x the ${baseline}-year real baseline; shorten it`);
+  if (t.years_to > MAX_PROJECTION_YEAR) e.push(`timeline: speculation stops at ${MAX_PROJECTION_YEAR}`);
+  return e;
+}
+
 /**
  * Beats against the timeline (accelerator-events): beats dated before years_from are intro material, not
  * on-screen events, so only in-span beats count toward the minimum; a beat whose `at` names no year is
@@ -277,7 +306,7 @@ export function counterProblems(t: Partial<CaseTension> | undefined): string[] {
 }
 export type NewCaseIdea = {
   title: string; pitch: string; domain: CaseDomain; arc: string; insight: string; why_lasts: string;
-  tension: CaseTension; beats: CaseBeat[]; cast?: CaseCastEntry[] | null; series?: CaseSeries | null; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
+  tension: CaseTension; beats: CaseBeat[]; cast?: CaseCastEntry[] | null; series?: CaseSeries | null; branch_year?: number | null; unknowns?: string[]; timeline: CaseTimeline; chart_ideas?: string[]; requires?: string[]; sources: CaseSource[];
   evidence?: string[]; data_status: DataStatus; source?: Record<string, unknown> | null;
   kind?: CaseKind;
   /** what-if / influence: how the scenario or the influence is computed, in one or two sentences */
@@ -298,7 +327,7 @@ export type CaseIdea = Omit<NewCaseIdea, "source"> & {
 const parse = <T>(s: string | null, d: T): T => (s ? (JSON.parse(s) as T) : d);
 const hydrate = (r: typeof caseIdeas.$inferSelect): CaseIdea => ({
   id: r.id, title: r.title, pitch: r.pitch, domain: r.domain as CaseDomain, arc: r.arc, insight: r.insight, why_lasts: r.why_lasts,
-  tension: parse(r.tension_json, { expectation: "", reality: "", strength: "weak" } as CaseTension), unknowns: parse(r.unknowns_json, []), beats: parse(r.beats_json, []), cast: parse(r.cast_json, null), series: parse(r.series_json, null),
+  tension: parse(r.tension_json, { expectation: "", reality: "", strength: "weak" } as CaseTension), unknowns: parse(r.unknowns_json, []), beats: parse(r.beats_json, []), cast: parse(r.cast_json, null), series: parse(r.series_json, null), branch_year: r.branch_year ?? null,
   timeline: parse(r.timeline_json, {} as CaseTimeline), span_years: r.span_years, chart_ideas: parse(r.chart_ideas_json, []),
   requires: parse(r.requires_json, []), sources: parse(r.sources_json, []), evidence: parse(r.evidence_json, []),
   data_status: r.data_status as DataStatus, source: parse(r.source_json, null), status: r.status,
@@ -329,6 +358,7 @@ export function validateCaseIdea(c: Partial<NewCaseIdea>): string[] {
   e.push(...rationaleProblems(c));
   e.push(...castProblems(c));
   e.push(...seriesProblems(c));
+  e.push(...speculationProblems(c));
   if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) e.push(`kind must be one of ${CASE_KINDS.join(", ")}`);
   if ((c.kind === "what-if" || c.kind === "influence") && !c.method?.trim()) {
     e.push(`a ${c.kind} case needs method: how the ${c.kind === "what-if" ? "scenario is computed" : "influence is measured"}`);
@@ -358,7 +388,7 @@ export class CaseIdeas {
     const row = {
       id: `ci-${randomUUID().slice(0, 8)}`, title: c.title.trim(), pitch: c.pitch.trim(), domain: c.domain, arc: c.arc.trim(),
       insight: c.insight.trim(), why_lasts: c.why_lasts.trim(), tension_json: JSON.stringify(c.tension),
-      unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), cast_json: c.cast ? JSON.stringify(c.cast) : null, series_json: c.series ? JSON.stringify(c.series) : null, timeline_json: JSON.stringify(c.timeline),
+      unknowns_json: JSON.stringify(c.unknowns ?? []), beats_json: JSON.stringify(c.beats), cast_json: c.cast ? JSON.stringify(c.cast) : null, series_json: c.series ? JSON.stringify(c.series) : null, branch_year: c.branch_year ?? null, timeline_json: JSON.stringify(c.timeline),
       span_years: c.timeline.years_to - c.timeline.years_from, chart_ideas_json: JSON.stringify(c.chart_ideas ?? []),
       requires_json: JSON.stringify(c.requires ?? []), sources_json: JSON.stringify(c.sources ?? []), evidence_json: JSON.stringify(c.evidence ?? []),
       topic: c.topic ?? null, kind: c.kind ?? "observed", method: c.method?.trim() || null, data_guess: c.data_guess?.trim() || null, feasibility: c.feasibility ?? null,

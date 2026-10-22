@@ -311,6 +311,8 @@ export type CaseIdea = {
   beats: { at: string; what: string }[];
   cast?: { name: string; known: boolean }[] | null;
   series?: { template: string; instances: string[] } | null;
+  /** what-if: last year of real data; speculation follows */
+  branch_year?: number | null;
   timeline: { unit: string; from: number; to: number; years_from: number; years_to: number };
   span_years: number;
   chart_ideas: string[];

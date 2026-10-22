@@ -218,6 +218,16 @@ test("validateCaseIdea mirrors the server rules (decade, beats, tension, sources
   assert.match(validateCaseIdea({ ...ok, series: series("country share of a global chart", "films", "books") }).join(), /at least 3 further/);
   assert.match(validateCaseIdea({ ...ok, series: series("country share of a global chart", "T", "films", "Films") }).join(), /1 distinct/);
   assert.match(validateCaseIdea({ ...ok, series: series("", "films", "books", "games") }).join(), /series.template/);
+  const wi = { ...ok, kind: "what-if", method: "hold the pre-event growth rate" };
+  assert.deepEqual(validateCaseIdea({ ...wi, branch_year: 1990 }), []);
+  assert.deepEqual(validateCaseIdea(wi), []);
+  assert.match(validateCaseIdea({ ...wi, branch_year: 1975 }).join(), /only 15 years of real baseline/);
+  assert.match(validateCaseIdea({ ...wi, branch_year: 1990, timeline: { ...ok.timeline, years_to: 2100 } }).join(), /more than 2x/);
+  assert.match(validateCaseIdea({ ...wi, branch_year: 1990, timeline: { ...ok.timeline, years_to: 2110 } }).join(), /stops at 2100/);
+  assert.doesNotMatch(validateCaseIdea({ ...wi, branch_year: 1975, timeline: { ...ok.timeline, unit: "month", years_to: 1995 } }).join(), /real baseline|more than 2x/);
+  assert.match(validateCaseIdea({ ...wi, branch_year: 1975, timeline: { ...ok.timeline, years_to: 1995 } }).join(), /real baseline/);
+  assert.match(validateCaseIdea({ ...wi, branch_year: 2020 }).join(), /must fall inside/);
+  assert.match(validateCaseIdea({ ...ok, branch_year: 1990 }).join(), /only a what-if/);
   assert.match(validateCaseIdea({ ...ok, topic: undefined }).join(), /topic must be one of/);
   assert.match(validateCaseIdea({ ...ok, topic: "knitting" }).join(), /topic must be one of/);
   assert.deepEqual(validateCaseIdea({ ...ok, topic: "energy" }), []);

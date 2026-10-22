@@ -190,6 +190,8 @@ export const caseIdeas = sqliteTable("case_ideas", {
   cast_json: text("cast_json"),
   /** the repeatable template {template, instances} (series-repeatability); null for a one-off. Added by addColumn. */
   series_json: text("series_json"),
+  /** last year of real data in a what-if (speculative-grounding); null when undeclared. Added by addColumn. */
+  branch_year: integer("branch_year"),
   timeline_json: text("timeline_json").notNull(),
   span_years: real("span_years").notNull(),
   chart_ideas_json: text("chart_ideas_json").notNull(),
@@ -377,6 +379,7 @@ export function openDb(file: string): Db {
   addColumn("case_ideas", "archive_reason", "text");
   addColumn("case_ideas", "cast_json", "text");
   addColumn("case_ideas", "series_json", "text");
+  addColumn("case_ideas", "branch_year", "integer");
   addColumn("generation_jobs", "cost_usd", "real");
   addColumn("generation_jobs", "turns", "integer");
   addColumn("llm_sessions", "cost_usd", "real");
